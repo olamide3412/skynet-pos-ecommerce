@@ -1,0 +1,33 @@
+{
+    "$schema": "https://json.schemastore.org/package.json",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "vite build",
+        "dev": "vite"
+    },
+    "devDependencies": {
+        "@tailwindcss/typography": "^0.5.19",
+        "@tailwindcss/vite": "^4.1.12",
+        "@vitejs/plugin-vue": "^6.0.1",
+        "axios": "^1.11.0",
+        "concurrently": "^9.0.1",
+        "laravel-vite-plugin": "^2.0.0",
+        "tailwindcss": "^4.1.12",
+        "vite": "^7.0.4"
+    },
+    "dependencies": {
+        "@fortawesome/fontawesome-svg-core": "^7.0.0",
+        "@fortawesome/free-brands-svg-icons": "^7.0.0",
+        "@fortawesome/free-regular-svg-icons": "^7.0.0",
+        "@fortawesome/free-solid-svg-icons": "^7.0.0",
+        "@fortawesome/vue-fontawesome": "^3.1.1",
+        "@inertiajs/vue3": "^2.1.2",
+        "@vueup/vue-quill": "^1.2.0",
+        "aos": "^3.0.0-beta.6",
+        "dayjs": "^1.11.13",
+        "html2pdf.js": "^0.14.0",
+        "pinia": "^3.0.3",
+        "vue-toastification": "^2.0.0-rc.5"
+    }
+}
