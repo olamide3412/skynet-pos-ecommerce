@@ -11,6 +11,7 @@ use App\Helpers\EnumHelper;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Pagination\Paginator;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 use Inertia\Inertia;
 
@@ -29,8 +30,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Schema::defaultStringLength(191);
+
         try {
-            if (\Illuminate\Support\Facades\Schema::hasTable('store_settings')) {
+            if (Schema::hasTable('store_settings')) {
                 $settings = \App\Models\StoreSetting::pluck('value', 'key')->toArray();
                 config([
                     'services.google.client_id'     => $settings['google_client_id'] ?? env('GOOGLE_CLIENT_ID'),
