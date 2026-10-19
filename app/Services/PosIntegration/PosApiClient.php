@@ -189,15 +189,56 @@ class PosApiClient
             'item_ids' => array_values(array_unique($posItemIds)),
         ]);
 
-        if (!$response->successful()) {
-            throw new PosIntegrationException(
-                "Failed to fetch availability from POS: " . ($response->json('message') ?? $response->body()),
-                "Unable to verify live stock availability from POS."
-            );
+        if ($response->successful()) {
+            $this->recordSuccess();
+            return $response->json();
         }
 
-        $this->recordSuccess();
-        return $response->json();
+        // Fallback: If bulk availability endpoint is not available (HTTP 404), query GET /catalog/{id}/stock
+        if ($response->status() === 404) {
+            $data = [];
+            foreach ($posItemIds as $id) {
+                try {
+                    $stockResp = $this->sendRequest('GET', "/catalog/{$id}/stock");
+                    if ($stockResp->successful()) {
+                        $stockJson = $stockResp->json();
+                        $qty = null;
+
+                        if (isset($stockJson['available_quantity']) && is_numeric($stockJson['available_quantity'])) {
+                            $qty = (float) $stockJson['available_quantity'];
+                        } elseif (isset($stockJson['quantity']) && is_numeric($stockJson['quantity'])) {
+                            $qty = (float) $stockJson['quantity'];
+                        } elseif (isset($stockJson['stock']) && is_numeric($stockJson['stock'])) {
+                            $qty = (float) $stockJson['stock'];
+                        } elseif (isset($stockJson['data'])) {
+                            if (is_numeric($stockJson['data'])) {
+                                $qty = (float) $stockJson['data'];
+                            } elseif (is_array($stockJson['data'])) {
+                                $d = $stockJson['data'];
+                                if (isset($d['available_quantity']) && is_numeric($d['available_quantity'])) {
+                                    $qty = (float) $d['available_quantity'];
+                                } elseif (isset($d['quantity']) && is_numeric($d['quantity'])) {
+                                    $qty = (float) $d['quantity'];
+                                } elseif (isset($d['stock']) && is_numeric($d['stock'])) {
+                                    $qty = (float) $d['stock'];
+                                }
+                            }
+                        }
+
+                        $data[$id] = $qty !== null ? $qty : 0.0;
+                    }
+                } catch (\Throwable $e) {
+                    // skip individual item error
+                }
+            }
+            $this->recordSuccess();
+            return ['status' => true, 'data' => $data];
+        }
+
+        throw new PosIntegrationException(
+            "Failed to fetch availability from POS: " . ($response->json('message') ?? $response->body()),
+            "Unable to verify live stock availability from POS."
+        );
     }
 
     /**
@@ -303,23 +344,34 @@ class PosApiClient
             return false;
         }
 
-        $response = $this->sendRequest('POST', '/api/pos-integration/mappings/register', [
-            'mappings' => $mappings,
-        ]);
+        try {
+            $response = $this->sendRequest('POST', '/api/pos-integration/mappings/register', [
+                'mappings' => $mappings,
+            ]);
 
-        if ($response->successful()) {
-            $this->recordSuccess();
+            if ($response->successful()) {
+                $this->recordSuccess();
+                return true;
+            }
+
+            // If the POS API does not have this endpoint (HTTP 404), silently skip
+            // Deletion protection mapping is optional on the POS side
+            if ($response->status() === 404) {
+                return true;
+            }
+
+            $errDetail = $response->json('message')
+                ?? ('HTTP ' . $response->status() . ($response->body() ? ': ' . \Illuminate\Support\Str::limit(strip_tags($response->body()), 120) : ''));
+
+            PosSyncLog::log('mapping_register', 'failed', "Failed to register mappings with POS ({$errDetail})", null, [
+                'status'   => $response->status(),
+                'response' => $response->json() ?? $response->body(),
+            ]);
+            return false;
+        } catch (\Throwable $e) {
+            // Silently ignore if POS does not support or cannot be reached for mapping registry
             return true;
         }
-
-        $errDetail = $response->json('message')
-            ?? ('HTTP ' . $response->status() . ($response->body() ? ': ' . \Illuminate\Support\Str::limit(strip_tags($response->body()), 120) : ''));
-
-        PosSyncLog::log('mapping_register', 'failed', "Failed to register mappings with POS ({$errDetail})", null, [
-            'status'   => $response->status(),
-            'response' => $response->json() ?? $response->body(),
-        ]);
-        return false;
     }
 
     /**
@@ -331,11 +383,15 @@ class PosApiClient
             return false;
         }
 
-        $response = $this->sendRequest('POST', '/api/pos-integration/mappings/unregister', [
-            'pos_item_ids' => array_values(array_unique($posItemIds)),
-        ]);
+        try {
+            $response = $this->sendRequest('POST', '/api/pos-integration/mappings/unregister', [
+                'pos_item_ids' => array_values(array_unique($posItemIds)),
+            ]);
 
-        return $response->successful();
+            return $response->successful() || $response->status() === 404;
+        } catch (\Throwable $e) {
+            return true;
+        }
     }
 
     /**

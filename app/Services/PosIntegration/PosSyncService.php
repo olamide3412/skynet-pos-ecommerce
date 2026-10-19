@@ -43,20 +43,57 @@ class PosSyncService
             $availabilityData = $response['data'] ?? [];
             $updatedCount = 0;
 
-            foreach ($availabilityData as $posItemId => $stockQty) {
-                // Update local cached synced_pos_items
-                SyncedPosItem::where('pos_item_id', $posItemId)->update([
-                    'effective_availability' => floatval($stockQty),
-                    'last_synced_at'         => now(),
-                ]);
+            foreach ($availabilityData as $key => $val) {
+                $posItemId = null;
+                $numericQty = 0.0;
 
-                // Update product stock
-                Product::where('pos_item_id', $posItemId)->update([
-                    'stock'            => (int) floor($stockQty),
-                    'last_pos_sync_at' => now(),
-                ]);
+                if (is_array($val)) {
+                    // Extract item ID if present in array or key
+                    $posItemId = $val['pos_item_id'] ?? $val['item_id'] ?? $val['id'] ?? null;
+                    if (!$posItemId && is_numeric($key) && in_array((int)$key, $mappedPosIds)) {
+                        $posItemId = (int)$key;
+                    }
 
-                $updatedCount++;
+                    // Extract numeric quantity from various possible keys
+                    if (isset($val['available_quantity']) && is_numeric($val['available_quantity'])) {
+                        $numericQty = (float) $val['available_quantity'];
+                    } elseif (isset($val['effective_availability']) && is_numeric($val['effective_availability'])) {
+                        $numericQty = (float) $val['effective_availability'];
+                    } elseif (isset($val['quantity']) && is_numeric($val['quantity'])) {
+                        $numericQty = (float) $val['quantity'];
+                    } elseif (isset($val['stock']) && is_numeric($val['stock'])) {
+                        $numericQty = (float) $val['stock'];
+                    } elseif (isset($val['stock']) && is_array($val['stock'])) {
+                        $sum = 0;
+                        foreach ($val['stock'] as $st) {
+                            if (is_array($st)) {
+                                $sum += (float) ($st['quantity'] ?? $st['available_quantity'] ?? 0);
+                            } elseif (is_numeric($st)) {
+                                $sum += (float) $st;
+                            }
+                        }
+                        $numericQty = (float) $sum;
+                    }
+                } elseif (is_numeric($val)) {
+                    $posItemId = is_numeric($key) ? (int)$key : null;
+                    $numericQty = (float)$val;
+                }
+
+                if ($posItemId && in_array((int)$posItemId, $mappedPosIds)) {
+                    // Update local cached synced_pos_items
+                    SyncedPosItem::where('pos_item_id', $posItemId)->update([
+                        'effective_availability' => $numericQty,
+                        'last_synced_at'         => now(),
+                    ]);
+
+                    // Update product stock
+                    Product::where('pos_item_id', $posItemId)->update([
+                        'stock'            => (int) floor($numericQty),
+                        'last_pos_sync_at' => now(),
+                    ]);
+
+                    $updatedCount++;
+                }
             }
 
             $conn->update([
