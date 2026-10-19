@@ -74,6 +74,14 @@ const syncAvailability = () => {
     });
 };
 
+const reconcileMappings = () => {
+    if (!props.connection?.is_connected) return;
+    isSyncing.value = true;
+    router.post(route('admin.pos-integration.reconcile-mappings'), {}, {
+        onFinish: () => { isSyncing.value = false; }
+    });
+};
+
 const importSingle = (posItemId) => {
     if (!props.connection?.is_connected) return;
     router.post(route('admin.pos-integration.import-simple'), { pos_item_id: posItemId }, {
@@ -137,6 +145,15 @@ const importAllEligible = () => {
                     >
                         <svg class="w-4 h-4 mr-2 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                         Sync Stock
+                    </button>
+                    <button
+                        @click="reconcileMappings"
+                        :disabled="isSyncing || !connection.is_connected"
+                        :title="!connection.is_connected ? 'Store must be connected to a POS branch to reconcile deletion locks' : 'Push and reconcile deletion-protection locks with POS for all active online products'"
+                        class="inline-flex items-center px-3.5 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <svg class="w-4 h-4 mr-2 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                        Reconcile Locks
                     </button>
                     <button
                         @click="syncCatalog(false)"

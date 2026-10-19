@@ -126,6 +126,26 @@ class PosIntegrationController extends Controller
     }
 
     /**
+     * Reconcile all mapped products with the POS deletion-protection registry.
+     */
+    public function reconcileMappings()
+    {
+        $conn = PosConnection::active();
+        if (!$conn || !$conn->is_connected) {
+            return back()->with('error', 'Cannot reconcile mappings: store is not connected to a verified POS branch.');
+        }
+
+        $result = $this->catalogService->reconcileAllMappings();
+
+        if ($result['success'] ?? ($result['status'] ?? false)) {
+            $count = $result['reconciled'] ?? 0;
+            return back()->with('success', "Successfully reconciled {$count} product mapping(s) with POS deletion protection.");
+        }
+
+        return back()->with('error', 'Mapping reconciliation failed: ' . ($result['message'] ?? 'Unknown error'));
+    }
+
+    /**
      * Import a single POS item as draft simple product.
      */
     public function importSimple(Request $request)

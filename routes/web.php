@@ -124,6 +124,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('pos-integration/test', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'testConnection'])->name('pos-integration.test');
             Route::post('pos-integration/sync-catalog', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'syncCatalog'])->name('pos-integration.sync-catalog');
             Route::post('pos-integration/sync-availability', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'syncAvailability'])->name('pos-integration.sync-availability');
+            Route::post('pos-integration/reconcile-mappings', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'reconcileMappings'])->name('pos-integration.reconcile-mappings');
             Route::post('pos-integration/import-simple', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'importSimple'])->name('pos-integration.import-simple');
             Route::post('pos-integration/bulk-import', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'bulkImport'])->name('pos-integration.bulk-import');
             Route::post('pos-integration/import-all', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'importAllEligible'])->name('pos-integration.import-all');

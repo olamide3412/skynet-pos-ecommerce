@@ -336,4 +336,25 @@ class PosCatalogService
             PosSyncLog::log('missing_item_detected', 'warning', "POS Item #{$prod->pos_item_id} mapped to Product #{$prod->id} ({$prod->name}) is missing from POS branch catalog.", (string) $prod->id);
         }
     }
+
+    /**
+     * Reconcile all currently mapped products with the POS deletion-protection registry.
+     */
+    public function reconcileAllMappings(): array
+    {
+        $mappedProducts = Product::where('inventory_source', 'pos')
+            ->whereNotNull('pos_item_id')
+            ->get(['id', 'pos_item_id']);
+
+        $mappings = [];
+        foreach ($mappedProducts as $product) {
+            $mappings[] = [
+                'pos_item_id'          => (int) $product->pos_item_id,
+                'ecommerce_product_id' => (string) $product->id,
+                'type'                 => 'simple',
+            ];
+        }
+
+        return $this->apiClient->reconcileMappings($mappings);
+    }
 }

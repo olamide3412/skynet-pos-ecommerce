@@ -340,7 +340,7 @@ class PosApiClient
      */
     public function registerMappings(array $mappings): bool
     {
-        if (!$this->isConfigured()) {
+        if (!$this->isConfigured() || empty($mappings)) {
             return false;
         }
 
@@ -351,11 +351,12 @@ class PosApiClient
 
             if ($response->successful()) {
                 $this->recordSuccess();
+                $count = count($mappings);
+                PosSyncLog::log('mapping_register', 'success', "Successfully registered {$count} product mapping(s) with POS deletion protection.");
                 return true;
             }
 
             // If the POS API does not have this endpoint (HTTP 404), silently skip
-            // Deletion protection mapping is optional on the POS side
             if ($response->status() === 404) {
                 return true;
             }
@@ -369,7 +370,7 @@ class PosApiClient
             ]);
             return false;
         } catch (\Throwable $e) {
-            // Silently ignore if POS does not support or cannot be reached for mapping registry
+            // Silently ignore if POS cannot be reached
             return true;
         }
     }
@@ -379,7 +380,7 @@ class PosApiClient
      */
     public function unregisterMappings(array $posItemIds): bool
     {
-        if (!$this->isConfigured()) {
+        if (!$this->isConfigured() || empty($posItemIds)) {
             return false;
         }
 
@@ -388,7 +389,14 @@ class PosApiClient
                 'pos_item_ids' => array_values(array_unique($posItemIds)),
             ]);
 
-            return $response->successful() || $response->status() === 404;
+            if ($response->successful()) {
+                $this->recordSuccess();
+                $count = count($posItemIds);
+                PosSyncLog::log('mapping_unregister', 'success', "Unregistered {$count} mapping(s) from POS deletion protection.");
+                return true;
+            }
+
+            return $response->status() === 404;
         } catch (\Throwable $e) {
             return true;
         }
@@ -401,11 +409,34 @@ class PosApiClient
     {
         $this->ensureConfigured();
 
-        $response = $this->sendRequest('POST', '/api/pos-integration/mappings/reconcile', [
-            'mappings' => $activeMappings,
-        ]);
+        try {
+            $response = $this->sendRequest('POST', '/api/pos-integration/mappings/reconcile', [
+                'mappings' => $activeMappings,
+            ]);
 
-        return $response->successful() ? $response->json() : ['status' => false];
+            if ($response->successful()) {
+                $this->recordSuccess();
+                $data = $response->json();
+                $count = $data['reconciled'] ?? count($activeMappings);
+                PosSyncLog::log('mapping_reconcile', 'success', "Successfully reconciled {$count} product mapping(s) with POS deletion protection.", null, $data);
+                return [
+                    'status'     => true,
+                    'success'    => true,
+                    'reconciled' => $count,
+                    'data'       => $data,
+                ];
+            }
+
+            $errDetail = $response->json('message') ?? ('HTTP ' . $response->status() . ': ' . \Illuminate\Support\Str::limit(strip_tags($response->body()), 120));
+            PosSyncLog::log('mapping_reconcile', 'failed', "Failed to reconcile mappings with POS: {$errDetail}", null, [
+                'status'   => $response->status(),
+                'response' => $response->json() ?? $response->body(),
+            ]);
+
+            return ['status' => false, 'success' => false, 'message' => $errDetail];
+        } catch (\Throwable $e) {
+            return ['status' => false, 'success' => false, 'message' => $e->getMessage()];
+        }
     }
 
     /**
