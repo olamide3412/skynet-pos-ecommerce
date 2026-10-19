@@ -312,7 +312,13 @@ class PosApiClient
             return true;
         }
 
-        PosSyncLog::log('mapping_register', 'failed', 'Failed to register mappings with POS', null, $response->json());
+        $errDetail = $response->json('message')
+            ?? ('HTTP ' . $response->status() . ($response->body() ? ': ' . \Illuminate\Support\Str::limit(strip_tags($response->body()), 120) : ''));
+
+        PosSyncLog::log('mapping_register', 'failed', "Failed to register mappings with POS ({$errDetail})", null, [
+            'status'   => $response->status(),
+            'response' => $response->json() ?? $response->body(),
+        ]);
         return false;
     }
 
