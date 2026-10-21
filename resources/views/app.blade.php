@@ -91,6 +91,25 @@
         @endif
 
 
+        @php
+            $themePrimary = \App\Models\StoreSetting::get('theme_primary_color', '#7B00FF');
+            $themeSecondary = \App\Models\StoreSetting::get('theme_secondary_color', '#FBA43D');
+            $themeDarkModeText = \App\Models\StoreSetting::get('theme_dark_mode_text_color', '#FFFFFF');
+        @endphp
+        <style id="skynet-theme-variables">
+            :root {
+                --color-primary: {{ $themePrimary }};
+                --color-primary-dark: {{ $themePrimary }};
+                --color-secondary-500: {{ $themeSecondary }};
+                --color-secondary-600: {{ $themeSecondary }};
+                --theme-primary: {{ $themePrimary }};
+                --theme-secondary: {{ $themeSecondary }};
+            }
+            [data-theme="dark"] {
+                --theme-dark-heading: {{ $themeDarkModeText }};
+            }
+        </style>
+
         @inertiaHead()
         @routes()
     </head>

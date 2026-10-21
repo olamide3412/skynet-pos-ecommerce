@@ -46,13 +46,10 @@ class PosApiClient
     {
         $this->ensureConfigured();
 
-        // Candidates to ping/test depending on baseUrl structure
-        $candidatePaths = [];
-        if (str_contains($this->baseUrl, '/api/commerce/v1')) {
-            $candidatePaths = ['/ping', '/catalog?per_page=1', '/test-connection'];
-        } else {
-            $candidatePaths = ['/api/commerce/v1/ping', '/api/commerce/v1/catalog?per_page=1', '/api/pos-integration/test-connection', '/ping'];
-        }
+        // Test versioned ping or catalog endpoint
+        $candidatePaths = str_contains($this->baseUrl, '/api/commerce/v1')
+            ? ['/ping', '/catalog?per_page=1']
+            : ['/api/commerce/v1/ping', '/api/commerce/v1/catalog?per_page=1'];
 
         $lastError = 'Connection failed';
         foreach ($candidatePaths as $path) {
@@ -145,7 +142,7 @@ class PosApiClient
             $params['since'] = $since;
         }
 
-        $response = $this->sendRequest('GET', '/api/pos-integration/catalog', $params);
+        $response = $this->sendRequest('GET', '/catalog', $params);
 
         if (!$response->successful()) {
             throw new PosIntegrationException(
@@ -165,7 +162,7 @@ class PosApiClient
     {
         $this->ensureConfigured();
 
-        $response = $this->sendRequest('GET', "/api/pos-integration/catalog/{$posItemId}");
+        $response = $this->sendRequest('GET', "/catalog/{$posItemId}");
 
         if (!$response->successful()) {
             throw new PosIntegrationException(
@@ -185,7 +182,7 @@ class PosApiClient
     {
         $this->ensureConfigured();
 
-        $response = $this->sendRequest('POST', '/api/pos-integration/availability', [
+        $response = $this->sendRequest('POST', '/availability', [
             'item_ids' => array_values(array_unique($posItemIds)),
         ]);
 
@@ -255,7 +252,7 @@ class PosApiClient
             'items'              => $items,
         ];
 
-        $response = $this->sendRequest('POST', '/api/pos-integration/reservations', $payload);
+        $response = $this->sendRequest('POST', '/reservations', $payload);
 
         if ($response->successful()) {
             $data = $response->json();
@@ -282,7 +279,7 @@ class PosApiClient
     {
         $this->ensureConfigured();
 
-        $response = $this->sendRequest('POST', "/api/pos-integration/reservations/{$externalReference}/confirm");
+        $response = $this->sendRequest('POST', "/reservations/{$externalReference}/confirm");
 
         if ($response->successful()) {
             $data = $response->json();
@@ -304,7 +301,7 @@ class PosApiClient
     {
         $this->ensureConfigured();
 
-        $response = $this->sendRequest('POST', "/api/pos-integration/reservations/{$externalReference}/release");
+        $response = $this->sendRequest('POST', "/reservations/{$externalReference}/release");
 
         if ($response->successful()) {
             $data = $response->json();
@@ -326,7 +323,7 @@ class PosApiClient
     {
         $this->ensureConfigured();
 
-        $response = $this->sendRequest('GET', "/api/pos-integration/reservations/{$externalReference}");
+        $response = $this->sendRequest('GET', "/reservations/{$externalReference}");
 
         if ($response->successful()) {
             return $response->json();
@@ -345,7 +342,7 @@ class PosApiClient
         }
 
         try {
-            $response = $this->sendRequest('POST', '/api/pos-integration/mappings/register', [
+            $response = $this->sendRequest('POST', '/mappings/register', [
                 'mappings' => $mappings,
             ]);
 
@@ -385,7 +382,7 @@ class PosApiClient
         }
 
         try {
-            $response = $this->sendRequest('POST', '/api/pos-integration/mappings/unregister', [
+            $response = $this->sendRequest('POST', '/mappings/unregister', [
                 'pos_item_ids' => array_values(array_unique($posItemIds)),
             ]);
 
@@ -410,7 +407,7 @@ class PosApiClient
         $this->ensureConfigured();
 
         try {
-            $response = $this->sendRequest('POST', '/api/pos-integration/mappings/reconcile', [
+            $response = $this->sendRequest('POST', '/mappings/reconcile', [
                 'mappings' => $activeMappings,
             ]);
 
@@ -440,12 +437,18 @@ class PosApiClient
     }
 
     /**
-     * Send authenticated HTTP request to POS API.
+     * Send authenticated HTTP request to POS API with support for versioned API endpoints.
      */
     protected function sendRequest(string $method, string $path, array $data = [])
     {
         $baseUrl = rtrim($this->baseUrl, '/');
-        if (str_starts_with($path, '/api/')) {
+
+        // Check if baseUrl specifies an API version root (e.g. http://127.0.0.1:8000/api/commerce/v1 or /api/v1)
+        if (preg_match('#/api/(?:commerce/v\d+|v\d+(?:/pos-integration)?|pos-integration)#i', $baseUrl)) {
+            // Strip redundant leading /api/pos-integration or /api/commerce/v1 from relative path
+            $cleanPath = preg_replace('#^/api/(?:pos-integration|commerce/v\d+|v\d+)#i', '', $path);
+            $url = $baseUrl . '/' . ltrim($cleanPath, '/');
+        } elseif (str_starts_with($path, '/api/')) {
             if (preg_match('#^(https?://[^/]+)#i', $baseUrl, $matches)) {
                 $url = $matches[1] . $path;
             } else {
@@ -454,6 +457,7 @@ class PosApiClient
         } else {
             $url = $baseUrl . '/' . ltrim($path, '/');
         }
+
         $timestamp = (string) now()->timestamp;
         $signature = hash_hmac('sha256', "{$this->clientId}:{$timestamp}", $this->apiSecret ?? '');
 

@@ -168,5 +168,22 @@ class PosIntegrationTest extends TestCase
         $released = $reservationService->releaseReservation($order);
         $this->assertTrue($released);
     }
+
+    public function test_synced_pos_item_casts_availability_as_integer(): void
+    {
+        $item = new \App\Models\SyncedPosItem([
+            'pos_item_id' => 999,
+            'pos_item_name' => 'Test Item',
+            'effective_availability' => '34.00',
+            'standard_price' => 1500.50,
+        ]);
+
+        $this->assertIsInt($item->effective_availability);
+        $this->assertSame(34, $item->effective_availability);
+
+        $array = $item->toArray();
+        $this->assertIsInt($array['effective_availability']);
+        $this->assertSame(34, $array['effective_availability']);
+    }
 }
 

@@ -1,8 +1,11 @@
 <script setup>
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
+import { useToast } from 'vue-toastification';
 import AdminLayout from '@/Layouts/AdminLayout.vue';
 import Pagination from '@/Components/Pagination.vue';
+
+const toast = useToast();
 
 const props = defineProps({
     connection: Object,
@@ -17,6 +20,20 @@ const mappingStatus = ref(props.filters?.mapping_status || '');
 const activeTab = ref('catalog'); // 'catalog' | 'logs'
 const selectedItems = ref([]);
 const isSyncing = ref(false);
+
+const webhookUrl = computed(() => {
+    return props.connection?.webhook_url || (typeof window !== 'undefined' ? `${window.location.origin}/api/webhooks/pos-inventory` : '/api/webhooks/pos-inventory');
+});
+
+const copied = ref(false);
+const copyWebhookUrl = () => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        navigator.clipboard.writeText(webhookUrl.value);
+        copied.value = true;
+        toast.success('Webhook URL copied to clipboard!');
+        setTimeout(() => { copied.value = false; }, 2000);
+    }
+};
 
 const pairingForm = useForm({
     pos_base_url: props.connection?.pos_base_url || '',
@@ -219,6 +236,43 @@ const importAllEligible = () => {
                             <span class="block text-gray-400">Last Stock Sync:</span>
                             <span class="font-medium text-gray-700 dark:text-gray-200">{{ connection.last_inventory_sync_at ? new Date(connection.last_inventory_sync_at).toLocaleTimeString() : 'Never' }}</span>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Real-Time Webhook Configuration Banner -->
+            <div class="rounded-xl border border-indigo-200 dark:border-indigo-900/60 bg-gradient-to-r from-indigo-50/80 via-blue-50/60 to-purple-50/60 dark:from-indigo-950/40 dark:via-blue-950/30 dark:to-purple-950/30 p-4.5 shadow-xs">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div class="flex items-start gap-3">
+                        <div class="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h4 class="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider">
+                                    Real-Time Webhook Notification URL
+                                </h4>
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300">
+                                    ● LIVE RECEIVER ACTIVE
+                                </span>
+                            </div>
+                            <p class="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+                                Paste this URL into <strong>POS Admin → Branches → [Branch] → Ecommerce tab → Webhook Notification URL</strong> to receive instant stock & price updates whenever items sell in the store.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <code class="px-3 py-2 rounded-lg bg-white dark:bg-gray-800 border border-indigo-200 dark:border-indigo-800 text-xs font-mono text-indigo-700 dark:text-indigo-300 select-all shadow-xs break-all">
+                            {{ webhookUrl }}
+                        </code>
+                        <button
+                            type="button"
+                            @click="copyWebhookUrl"
+                            class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-xs transition flex items-center gap-1.5 shrink-0"
+                        >
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                            {{ copied ? 'Copied!' : 'Copy Link' }}
+                        </button>
                     </div>
                 </div>
             </div>
@@ -467,9 +521,9 @@ const importAllEligible = () => {
                                     <td class="p-3">
                                         <span
                                             class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold"
-                                            :class="item.effective_availability > 0 ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300'"
+                                            :class="Number(item.effective_availability) > 0 ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300'"
                                         >
-                                            {{ item.effective_availability }} {{ item.base_unit_name }}
+                                            {{ Math.round(Number(item.effective_availability || 0)) }} {{ item.base_unit_name }}
                                         </span>
                                     </td>
                                     <td class="p-3">

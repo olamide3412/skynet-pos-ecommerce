@@ -98,7 +98,7 @@ class PosCatalogService
                     'is_active'              => (bool) ($data['is_active'] ?? true),
                     'base_unit_name'         => $data['base_unit_name'] ?? $data['unit_name'] ?? 'Piece',
                     'standard_price'         => floatval($data['standard_price'] ?? $data['selling_price'] ?? 0),
-                    'effective_availability' => floatval($data['effective_availability'] ?? $data['quantity'] ?? 0),
+                    'effective_availability' => (int) round(floatval($data['effective_availability'] ?? $data['quantity'] ?? 0)),
                     'imei_tracking_enabled' => (bool) ($data['imei_tracking_enabled'] ?? false),
                     'pos_updated_at'         => isset($data['updated_at']) ? \Illuminate\Support\Carbon::parse($data['updated_at']) : now(),
                     'last_synced_at'         => now(),

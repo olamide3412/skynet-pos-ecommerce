@@ -46,6 +46,27 @@
     .bg-primary {
       background-color: var(--color-primary);
     }
+    .text-primary {
+      color: var(--color-primary);
+    }
+    .border-primary {
+      border-color: var(--color-primary);
+    }
+    .bg-secondary {
+      background-color: var(--color-secondary-500);
+    }
+    .text-secondary {
+      color: var(--color-secondary-500);
+    }
+
+    .theme-sidebar-active {
+      background-color: color-mix(in srgb, var(--color-primary, #7B00FF) 12%, transparent) !important;
+      color: var(--color-primary, #7B00FF) !important;
+    }
+    [data-theme="dark"] .theme-sidebar-active {
+      background-color: color-mix(in srgb, var(--color-primary, #7B00FF) 22%, transparent) !important;
+      color: color-mix(in srgb, var(--color-primary, #7B00FF) 65%, #ffffff) !important;
+    }
 
     .text-2xs {
       font-size: var(--font-size-2xs);

@@ -118,7 +118,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('settings', [SettingsController::class , 'index'])->name('settings.index');
             Route::put('settings', [SettingsController::class , 'update'])->name('settings.update');
 
-            // POS Integration Center
+            // Theme & Dual-Color Palette Settings
+            Route::get('theme-settings', [\App\Http\Controllers\Admin\ThemeController::class, 'index'])->name('themes.index');
+            Route::put('theme-settings', [\App\Http\Controllers\Admin\ThemeController::class, 'update'])->name('themes.update');
+
+            // POS Integration & Connection Settings
+            Route::get('pos-connection', [\App\Http\Controllers\Admin\PosConnectionController::class, 'index'])->name('pos-connection.index');
             Route::get('pos-integration', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'index'])->name('pos-integration.index');
             Route::post('pos-integration/save-and-test', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'saveAndTestConnection'])->name('pos-integration.save-and-test');
             Route::post('pos-integration/test', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'testConnection'])->name('pos-integration.test');

@@ -1,9 +1,11 @@
 <script setup>
 import { Link, usePage } from '@inertiajs/vue3';
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import FlashMessages from '@/Components/FlashMessages.vue';
 import ThemeToggle from '@/Components/ThemeToggle.vue';
 import Logo from '../../images/logo.png';
+
+const page = usePage();
 
 // Mobile overlay toggle
 const isMobileOpen = ref(false);
@@ -51,6 +53,8 @@ const navLinks = [
         icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z',
         children: [
             { label: 'Store Config', route: 'admin.settings.index', match: 'Admin/Settings' },
+            { label: 'Color Themes', route: 'admin.themes.index', match: 'Admin/Themes' },
+            { label: 'POS Connection', route: 'admin.pos-connection.index', match: 'Admin/PosConnection' },
             { label: 'Sliders', route: 'admin.sliders.index', match: 'Admin/Sliders' },
         ]
     },
@@ -89,6 +93,34 @@ const toggleCollapse = () => {
     localStorage.setItem('admin_sidebar_collapsed', isCollapsed.value);
 };
 
+// Apply dynamic theme variables on mount & navigation
+watch(
+    () => [
+        page.props.store_settings?.theme_primary_color,
+        page.props.store_settings?.theme_secondary_color,
+        page.props.store_settings?.theme_dark_mode_text_color,
+    ],
+    ([primary, secondary, darkText]) => {
+        if (typeof document !== 'undefined') {
+            const root = document.documentElement;
+            if (primary) {
+                root.style.setProperty('--color-primary', primary);
+                root.style.setProperty('--color-primary-dark', primary);
+                root.style.setProperty('--theme-primary', primary);
+            }
+            if (secondary) {
+                root.style.setProperty('--color-secondary-500', secondary);
+                root.style.setProperty('--color-secondary-600', secondary);
+                root.style.setProperty('--theme-secondary', secondary);
+            }
+            if (darkText) {
+                root.style.setProperty('--theme-dark-heading', darkText);
+            }
+        }
+    },
+    { immediate: true }
+);
+
 onMounted(() => {
     const saved = localStorage.getItem('admin_sidebar_collapsed');
     if (saved !== null) isCollapsed.value = saved === 'true';
@@ -121,7 +153,7 @@ onMounted(() => {
             <div class="flex items-center h-16 border-b border-gray-200 dark:border-gray-700 px-3 overflow-hidden">
                 <Link href="/" class="flex items-center gap-2 min-w-0">
                     <img :src="$page.props.store_settings.company_logo ? '/storage/' + $page.props.store_settings.company_logo : Logo" class="w-8 h-8 object-contain flex-shrink-0" alt="Logo"/>
-                    <span v-show="!isCollapsed" class="text-base font-bold text-blue-600 dark:text-blue-400 whitespace-nowrap overflow-hidden transition-all duration-300">
+                    <span v-show="!isCollapsed" class="text-base font-bold whitespace-nowrap overflow-hidden transition-all duration-300" :style="{ color: 'var(--color-primary, #7B00FF)' }">
                         {{ $page.props.store_settings.company_name || 'Skynet' }} Admin
                     </span>
                 </Link>
@@ -150,7 +182,7 @@ onMounted(() => {
                                 'flex w-full items-center rounded-lg font-medium transition-colors cursor-pointer',
                                 isCollapsed ? 'justify-center px-0 py-3' : 'px-4 py-3 gap-0',
                                 isActive(link)
-                                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                    ? 'theme-sidebar-active font-semibold shadow-xs'
                                     : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
                             ]"
                         >
@@ -174,7 +206,7 @@ onMounted(() => {
                                 'flex w-full items-center rounded-lg font-medium transition-colors cursor-pointer',
                                 isCollapsed ? 'justify-center px-0 py-3' : 'px-4 py-3 gap-0',
                                 isActive(link)
-                                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                    ? 'theme-sidebar-active font-semibold shadow-xs'
                                     : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
                             ]"
                         >
@@ -194,7 +226,7 @@ onMounted(() => {
                                 :class="[
                                     'flex items-center px-3 py-2 text-sm rounded-lg transition-colors',
                                     isChildActive(child)
-                                        ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400 font-bold'
+                                        ? 'theme-sidebar-active font-bold'
                                         : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white'
                                 ]"
                             >
@@ -211,7 +243,7 @@ onMounted(() => {
                                 :class="[
                                     'block px-4 py-2 text-sm transition-colors',
                                     isChildActive(child)
-                                        ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 font-bold'
+                                        ? 'theme-sidebar-active font-bold'
                                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white'
                                 ]"
                             >
@@ -263,7 +295,7 @@ onMounted(() => {
                 <div class="flex items-center gap-4">
                     <ThemeToggle/>
                     <div class="hidden sm:flex items-center gap-2">
-                        <div class="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold text-sm">
+                        <div class="h-8 w-8 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-xs" :style="{ backgroundColor: 'var(--color-primary, #7B00FF)' }">
                             {{ $page.props.auth.user?.name?.charAt(0)?.toUpperCase() || 'A' }}
                         </div>
                         <span class="text-sm font-medium">{{ $page.props.auth.user?.name }}</span>

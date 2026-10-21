@@ -37,6 +37,7 @@ class PosConnectionService
                 'last_inventory_sync_at'     => null,
                 'last_error_at'              => null,
                 'last_error_message'         => null,
+                'webhook_url'                => url('/api/webhooks/pos-inventory'),
             ];
         }
 
@@ -53,6 +54,7 @@ class PosConnectionService
             'last_inventory_sync_at'     => $conn->last_inventory_sync_at?->toIso8601String(),
             'last_error_at'              => $conn->last_error_at?->toIso8601String(),
             'last_error_message'         => $conn->last_error_message,
+            'webhook_url'                => url('/api/webhooks/pos-inventory'),
         ];
     }
 

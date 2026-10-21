@@ -24,5 +24,22 @@ export const useThemeStore = defineStore('theme', {
       if (saved) this.theme = saved
       this.applyTheme()
     },
+    applyBrandColors(primary, secondary, darkText) {
+      if (typeof document === 'undefined') return
+      const root = document.documentElement
+      if (primary) {
+        root.style.setProperty('--color-primary', primary)
+        root.style.setProperty('--color-primary-dark', primary)
+        root.style.setProperty('--theme-primary', primary)
+      }
+      if (secondary) {
+        root.style.setProperty('--color-secondary-500', secondary)
+        root.style.setProperty('--color-secondary-600', secondary)
+        root.style.setProperty('--theme-secondary', secondary)
+      }
+      if (darkText) {
+        root.style.setProperty('--theme-dark-heading', darkText)
+      }
+    },
   },
 })

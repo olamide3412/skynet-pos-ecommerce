@@ -82,7 +82,7 @@ class PosSyncService
                 if ($posItemId && in_array((int)$posItemId, $mappedPosIds)) {
                     // Update local cached synced_pos_items
                     SyncedPosItem::where('pos_item_id', $posItemId)->update([
-                        'effective_availability' => $numericQty,
+                        'effective_availability' => (int) round($numericQty),
                         'last_synced_at'         => now(),
                     ]);
 

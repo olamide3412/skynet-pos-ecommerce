@@ -31,7 +31,7 @@ class SyncedPosItem extends Model
         'is_active'              => 'boolean',
         'imei_tracking_enabled' => 'boolean',
         'standard_price'         => 'decimal:2',
-        'effective_availability' => 'decimal:2',
+        'effective_availability' => 'integer',
         'pos_updated_at'         => 'datetime',
         'last_synced_at'         => 'datetime',
     ];

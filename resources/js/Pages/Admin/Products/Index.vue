@@ -98,7 +98,7 @@ const onPosItemSelect = (e) => {
     if (item) {
         form.pos_item_id = item.pos_item_id;
         form.price = item.standard_price;
-        form.stock = item.effective_availability;
+        form.stock = Math.round(Number(item.effective_availability || 0));
         if (!form.name || !isEditing.value) {
             form.name = item.pos_item_name;
         }
@@ -806,7 +806,7 @@ const submitBulkDelete = () => {
                                 >
                                     <option :value="null">-- Choose an item from connected POS branch --</option>
                                     <option v-for="item in synced_pos_items" :key="item.pos_item_id" :value="item.pos_item_id">
-                                        {{ item.pos_item_name }} (Stock: {{ item.effective_availability }} {{ item.base_unit_name }} | ₦{{ Number(item.standard_price).toLocaleString() }})
+                                        {{ item.pos_item_name }} (Stock: {{ Math.round(Number(item.effective_availability || 0)) }} {{ item.base_unit_name }} | ₦{{ Number(item.standard_price).toLocaleString() }})
                                     </option>
                                 </select>
                                 <p v-if="form.pos_item_id" class="text-xs text-indigo-600 dark:text-indigo-400 mt-1.5 flex items-center">

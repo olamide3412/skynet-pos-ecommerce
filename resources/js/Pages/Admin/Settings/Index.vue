@@ -1,6 +1,6 @@
 <script setup>
-import { Head, router, useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { Head, Link, useForm } from '@inertiajs/vue3';
+import { ref, computed } from 'vue';
 import AdminLayout from '@/Layouts/AdminLayout.vue';
 import { useToast } from 'vue-toastification';
 
@@ -10,37 +10,6 @@ const props = defineProps({
     settings: Object,
     pos_connection: Object,
 });
-
-const posPairingForm = useForm({
-    pos_base_url: props.pos_connection?.pos_base_url || '',
-    client_id: props.pos_connection?.client_id || '',
-    api_secret: '',
-});
-const isRepairing = ref(!props.pos_connection?.is_connected);
-const showApiSecret = ref(false);
-const isTestingStoredConnection = ref(false);
-
-const saveAndTestPosConnection = () => {
-    posPairingForm.post(route('admin.pos-integration.save-and-test'), {
-        preserveScroll: true,
-        onSuccess: () => {
-            posPairingForm.api_secret = '';
-            if (props.pos_connection?.is_connected) {
-                isRepairing.value = false;
-            }
-        },
-    });
-};
-
-const testExistingPosConnection = () => {
-    isTestingStoredConnection.value = true;
-    router.post(route('admin.pos-integration.test'), {}, {
-        preserveScroll: true,
-        onFinish: () => {
-            isTestingStoredConnection.value = false;
-        }
-    });
-};
 
 const form = useForm({
     _method: 'PUT',
@@ -123,8 +92,6 @@ const save = () => {
     });
 };
 
-import { computed } from 'vue';
-
 const storeFeatures = computed(() => ({
     shop_enabled:                  { label: 'Shop / Product Listing',   desc: 'Show the /shop page and product listings to visitors.' },
     order_tracking_enabled:        { label: 'Order Tracking',            desc: 'Allow customers to track orders by tracking number or ID.' },
@@ -142,201 +109,72 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
 <template>
     <Head title="Store Settings" />
     <AdminLayout>
-        <div class="max-w-4xl mx-auto">
+        <div class="max-w-4xl mx-auto space-y-6">
+            <!-- Top Navigation Tabs (Matching POS Super Admin Settings Style) -->
+            <div class="flex items-center gap-2 overflow-x-auto border-b border-gray-200 dark:border-gray-700 pb-3">
+                <Link
+                    :href="route('admin.themes.index')"
+                    class="px-4 py-2 rounded-lg text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition flex items-center gap-2"
+                >
+                    <span>🎨</span> Branding & Color Themes
+                </Link>
+                <Link
+                    :href="route('admin.settings.index')"
+                    class="px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-2 text-white shadow-xs"
+                    :style="{ background: `linear-gradient(135deg, var(--color-primary, #7B00FF), var(--color-secondary-500, #FBA43D))` }"
+                >
+                    <span>⚙️</span> General Store Config
+                </Link>
+                <Link
+                    :href="route('admin.pos-connection.index')"
+                    class="px-4 py-2 rounded-lg text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition flex items-center gap-2"
+                >
+                    <span>🔗</span> POS Connection & Pairing
+                </Link>
+                <Link
+                    :href="route('admin.sliders.index')"
+                    class="px-4 py-2 rounded-lg text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition flex items-center gap-2"
+                >
+                    <span>🖼️</span> Sliders & Banners
+                </Link>
+            </div>
+
             <div class="flex items-center justify-between mb-8">
                 <div>
                     <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Store Settings</h1>
                     <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Control all store features, payment methods, taxes, and shipping.</p>
                 </div>
-                <button @click="save" :disabled="form.processing" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2.5 rounded-lg transition flex items-center gap-2 disabled:opacity-60">
+                <button @click="save" :disabled="form.processing" class="text-white hover:opacity-90 font-bold px-6 py-2.5 rounded-lg transition flex items-center gap-2 disabled:opacity-60 shadow-xs" :style="{ backgroundColor: 'var(--color-primary, #7B00FF)' }">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                     {{ form.processing ? 'Saving...' : 'Save Settings' }}
                 </button>
             </div>
 
-            <!-- ─── POS Branch Connection & Pairing ───────────────────────── -->
-            <section class="mb-8 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-xs">
-                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <!-- POS Connection Quick Link Notice -->
+            <div class="mb-8 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-800/80 rounded-xl border border-blue-200 dark:border-blue-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="p-2.5 text-white rounded-lg shrink-0 shadow-xs" :style="{ backgroundColor: 'var(--color-primary, #7B00FF)' }">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+                    </div>
                     <div>
-                        <div class="flex items-center gap-2">
-                            <h2 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                                <span>🔗</span> POS Branch Connection & Pairing
-                            </h2>
-                            <span
-                                v-if="pos_connection?.is_connected"
-                                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
-                            >
-                                ● Connected
-                            </span>
-                            <span
-                                v-else
-                                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
-                            >
-                                ● Disconnected
-                            </span>
-                        </div>
-                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                            Authoritative physical inventory and price source from your connected POS branch.
+                        <h2 class="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                            POS Branch Connection & Pairing
+                            <span v-if="pos_connection?.is_connected" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">● Connected</span>
+                            <span v-else class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">● Disconnected</span>
+                        </h2>
+                        <p class="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+                            Branch pairing, credentials, and webhook notification settings have moved to a dedicated menu.
                         </p>
                     </div>
-                    <div class="flex items-center gap-2">
-                        <button
-                            v-if="pos_connection?.is_connected"
-                            type="button"
-                            @click="testExistingPosConnection"
-                            :disabled="isTestingStoredConnection"
-                            class="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-xs font-semibold text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition flex items-center gap-1.5 disabled:opacity-60"
-                        >
-                            <svg class="w-3.5 h-3.5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-                            {{ isTestingStoredConnection ? 'Testing...' : 'Test Connection' }}
-                        </button>
-                        <button
-                            v-if="pos_connection?.is_connected"
-                            type="button"
-                            @click="isRepairing = !isRepairing"
-                            class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition"
-                        >
-                            {{ isRepairing ? 'Hide Re-pairing' : 'Re-pair / Rotate Credentials' }}
-                        </button>
-                    </div>
                 </div>
-
-                <div class="p-6 space-y-6">
-                    <!-- Connection Summary Dashboard -->
-                    <div class="bg-gray-50 dark:bg-gray-900/40 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
-                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <div>
-                                <h3 class="text-sm font-bold text-gray-900 dark:text-white">
-                                    {{ pos_connection?.pos_branch_name ? `Branch: ${pos_connection.pos_branch_name}` : 'No Connected POS Branch' }}
-                                </h3>
-                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1 font-mono">
-                                    Endpoint: <span class="text-gray-800 dark:text-gray-200">{{ pos_connection?.pos_base_url || 'Not configured' }}</span>
-                                    <span v-if="pos_connection?.pos_branch_id"> (Branch #{{ pos_connection.pos_branch_id }})</span>
-                                    <span v-if="pos_connection?.client_id" class="ml-2">| Client ID: {{ pos_connection.client_id }}</span>
-                                </p>
-                            </div>
-                            <div class="grid grid-cols-3 gap-4 text-xs text-gray-500 dark:text-gray-400">
-                                <div>
-                                    <span class="block text-gray-400">Last Request:</span>
-                                    <span class="font-medium text-gray-700 dark:text-gray-200">{{ pos_connection?.last_successful_request_at ? new Date(pos_connection.last_successful_request_at).toLocaleTimeString() : 'Never' }}</span>
-                                </div>
-                                <div>
-                                    <span class="block text-gray-400">Last Catalog:</span>
-                                    <span class="font-medium text-gray-700 dark:text-gray-200">{{ pos_connection?.last_catalog_sync_at ? new Date(pos_connection.last_catalog_sync_at).toLocaleDateString() : 'Never' }}</span>
-                                </div>
-                                <div>
-                                    <span class="block text-gray-400">Last Stock:</span>
-                                    <span class="font-medium text-gray-700 dark:text-gray-200">{{ pos_connection?.last_inventory_sync_at ? new Date(pos_connection.last_inventory_sync_at).toLocaleTimeString() : 'Never' }}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Clear Error Message Alert Banner -->
-                    <div v-if="pos_connection?.last_error_message" class="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 flex items-start gap-3">
-                        <svg class="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-                        <div class="flex-1">
-                            <h4 class="text-sm font-semibold text-rose-800 dark:text-rose-300">Connection / Authentication Error</h4>
-                            <p class="text-xs text-rose-700 dark:text-rose-400 mt-0.5 font-mono">{{ pos_connection.last_error_message }}</p>
-                            <p v-if="pos_connection.last_error_at" class="text-[11px] text-rose-500 mt-1">Recorded: {{ new Date(pos_connection.last_error_at).toLocaleString() }}</p>
-                        </div>
-                    </div>
-
-                    <!-- Pairing Form -->
-                    <div v-if="!pos_connection?.is_connected || isRepairing" class="border-t border-gray-200 dark:border-gray-700 pt-6">
-                        <div class="mb-4">
-                            <h3 class="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">
-                                {{ pos_connection?.is_connected ? 'Re-pair Connection / Rotate Credentials' : 'Pair New POS Connection' }}
-                            </h3>
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                                Enter the API Base URL, Client ID, and API Secret generated by your POS Super Admin (Branch Directory → Ecommerce Integration).
-                            </p>
-                        </div>
-
-                        <form @submit.prevent="saveAndTestPosConnection" class="space-y-4">
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div class="md:col-span-2">
-                                    <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                                        POS API Base URL *
-                                    </label>
-                                    <input
-                                        type="url"
-                                        v-model="posPairingForm.pos_base_url"
-                                        required
-                                        placeholder="e.g. http://127.0.0.1:8000"
-                                        class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
-                                    />
-                                    <p class="text-[11px] text-gray-400 mt-1">
-                                        The base URL where the POS API is reachable (e.g., http://127.0.0.1:8000 or https://pos.yourdomain.com).
-                                    </p>
-                                </div>
-
-                                <div>
-                                    <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                                        Client ID *
-                                    </label>
-                                    <input
-                                        type="text"
-                                        v-model="posPairingForm.client_id"
-                                        required
-                                        placeholder="e.g. branch-1 or client ID"
-                                        class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                                        API Secret / Token *
-                                    </label>
-                                    <div class="relative">
-                                        <input
-                                            :type="showApiSecret ? 'text' : 'password'"
-                                            v-model="posPairingForm.api_secret"
-                                            required
-                                            placeholder="Paste the secret or token generated by POS"
-                                            class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 pr-10 text-sm focus:ring-2 focus:ring-blue-500 font-mono"
-                                        />
-                                        <button
-                                            type="button"
-                                            @click="showApiSecret = !showApiSecret"
-                                            class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-                                        >
-                                            <span class="text-xs">{{ showApiSecret ? 'Hide' : 'Show' }}</span>
-                                        </button>
-                                    </div>
-                                    <p class="text-[11px] text-gray-400 mt-1">
-                                        Encrypted immediately on save. Never stored or displayed in plain text.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div class="flex items-center justify-between pt-2">
-                                <span class="text-xs text-gray-500">
-                                    Submitting will immediately make an authenticated handshake request to verify credentials.
-                                </span>
-                                <div class="flex items-center gap-2">
-                                    <button
-                                        v-if="pos_connection?.is_connected"
-                                        type="button"
-                                        @click="isRepairing = false"
-                                        class="px-4 py-2 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-800"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        :disabled="posPairingForm.processing"
-                                        class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2.5 rounded-lg text-sm transition flex items-center gap-2 disabled:opacity-60 shadow-xs"
-                                    >
-                                        <svg v-if="posPairingForm.processing" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
-                                        {{ posPairingForm.processing ? 'Saving & Testing...' : 'Save & Test Connection' }}
-                                    </button>
-                                </div>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </section>
+                <Link
+                    :href="route('admin.pos-connection.index')"
+                    class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg text-white hover:opacity-90 transition shrink-0 shadow-xs"
+                    :style="{ backgroundColor: 'var(--color-primary, #7B00FF)' }"
+                >
+                    Manage POS Connection &rarr;
+                </Link>
+            </div>
 
             <form @submit.prevent="save" class="space-y-8">
 
