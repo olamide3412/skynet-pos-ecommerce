@@ -9,6 +9,7 @@
 @source '../../storage/framework/views/*.php';
 @source '../**/*.blade.php';
 @source '../**/*.js';
+@source '../**/*.vue';
 
 @theme {
     --color-primary: #7e22ce;        /* Purple 700 */
@@ -66,6 +67,19 @@
     [data-theme="dark"] .theme-sidebar-active {
       background-color: color-mix(in srgb, var(--color-primary, #7B00FF) 22%, transparent) !important;
       color: color-mix(in srgb, var(--color-primary, #7B00FF) 65%, #ffffff) !important;
+    }
+
+    .sidebar-popover {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.15s ease, visibility 0.15s ease;
+    }
+    .group:hover > .sidebar-popover,
+    .group:focus-within > .sidebar-popover {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
     }
 
     .text-2xs {

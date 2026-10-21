@@ -146,21 +146,24 @@ onMounted(() => {
                 'fixed inset-y-0 left-0 z-30 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col transition-all duration-300',
                 'lg:relative lg:translate-x-0',
                 isMobileOpen ? 'translate-x-0 w-64' : '-translate-x-full lg:translate-x-0',
-                isCollapsed ? 'lg:w-16' : 'lg:w-64'
+                isCollapsed ? 'lg:w-20 overflow-visible' : 'lg:w-64 overflow-hidden'
             ]"
         >
             <!-- Logo / Brand -->
-            <div class="flex items-center h-16 border-b border-gray-200 dark:border-gray-700 px-3 overflow-hidden">
-                <Link href="/" class="flex items-center gap-2 min-w-0">
-                    <img :src="$page.props.store_settings.company_logo ? '/storage/' + $page.props.store_settings.company_logo : Logo" class="w-8 h-8 object-contain flex-shrink-0" alt="Logo"/>
+            <div :class="[
+                'flex items-center h-16 border-b border-gray-200 dark:border-gray-700 transition-all duration-300',
+                isCollapsed ? 'px-2 justify-between' : 'px-4 justify-between overflow-hidden'
+            ]">
+                <Link href="/" class="flex items-center gap-2 min-w-0" :title="$page.props.store_settings?.company_name || 'Skynet Admin'">
+                    <img :src="$page.props.store_settings?.company_logo ? '/storage/' + $page.props.store_settings.company_logo : Logo" class="w-8 h-8 object-contain flex-shrink-0" alt="Logo"/>
                     <span v-show="!isCollapsed" class="text-base font-bold whitespace-nowrap overflow-hidden transition-all duration-300" :style="{ color: 'var(--color-primary, #7B00FF)' }">
-                        {{ $page.props.store_settings.company_name || 'Skynet' }} Admin
+                        {{ $page.props.store_settings?.company_name || 'Skynet' }} Admin
                     </span>
                 </Link>
                 <!-- Desktop collapse toggle -->
                 <button
                     @click="toggleCollapse"
-                    class="hidden lg:flex ml-auto items-center justify-center w-7 h-7 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition flex-shrink-0"
+                    class="hidden lg:flex items-center justify-center w-7 h-7 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition flex-shrink-0 cursor-pointer"
                     :title="isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
                 >
                     <svg class="w-4 h-4 transition-transform duration-300" :class="isCollapsed ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -170,7 +173,14 @@ onMounted(() => {
             </div>
 
             <!-- Nav Links -->
-            <nav class="flex-1 overflow-y-auto py-4 px-2 space-y-1">
+            <nav
+                :class="[
+                    'flex-1 py-4 space-y-1.5 transition-all duration-300',
+                    isCollapsed
+                        ? 'px-2 overflow-visible'
+                        : 'px-3 overflow-y-auto overflow-x-hidden [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-thumb]:bg-gray-600'
+                ]"
+            >
                 <template v-for="link in navLinks" :key="link.label">
                     <div class="relative group">
                         
@@ -179,8 +189,8 @@ onMounted(() => {
                             :href="route(link.route)"
                             :title="isCollapsed ? link.label : ''"
                             :class="[
-                                'flex w-full items-center rounded-lg font-medium transition-colors cursor-pointer',
-                                isCollapsed ? 'justify-center px-0 py-3' : 'px-4 py-3 gap-0',
+                                'flex items-center font-medium transition-all duration-200 cursor-pointer',
+                                isCollapsed ? 'w-12 h-12 justify-center mx-auto rounded-xl' : 'w-full px-4 py-3 gap-0 rounded-lg',
                                 isActive(link)
                                     ? 'theme-sidebar-active font-semibold shadow-xs'
                                     : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
@@ -193,7 +203,7 @@ onMounted(() => {
                                 {{ link.label }}
                             </span>
                             <!-- Tooltip when collapsed -->
-                            <span v-show="isCollapsed" class="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-xs rounded shadow-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 z-50">
+                            <span v-if="isCollapsed" class="sidebar-popover absolute left-full ml-3 px-2.5 py-1.5 bg-gray-900 dark:bg-gray-700 text-white text-xs font-medium rounded-lg shadow-lg whitespace-nowrap z-50">
                                 {{ link.label }}
                             </span>
                         </Link>
@@ -203,8 +213,8 @@ onMounted(() => {
                             @click="toggleMenu(link.label)"
                             :title="isCollapsed ? link.label : ''"
                             :class="[
-                                'flex w-full items-center rounded-lg font-medium transition-colors cursor-pointer',
-                                isCollapsed ? 'justify-center px-0 py-3' : 'px-4 py-3 gap-0',
+                                'flex items-center font-medium transition-all duration-200 cursor-pointer',
+                                isCollapsed ? 'w-12 h-12 justify-center mx-auto rounded-xl' : 'w-full px-4 py-3 gap-0 rounded-lg',
                                 isActive(link)
                                     ? 'theme-sidebar-active font-semibold shadow-xs'
                                     : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
@@ -236,8 +246,8 @@ onMounted(() => {
 
                         <!-- Children (Popover - when collapsed) -->
                         <div v-if="link.children && isCollapsed" 
-                            class="absolute left-full top-0 ml-2 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-[60] py-2 pointer-events-none group-hover:pointer-events-auto">
-                            <div class="px-4 py-2 font-bold text-gray-900 dark:text-white border-b border-gray-100 dark:border-gray-700 mb-1 tracking-wide">{{ link.label }}</div>
+                            class="sidebar-popover absolute left-full top-0 ml-3 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-[70] py-2">
+                            <div class="px-4 py-2 font-bold text-gray-900 dark:text-white border-b border-gray-100 dark:border-gray-700 mb-1 tracking-wide text-xs uppercase">{{ link.label }}</div>
                             <Link v-for="child in link.children" :key="child.label"
                                 :href="route(child.route)"
                                 :class="[
@@ -263,16 +273,16 @@ onMounted(() => {
                     as="button"
                     :title="isCollapsed ? 'Logout' : ''"
                     :class="[
-                        'flex w-full items-center rounded-lg text-sm text-red-600 dark:text-red-400 font-medium hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors group relative',
-                        isCollapsed ? 'justify-center px-0 py-3' : 'px-4 py-2 gap-0'
+                        'flex items-center text-sm text-red-600 dark:text-red-400 font-medium hover:bg-red-50 dark:hover:bg-red-900/20 transition-all duration-200 group relative cursor-pointer',
+                        isCollapsed ? 'w-12 h-12 justify-center mx-auto rounded-xl' : 'w-full px-4 py-2.5 rounded-lg'
                     ]"
                 >
                     <svg class="w-5 h-5 flex-shrink-0" :class="isCollapsed ? '' : 'mr-3'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
                     </svg>
                     <span v-show="!isCollapsed" class="whitespace-nowrap">Logout</span>
-                    <span v-show="isCollapsed"
-                        class="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-xs rounded shadow-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 z-50">
+                    <span v-if="isCollapsed"
+                        class="sidebar-popover absolute left-full ml-3 px-2.5 py-1.5 bg-gray-900 dark:bg-gray-700 text-white text-xs font-medium rounded-lg shadow-lg whitespace-nowrap z-50">
                         Logout
                     </span>
                 </Link>
