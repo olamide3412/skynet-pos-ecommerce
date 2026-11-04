@@ -133,11 +133,14 @@ const handleLogin = () => {
 
                     <div class="flex items-center justify-between">
                         <label class="flex items-center">
-                            <input type="checkbox" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" v-model="form.remember" />
+                            <input type="checkbox" class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded" v-model="form.remember" />
                             <span class="ml-2 text-sm text-gray-600 dark:text-gray-300">Remember me</span>
                         </label>
+                        <a :href="route('password.request')" class="text-sm font-medium text-primary hover:underline">
+                            Forgot password?
+                        </a>
                     </div>
-                    <button class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-md transition" :disabled="form.processing">Sign in</button>
+                    <button class="w-full bg-primary hover:opacity-90 text-white font-bold py-3 rounded-md transition shadow-md" :disabled="form.processing">Sign in</button>
 
                     <!-- Divider -->
                     <div v-if="$page.props.store_settings.google_auth_enabled === '1' || $page.props.store_settings.facebook_auth_enabled === '1'" class="relative mt-6">
@@ -167,7 +170,7 @@ const handleLogin = () => {
                 </form>
                 <p class="text-center text-sm text-gray-600 dark:text-gray-400 mt-4">
                     Don't have an account?
-                    <a :href="route('register')" class="font-medium text-blue-600 dark:text-blue-400 hover:underline">Sign up</a>
+                    <a :href="route('register')" class="font-medium text-primary hover:underline">Sign up</a>
                 </p>
             </div>
         </div>

@@ -11,7 +11,9 @@ class AdminMiddleware
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if (auth('web')->check() && (auth('web')->user()->role === RoleEnums::Administrator->value || auth('web')->user()->role === RoleEnums::SuperAdministrator->value)) {
+        $user = auth('web')->user();
+
+        if ($user && $user->canAccessBackoffice()) {
             return $next($request);
         }
 

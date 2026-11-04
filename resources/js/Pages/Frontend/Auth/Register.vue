@@ -70,7 +70,6 @@ const handleRegister = () => {
             }
         },
         onSuccess: () => {
-            toast.success('Registration successful!');
             form.reset();
         }
     });
@@ -103,7 +102,7 @@ const handleRegister = () => {
                         {{ form.errors.cf_turnstile_response }}
                     </div>
 
-                    <button class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-md transition" :disabled="form.processing">Register</button>
+                    <button class="w-full bg-primary hover:opacity-90 text-white font-bold py-3 rounded-md transition shadow-md" :disabled="form.processing">Register</button>
                     <!-- Divider -->
                     <div v-if="$page.props.store_settings.google_auth_enabled === '1' || $page.props.store_settings.facebook_auth_enabled === '1'" class="relative">
                         <div class="absolute inset-0 flex items-center">
@@ -133,7 +132,7 @@ const handleRegister = () => {
                 
                 <p class="text-center text-sm text-gray-600 dark:text-gray-400 mt-4 border-t dark:border-gray-800 pt-6">
                     Already have an account?
-                    <a :href="route('login')" class="font-medium text-blue-600 dark:text-blue-400 hover:underline">Sign in</a>
+                    <a :href="route('login')" class="font-medium text-primary hover:underline">Sign in</a>
                 </p>
             </div>
         </div>

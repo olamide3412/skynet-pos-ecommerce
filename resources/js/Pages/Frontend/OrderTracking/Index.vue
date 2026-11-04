@@ -51,8 +51,8 @@ const progressWidth = computed(() => {
 
                 <!-- Header -->
                 <div class="text-center mb-12">
-                    <div class="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
                         </svg>
                     </div>
@@ -69,7 +69,7 @@ const progressWidth = computed(() => {
                             </label>
                             <input type="text" v-model="form.tracking_input" required
                                 placeholder="e.g. SKY-AB12CD34  or  1234"
-                                class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-4 py-3 text-lg font-mono uppercase tracking-widest focus:ring-blue-500 focus:border-blue-500" />
+                                class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-4 py-3 text-lg font-mono uppercase tracking-widest focus:ring-primary focus:border-primary" />
                             <p v-if="form.errors.tracking_input" class="text-red-500 text-xs mt-1">{{ form.errors.tracking_input }}</p>
                         </div>
                         <div class="sm:col-span-2">
@@ -78,11 +78,11 @@ const progressWidth = computed(() => {
                             </label>
                             <input type="email" v-model="form.email"
                                 placeholder="Email used at checkout"
-                                class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-4 py-3 focus:ring-blue-500 focus:border-blue-500" />
+                                class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-4 py-3 focus:ring-primary focus:border-primary" />
                         </div>
                     </div>
                     <button type="submit" :disabled="form.processing"
-                        class="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg transition disabled:opacity-60">
+                        class="w-full py-3 rounded-xl bg-primary hover:opacity-90 text-white font-bold text-lg transition disabled:opacity-60 shadow-md">
                         {{ form.processing ? 'Searching...' : '🔍 Track Order' }}
                     </button>
                 </form>
@@ -98,11 +98,11 @@ const progressWidth = computed(() => {
                 <div v-if="order" class="space-y-6">
 
                     <!-- Tracking Number Card -->
-                    <div class="bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-2xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div class="bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary-500,var(--color-primary))] text-white rounded-2xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg">
                         <div>
-                            <p class="text-blue-200 text-sm font-medium uppercase tracking-wider mb-1">Tracking Number</p>
+                            <p class="text-white/80 text-sm font-medium uppercase tracking-wider mb-1">Tracking Number</p>
                             <p class="text-3xl font-black font-mono tracking-widest">{{ order.tracking_number }}</p>
-                            <p class="text-blue-200 text-sm mt-1">Order #{{ order.id }} · {{ new Date(order.created_at).toLocaleDateString('en-NG', { day:'numeric', month:'long', year:'numeric' }) }}</p>
+                            <p class="text-white/80 text-sm mt-1">Order #{{ order.id }} · {{ new Date(order.created_at).toLocaleDateString('en-NG', { day:'numeric', month:'long', year:'numeric' }) }}</p>
                         </div>
                         <div class="flex flex-col gap-2">
                             <!-- Copy shareable link -->
@@ -122,7 +122,7 @@ const progressWidth = computed(() => {
                             <span class="px-4 py-2 rounded-full font-bold text-sm uppercase tracking-wider"
                                 :class="{
                                     'bg-yellow-100 text-yellow-800': order.status === 'pending',
-                                    'bg-blue-100 text-blue-800': order.status === 'paid',
+                                    'bg-primary/10 text-primary border border-primary/20': order.status === 'paid',
                                     'bg-purple-100 text-purple-800': order.status === 'shipped',
                                     'bg-green-100 text-green-800': order.status === 'completed',
                                     'bg-red-100 text-red-800': order.status === 'cancelled',
@@ -140,13 +140,13 @@ const progressWidth = computed(() => {
                         <div v-else class="p-6">
                             <div class="relative flex items-start justify-between">
                                 <div class="absolute top-5 left-0 right-0 h-1 bg-gray-200 dark:bg-gray-700 z-0 rounded-full"></div>
-                                <div class="absolute top-5 left-0 h-1 bg-blue-500 z-0 transition-all duration-700 rounded-full" :style="{ width: progressWidth }"></div>
+                                <div class="absolute top-5 left-0 h-1 bg-primary z-0 transition-all duration-700 rounded-full" :style="{ width: progressWidth }"></div>
                                 <div v-for="(step, i) in steps" :key="step" class="relative z-10 flex flex-col items-center flex-1">
-                                    <div :class="['w-10 h-10 rounded-full flex items-center justify-center border-2 text-sm font-bold transition-all', i <= getStepIndex(order.status) ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-400']">
+                                    <div :class="['w-10 h-10 rounded-full flex items-center justify-center border-2 text-sm font-bold transition-all', i <= getStepIndex(order.status) ? 'bg-primary border-primary text-white shadow-lg' : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-400']">
                                         {{ i + 1 }}
                                     </div>
                                     <p class="mt-2 text-xs font-semibold text-center px-1 leading-tight"
-                                        :class="i <= getStepIndex(order.status) ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400'">
+                                        :class="i <= getStepIndex(order.status) ? 'text-primary font-bold' : 'text-gray-400'">
                                         {{ stepLabels[step] }}
                                     </p>
                                 </div>
@@ -167,12 +167,12 @@ const progressWidth = computed(() => {
                                     <p class="font-semibold truncate">{{ item.product?.name ?? 'Product' }}</p>
                                     <p class="text-sm text-gray-500 dark:text-gray-400">Qty: {{ item.quantity }}</p>
                                 </div>
-                                <p class="font-bold text-blue-600 dark:text-blue-400 whitespace-nowrap">₦{{ (item.price * item.quantity).toLocaleString() }}</p>
+                                <p class="font-bold text-primary whitespace-nowrap">₦{{ (item.price * item.quantity).toLocaleString() }}</p>
                             </div>
                         </div>
                         <div class="p-5 bg-gray-50 dark:bg-gray-900/50 flex justify-between font-extrabold text-lg border-t dark:border-gray-700">
                             <span>Total</span>
-                            <span class="text-blue-600 dark:text-blue-400">₦{{ parseFloat(order.total_amount).toLocaleString() }}</span>
+                            <span class="text-primary">₦{{ parseFloat(order.total_amount).toLocaleString() }}</span>
                         </div>
                     </div>
 

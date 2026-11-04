@@ -16,3 +16,7 @@ use Illuminate\Support\Facades\Route;
 
 // POS Real-time Inventory & Price Webhook
 Route::post('/webhooks/pos-inventory', [PosWebhookController::class, 'handle']);
+
+// Payment Gateway Webhooks (Alternative API paths)
+Route::post('/webhooks/paystack', [\App\Http\Controllers\Frontend\CheckoutController::class, 'paystackWebhook']);
+Route::post('/webhooks/flutterwave', [\App\Http\Controllers\Frontend\CheckoutController::class, 'flutterwaveWebhook']);

@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Frontend;
 
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
+use App\Traits\MergesGuestCart;
 use Illuminate\Support\Facades\Auth;
 use Laravel\Socialite\Facades\Socialite;
 use Illuminate\Support\Str;
 
 class SocialLoginController extends Controller
 {
+    use MergesGuestCart;
     public function redirect($provider)
     {
         if (!in_array($provider, ['google', 'facebook'])) {
@@ -70,8 +72,13 @@ class SocialLoginController extends Controller
                 ]);
             }
 
+            $guestSessionId = request()->session()->getId();
+
             // Log the customer in using the customer guard
             Auth::guard('customer')->login($customer, true);
+            request()->session()->regenerate();
+
+            $this->mergeGuestCart($guestSessionId, $customer);
 
             return redirect()->route('home')->with('success', 'Successfully logged in with '.ucfirst($provider).'!');
 

@@ -15,6 +15,7 @@ class OrderItem extends Model
         'product_id',
         'quantity',
         'price',
+        'cost_price',
         'variant',
         // POS Item, Unit & Variant Snapshots
         'inventory_source',
@@ -30,6 +31,7 @@ class OrderItem extends Model
 
     protected $casts = [
         'price'                       => 'decimal:2',
+        'cost_price'                  => 'decimal:2',
         'quantity_in_base_units'      => 'decimal:4',
         'standard_pos_price_snapshot' => 'decimal:2',
         'online_unit_price'           => 'decimal:2',

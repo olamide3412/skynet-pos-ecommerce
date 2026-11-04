@@ -28,8 +28,10 @@ class PosCatalogService
      */
     public function syncCatalog(bool $forceFull = false): array
     {
+        @set_time_limit(300);
+
         $conn = PosConnection::active();
-        if (!$conn || !$conn->is_connected) {
+        if (!$conn || empty($conn->pos_base_url)) {
             return ['status' => false, 'message' => 'No active POS connection.'];
         }
 
@@ -92,14 +94,17 @@ class PosCatalogService
                 ['pos_item_id' => $data['id']],
                 [
                     'pos_item_name'          => $data['name'] ?? 'Unnamed POS Item',
+                    'pos_category_id'        => $data['pos_category_id'] ?? $data['category_id'] ?? $data['category']['id'] ?? null,
+                    'pos_category_name'      => $data['pos_category_name'] ?? $data['category_name'] ?? $data['category']['name'] ?? null,
                     'barcode'                => $data['barcode'] ?? null,
                     'item_reference'         => $data['item_reference'] ?? $data['reference'] ?? null,
                     'sku'                    => $data['sku'] ?? null,
                     'is_active'              => (bool) ($data['is_active'] ?? true),
                     'base_unit_name'         => $data['base_unit_name'] ?? $data['unit_name'] ?? 'Piece',
                     'standard_price'         => floatval($data['standard_price'] ?? $data['selling_price'] ?? 0),
+                    'buying_price'           => floatval($data['buying_price'] ?? $data['cost_price'] ?? $data['purchase_price'] ?? $data['cost'] ?? $data['unit_cost'] ?? 0),
                     'effective_availability' => (int) round(floatval($data['effective_availability'] ?? $data['quantity'] ?? 0)),
-                    'imei_tracking_enabled' => (bool) ($data['imei_tracking_enabled'] ?? false),
+                    'imei_tracking_enabled'  => (bool) ($data['imei_tracking_enabled'] ?? false),
                     'pos_updated_at'         => isset($data['updated_at']) ? \Illuminate\Support\Carbon::parse($data['updated_at']) : now(),
                     'last_synced_at'         => now(),
                 ]
@@ -144,25 +149,81 @@ class PosCatalogService
     }
 
     /**
-     * Import a synchronized POS catalog item as an Ecommerce Simple Product (draft-first mode).
+     * Import a synchronized POS catalog item as an Ecommerce Simple Product.
      */
-    public function importAsSimpleProduct(int|string $posItemId, array $customFields = []): Product
-    {
-        $syncedItem = SyncedPosItem::with('units')->where('pos_item_id', $posItemId)->firstOrFail();
+    public function importAsSimpleProduct(
+        int|string $posItemId,
+        array $customFields = [],
+        bool $registerMapping = true,
+        bool $logIndividual = true,
+        array &$categoryCache = [],
+        ?SyncedPosItem $preloadedSyncedItem = null
+    ): Product {
+        $syncedItem = $preloadedSyncedItem ?: SyncedPosItem::with('units')->where('pos_item_id', $posItemId)->firstOrFail();
+
+        $status = isset($customFields['status'])
+            ? (bool) $customFields['status']
+            : (bool) ($customFields['is_active'] ?? false);
 
         // Check duplicate mapping
         $existing = Product::where('pos_item_id', $posItemId)->first();
         if ($existing) {
+            $updates = [];
+            if (isset($customFields['status']) || isset($customFields['is_active'])) {
+                $updates['status'] = $status;
+            }
+            if ($syncedItem->buying_price > 0 || $existing->cost_price === null) {
+                $updates['cost_price'] = $syncedItem->buying_price ?? 0;
+            }
+            if (!empty($updates)) {
+                $existing->update($updates);
+            }
             return $existing;
         }
 
-        return DB::transaction(function () use ($syncedItem, $customFields) {
+        $product = DB::transaction(function () use ($syncedItem, $customFields, $status, &$categoryCache) {
             $name = $customFields['name'] ?? $syncedItem->pos_item_name;
             $slug = Str::slug($name) . '-' . uniqid();
             $urlKey = Str::slug($name) . '-' . Str::random(6);
 
+            // Resolve Category:
+            // 1. Explicit override passed in $customFields['category_id']
+            // 2. Matching Ecommerce category by pos_category_name (auto-match or auto-create)
+            // 3. Fallback to first category
+            $categoryId = $customFields['category_id'] ?? null;
+            if (!$categoryId && !empty($syncedItem->pos_category_name)) {
+                $categoryName = trim($syncedItem->pos_category_name);
+                if (isset($categoryCache[$categoryName])) {
+                    $categoryId = $categoryCache[$categoryName];
+                } else {
+                    $matchedCategory = \App\Models\Category::where('name', $categoryName)
+                        ->orWhere('slug', Str::slug($categoryName))
+                        ->first();
+
+                    if (!$matchedCategory) {
+                        $matchedCategory = \App\Models\Category::create([
+                            'name'            => $categoryName,
+                            'slug'            => Str::slug($categoryName) ?: 'category-' . uniqid(),
+                            'visible_in_menu' => true,
+                            'menu_position'   => 0,
+                        ]);
+                    }
+                    $categoryId = $matchedCategory->id;
+                    $categoryCache[$categoryName] = $categoryId;
+                }
+            }
+
+            if (!$categoryId) {
+                if (isset($categoryCache['__fallback_default'])) {
+                    $categoryId = $categoryCache['__fallback_default'];
+                } else {
+                    $categoryId = \App\Models\Category::first()?->id ?? 1;
+                    $categoryCache['__fallback_default'] = $categoryId;
+                }
+            }
+
             $product = Product::create([
-                'category_id'            => $customFields['category_id'] ?? \App\Models\Category::first()?->id ?? 1,
+                'category_id'            => $categoryId,
                 'name'                   => $name,
                 'slug'                   => $slug,
                 'url_key'                => $urlKey,
@@ -170,8 +231,9 @@ class PosCatalogService
                 'description'            => $customFields['description'] ?? "<p>{$syncedItem->pos_item_name}</p>",
                 'short_description'      => $customFields['short_description'] ?? $syncedItem->pos_item_name,
                 'price'                  => $syncedItem->standard_price,
+                'cost_price'             => $customFields['cost_price'] ?? $syncedItem->buying_price ?? 0,
                 'stock'                  => (int) floor($syncedItem->effective_availability),
-                'status'                 => false, // draft-first mode per Section 42AB
+                'status'                 => $status, // Active or draft based on choice
                 'is_new'                 => true,
                 'is_featured'            => false,
                 'visible_individually'   => true,
@@ -191,7 +253,11 @@ class PosCatalogService
             // Update mapping status on synced item
             $syncedItem->update(['mapping_status' => 'mapped_simple']);
 
-            // Register mapping with POS registry for deletion protection
+            return $product;
+        });
+
+        // Perform external HTTP registration and audit logging AFTER transaction commits
+        if ($registerMapping) {
             $this->apiClient->registerMappings([
                 [
                     'pos_item_id'          => $syncedItem->pos_item_id,
@@ -199,35 +265,85 @@ class PosCatalogService
                     'type'                 => 'simple',
                 ],
             ]);
+        }
 
-            PosSyncLog::log('item_import', 'success', "Imported POS item #{$syncedItem->pos_item_id} as product: {$product->name}");
+        if ($logIndividual) {
+            $statusName = $status ? 'active' : 'draft';
+            PosSyncLog::log('item_import', 'success', "Imported POS item #{$syncedItem->pos_item_id} as {$statusName} product: {$product->name}");
+        }
 
-            return $product;
-        });
+        return $product;
     }
 
     /**
      * Bulk import multiple synchronized POS items as simple products.
+     * High-performance chunked processing with batched API mapping registration.
      */
-    public function bulkImportSimpleProducts(array $posItemIds): array
+    public function bulkImportSimpleProducts(array $posItemIds, array $customFields = []): array
     {
+        @set_time_limit(300);
+
         $imported = [];
         $errors = [];
+        $mappingsToRegister = [];
+        $categoryCache = [];
 
-        foreach ($posItemIds as $posItemId) {
-            try {
-                $imported[] = $this->importAsSimpleProduct($posItemId);
-            } catch (\Throwable $e) {
-                $errors[] = [
-                    'pos_item_id' => $posItemId,
-                    'error'       => $e->getMessage(),
-                ];
+        // Process in chunks of 200 items to keep memory and query overhead low
+        foreach (array_chunk($posItemIds, 200) as $chunkIds) {
+            $syncedItems = SyncedPosItem::with('units')
+                ->whereIn('pos_item_id', $chunkIds)
+                ->get()
+                ->keyBy('pos_item_id');
+
+            foreach ($chunkIds as $posItemId) {
+                try {
+                    $syncedItem = $syncedItems->get($posItemId);
+                    if (!$syncedItem) {
+                        continue;
+                    }
+
+                    $product = $this->importAsSimpleProduct(
+                        posItemId: $posItemId,
+                        customFields: $customFields,
+                        registerMapping: false,
+                        logIndividual: false,
+                        categoryCache: $categoryCache,
+                        preloadedSyncedItem: $syncedItem
+                    );
+
+                    $imported[] = $product;
+                    $mappingsToRegister[] = [
+                        'pos_item_id'          => (int) $posItemId,
+                        'ecommerce_product_id' => $product->id,
+                        'type'                 => 'simple',
+                    ];
+                } catch (\Throwable $e) {
+                    $errors[] = [
+                        'pos_item_id' => $posItemId,
+                        'error'       => $e->getMessage(),
+                    ];
+                }
             }
         }
 
+        // Register all mappings with POS deletion protection in batches of 250
+        if (!empty($mappingsToRegister)) {
+            foreach (array_chunk($mappingsToRegister, 250) as $chunk) {
+                try {
+                    $this->apiClient->registerMappings($chunk);
+                } catch (\Throwable $e) {
+                    Log::warning("Failed to register bulk mappings chunk with POS: " . $e->getMessage());
+                }
+            }
+        }
+
+        $total = count($imported);
+        $statusLabel = (!empty($customFields['status']) || !empty($customFields['is_active'])) ? 'active' : 'draft';
+        PosSyncLog::log('item_import', 'success', "Bulk imported {$total} POS items as {$statusLabel} products.");
+
         return [
             'status'         => true,
-            'total_imported' => count($imported),
+            'total_imported' => $total,
             'errors'         => $errors,
         ];
     }
@@ -235,14 +351,16 @@ class PosCatalogService
     /**
      * Import all currently unmapped eligible items.
      */
-    public function importAllEligible(): array
+    public function importAllEligible(array $customFields = []): array
     {
+        @set_time_limit(300);
+
         $unmappedIds = SyncedPosItem::where('mapping_status', 'unmapped')
             ->where('is_active', true)
             ->pluck('pos_item_id')
             ->toArray();
 
-        return $this->bulkImportSimpleProducts($unmappedIds);
+        return $this->bulkImportSimpleProducts($unmappedIds, $customFields);
     }
 
     /**
@@ -303,14 +421,20 @@ class PosCatalogService
      */
     protected function syncProductWithPosData(Product $product, SyncedPosItem $syncedItem): void
     {
-        $product->update([
+        $updateData = [
             'price'                  => $syncedItem->standard_price,
             'stock'                  => (int) floor($syncedItem->effective_availability),
             'pos_item_name_snapshot' => $syncedItem->pos_item_name,
             'pos_base_unit_name'     => $syncedItem->base_unit_name,
             'pos_sync_status'        => $syncedItem->is_active ? 'synced' : 'inactive_pos_item',
             'last_pos_sync_at'       => now(),
-        ]);
+        ];
+
+        if ($syncedItem->buying_price > 0 || $product->cost_price === null) {
+            $updateData['cost_price'] = $syncedItem->buying_price ?? 0;
+        }
+
+        $product->update($updateData);
 
         $this->syncProductUnits($product, $syncedItem);
     }
@@ -342,9 +466,18 @@ class PosCatalogService
      */
     public function reconcileAllMappings(): array
     {
+        @set_time_limit(300);
+
         $mappedProducts = Product::where('inventory_source', 'pos')
             ->whereNotNull('pos_item_id')
             ->get(['id', 'pos_item_id']);
+
+        $activePosItemIds = $mappedProducts->pluck('pos_item_id')->map(fn ($id) => (int) $id)->all();
+
+        // Ensure local synced_pos_items mapping_status matches active products
+        SyncedPosItem::where('mapping_status', '!=', 'unmapped')
+            ->when(!empty($activePosItemIds), fn ($q) => $q->whereNotIn('pos_item_id', $activePosItemIds))
+            ->update(['mapping_status' => 'unmapped']);
 
         $mappings = [];
         foreach ($mappedProducts as $product) {

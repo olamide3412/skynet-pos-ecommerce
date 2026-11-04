@@ -3,12 +3,24 @@ import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import { useToast } from 'vue-toastification';
 import AdminLayout from '@/Layouts/AdminLayout.vue';
+import SettingsNavTabs from '@/Components/Admin/SettingsNavTabs.vue';
+import Pagination from '@/Components/Pagination.vue';
 
 const toast = useToast();
 
 const props = defineProps({
     pos_connection: Object,
-    connection_logs: Array,
+    connection_logs: [Array, Object],
+});
+
+const logsList = computed(() => {
+    if (Array.isArray(props.connection_logs)) return props.connection_logs;
+    return props.connection_logs?.data || [];
+});
+
+const totalLogsCount = computed(() => {
+    if (props.connection_logs?.total !== undefined) return props.connection_logs.total;
+    return logsList.value.length;
 });
 
 const isRepairing = ref(!props.pos_connection?.is_connected);
@@ -75,34 +87,8 @@ const reconcileLocks = () => {
     <AdminLayout>
         <div class="max-w-5xl mx-auto space-y-6">
 
-            <!-- Top Navigation Tabs (Matching POS Super Admin Settings Style) -->
-            <div class="flex items-center gap-2 overflow-x-auto border-b border-gray-200 dark:border-gray-700 pb-3">
-                <Link
-                    :href="route('admin.themes.index')"
-                    class="px-4 py-2 rounded-lg text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition flex items-center gap-2"
-                >
-                    <span>🎨</span> Branding & Color Themes
-                </Link>
-                <Link
-                    :href="route('admin.settings.index')"
-                    class="px-4 py-2 rounded-lg text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition flex items-center gap-2"
-                >
-                    <span>⚙️</span> General Store Config
-                </Link>
-                <Link
-                    :href="route('admin.pos-connection.index')"
-                    class="px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-2 text-white shadow-xs"
-                    :style="{ background: `linear-gradient(135deg, var(--color-primary, #7B00FF), var(--color-secondary-500, #FBA43D))` }"
-                >
-                    <span>🔗</span> POS Connection & Pairing
-                </Link>
-                <Link
-                    :href="route('admin.sliders.index')"
-                    class="px-4 py-2 rounded-lg text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition flex items-center gap-2"
-                >
-                    <span>🖼️</span> Sliders & Banners
-                </Link>
-            </div>
+            <!-- Top Navigation Tabs -->
+            <SettingsNavTabs />
 
             <!-- Header -->
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -122,7 +108,7 @@ const reconcileLocks = () => {
                         :disabled="isTesting"
                         class="px-3.5 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-semibold text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition flex items-center gap-2 shadow-xs disabled:opacity-50"
                     >
-                        <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                        <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
                         {{ isTesting ? 'Testing...' : 'Test Connection' }}
                     </button>
                     <button
@@ -131,9 +117,9 @@ const reconcileLocks = () => {
                         @click="reconcileLocks"
                         :disabled="isReconciling"
                         title="Synchronize deletion-protection locks with POS"
-                        class="px-3.5 py-2 border border-amber-300 dark:border-amber-600 rounded-lg text-sm font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/30 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition flex items-center gap-2 shadow-xs disabled:opacity-50"
+                        class="px-3.5 py-2 border border-secondary-soft rounded-lg text-sm font-semibold text-secondary bg-secondary-soft hover:opacity-90 transition flex items-center gap-2 shadow-xs disabled:opacity-50"
                     >
-                        <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                        <svg class="w-4 h-4 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
                         {{ isReconciling ? 'Reconciling...' : 'Reconcile Locks' }}
                     </button>
                 </div>
@@ -143,7 +129,7 @@ const reconcileLocks = () => {
             <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-xs">
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-5">
                     <div class="flex items-start space-x-4">
-                        <div class="w-12 h-12 rounded-xl flex items-center justify-center bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-bold text-xl shrink-0">
+                        <div class="w-12 h-12 rounded-xl flex items-center justify-center bg-primary-soft text-primary font-bold text-xl shrink-0">
                             POS
                         </div>
                         <div>
@@ -189,10 +175,10 @@ const reconcileLocks = () => {
             </div>
 
             <!-- Real-Time Webhook Configuration Banner -->
-            <div class="rounded-xl border border-indigo-200 dark:border-indigo-900/60 bg-gradient-to-r from-indigo-50/80 via-blue-50/60 to-purple-50/60 dark:from-indigo-950/40 dark:via-blue-950/30 dark:to-purple-950/30 p-5 shadow-xs">
+            <div class="rounded-xl border theme-gradient-banner p-5 shadow-xs">
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div class="flex items-start gap-3.5">
-                        <div class="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                        <div class="w-10 h-10 rounded-xl bg-primary text-white flex items-center justify-center shrink-0 shadow-xs">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
                         </div>
                         <div>
@@ -210,13 +196,13 @@ const reconcileLocks = () => {
                         </div>
                     </div>
                     <div class="flex items-center gap-2 shrink-0">
-                        <code class="px-3 py-2 rounded-lg bg-white dark:bg-gray-800 border border-indigo-200 dark:border-indigo-800 text-xs font-mono text-indigo-700 dark:text-indigo-300 select-all shadow-xs break-all">
+                        <code class="px-3 py-2 rounded-lg bg-white dark:bg-gray-800 border border-primary-soft text-xs font-mono text-primary select-all shadow-xs break-all">
                             {{ webhookUrl }}
                         </code>
                         <button
                             type="button"
                             @click="copyWebhookUrl"
-                            class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-xs transition flex items-center gap-1.5 shrink-0"
+                            class="px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-xs font-semibold shadow-xs transition flex items-center gap-1.5 shrink-0"
                         >
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
                             {{ copied ? 'Copied!' : 'Copy Link' }}
@@ -250,7 +236,7 @@ const reconcileLocks = () => {
                         v-if="pos_connection?.is_connected"
                         type="button"
                         @click="isRepairing = !isRepairing"
-                        class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
+                        class="text-xs font-semibold text-primary hover:underline"
                     >
                         {{ isRepairing ? 'Hide Form' : 'Edit Credentials' }}
                     </button>
@@ -267,7 +253,7 @@ const reconcileLocks = () => {
                                 type="url"
                                 placeholder="http://127.0.0.1:8000 or https://pos.yourcompany.com"
                                 required
-                                class="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                                class="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary"
                             />
                             <p class="text-[11px] text-gray-400 mt-1">
                                 Domain and protocol of the POS system without trailing slashes.
@@ -283,7 +269,7 @@ const reconcileLocks = () => {
                                 type="text"
                                 placeholder="e.g. client_pos_branch_10"
                                 required
-                                class="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                                class="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary"
                             />
                         </div>
 
@@ -297,7 +283,7 @@ const reconcileLocks = () => {
                                     :type="showApiSecret ? 'text' : 'password'"
                                     placeholder="Paste API secret token from POS branch settings"
                                     :required="!pos_connection?.is_configured"
-                                    class="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 pr-16"
+                                    class="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary pr-16"
                                 />
                                 <button
                                     type="button"
@@ -322,8 +308,7 @@ const reconcileLocks = () => {
                         <button
                             type="submit"
                             :disabled="pairingForm.processing"
-                            class="px-5 py-2.5 text-white rounded-lg text-sm font-semibold shadow-xs transition flex items-center gap-2 disabled:opacity-50 hover:opacity-90"
-                            :style="{ backgroundColor: 'var(--color-primary, #7B00FF)' }"
+                            class="px-5 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-lg text-sm font-semibold shadow-xs transition flex items-center gap-2 disabled:opacity-50"
                         >
                             <svg v-if="pairingForm.processing" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
                             <span>{{ pairingForm.processing ? 'Testing & Saving...' : 'Save & Verify Connection' }}</span>
@@ -343,6 +328,9 @@ const reconcileLocks = () => {
                             Recent test pings, connection tests, and incoming webhook events received from the POS.
                         </p>
                     </div>
+                    <span v-if="totalLogsCount > 0" class="px-2.5 py-1 text-xs font-semibold rounded-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                        {{ totalLogsCount }} Total Events
+                    </span>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-left text-xs">
@@ -356,7 +344,7 @@ const reconcileLocks = () => {
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200 dark:divide-gray-700 text-gray-800 dark:text-gray-200 font-mono">
-                            <tr v-for="log in connection_logs" :key="log.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/60 transition">
+                            <tr v-for="log in logsList" :key="log.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/60 transition">
                                 <td class="p-3 whitespace-nowrap text-gray-500 font-sans">
                                     {{ new Date(log.created_at).toLocaleString() }}
                                 </td>
@@ -383,13 +371,18 @@ const reconcileLocks = () => {
                                     {{ log.message }}
                                 </td>
                             </tr>
-                            <tr v-if="!connection_logs || !connection_logs.length">
+                            <tr v-if="!logsList || !logsList.length">
                                 <td colspan="5" class="p-6 text-center text-gray-500 font-sans">
                                     No connection or webhook events recorded yet.
                                 </td>
                             </tr>
                         </tbody>
                     </table>
+                </div>
+
+                <!-- Pagination -->
+                <div v-if="connection_logs?.links && connection_logs.links.length > 3" class="p-4 border-t border-gray-100 dark:border-gray-700/60">
+                    <Pagination :links="connection_logs.links" />
                 </div>
             </div>
 

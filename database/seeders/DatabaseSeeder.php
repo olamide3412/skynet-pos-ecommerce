@@ -89,6 +89,11 @@ class DatabaseSeeder extends Seeder
             'paystack_enabled' => '1',
             'flutterwave_enabled' => '1',
             'cod_enabled' => '1',
+            'bank_transfer_enabled' => '1',
+            'bank_name' => 'First Bank of Nigeria',
+            'bank_account_number' => '0123456789',
+            'bank_account_name' => 'Skynet POS & E-Commerce Ltd',
+            'bank_instructions' => 'Please use your Order Tracking Number as payment narration and contact support after payment.',
             // Tax & Fees
             'tax_enabled' => '1',
             'tax_rate' => '7.5',
@@ -105,14 +110,54 @@ class DatabaseSeeder extends Seeder
             'customer_registration_enabled' => '1',
             'shop_enabled' => '1',
             'guest_checkout_enabled' => '1',
-            'reviews_enabled' => '0',
-            'wishlist_enabled' => '0',
+            'reviews_enabled' => '1',
+            'wishlist_enabled' => '1',
             'tracking_number_prefix' => 'SKY-',
             // Product display defaults
             'show_stock_level_default' => '1',
+            'stock_display_mode' => 'threshold_only',
+            'low_stock_threshold' => '5',
         ];
         foreach ($defaults as $key => $value) {
-            StoreSetting::firstOrCreate(['key' => $key], ['value' => $value]);
+            StoreSetting::updateOrCreate(['key' => $key], ['value' => $value]);
         }
+
+        // Default Shipping Zones
+        $zones = [
+            ['state' => 'Lagos', 'fee' => 1500, 'estimated_days' => '1 - 2 Business Days'],
+            ['state' => 'Abuja (FCT)', 'fee' => 2500, 'estimated_days' => '2 - 3 Business Days'],
+            ['state' => 'Rivers (Port Harcourt)', 'fee' => 2500, 'estimated_days' => '2 - 3 Business Days'],
+            ['state' => 'Delta', 'fee' => 1500, 'estimated_days' => '1 - 2 Business Days'],
+            ['state' => 'Oyo (Ibadan)', 'fee' => 2000, 'estimated_days' => '2 - 3 Business Days'],
+            ['state' => 'Kano', 'fee' => 3500, 'estimated_days' => '3 - 5 Business Days'],
+            ['state' => 'Other States', 'fee' => 3500, 'estimated_days' => '3 - 5 Business Days'],
+        ];
+        foreach ($zones as $zone) {
+            \App\Models\ShippingZone::firstOrCreate(
+                ['state' => $zone['state']],
+                ['fee' => $zone['fee'], 'estimated_days' => $zone['estimated_days'], 'is_active' => true]
+            );
+        }
+
+        // Default Test Coupons
+        \App\Models\Coupon::firstOrCreate(
+            ['code' => 'WELCOME10'],
+            [
+                'type'             => 'percent',
+                'value'            => 10,
+                'min_order_amount' => 5000,
+                'is_active'        => true,
+            ]
+        );
+
+        \App\Models\Coupon::firstOrCreate(
+            ['code' => 'FLAT2000'],
+            [
+                'type'             => 'fixed',
+                'value'            => 2000,
+                'min_order_amount' => 20000,
+                'is_active'        => true,
+            ]
+        );
     }
 }

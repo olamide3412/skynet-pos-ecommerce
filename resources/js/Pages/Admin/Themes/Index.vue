@@ -2,6 +2,7 @@
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import AdminLayout from '@/Layouts/AdminLayout.vue';
+import SettingsNavTabs from '@/Components/Admin/SettingsNavTabs.vue';
 import { useToast } from 'vue-toastification';
 
 const toast = useToast();
@@ -165,7 +166,6 @@ const saveTheme = () => {
     form.put(route('admin.themes.update'), {
         preserveScroll: true,
         onSuccess: () => {
-            toast.success('Dual-Color palette and Dark Mode theme updated successfully!');
             applyLiveStyles();
         },
         onError: () => {
@@ -180,34 +180,8 @@ const saveTheme = () => {
     <AdminLayout>
         <div class="max-w-6xl mx-auto space-y-6">
 
-            <!-- Top Navigation Tabs (Matching POS Super Admin Settings Style) -->
-            <div class="flex items-center gap-2 overflow-x-auto border-b border-gray-200 dark:border-gray-700 pb-3">
-                <Link
-                    :href="route('admin.themes.index')"
-                    class="px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-2 text-white shadow-xs"
-                    :style="{ background: `linear-gradient(135deg, ${form.theme_primary_color}, ${form.theme_secondary_color})` }"
-                >
-                    <span>🎨</span> Branding & Color Themes
-                </Link>
-                <Link
-                    :href="route('admin.settings.index')"
-                    class="px-4 py-2 rounded-lg text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition flex items-center gap-2"
-                >
-                    <span>⚙️</span> General Store Config
-                </Link>
-                <Link
-                    :href="route('admin.pos-connection.index')"
-                    class="px-4 py-2 rounded-lg text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition flex items-center gap-2"
-                >
-                    <span>🔗</span> POS Connection & Pairing
-                </Link>
-                <Link
-                    :href="route('admin.sliders.index')"
-                    class="px-4 py-2 rounded-lg text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition flex items-center gap-2"
-                >
-                    <span>🖼️</span> Sliders & Banners
-                </Link>
-            </div>
+            <!-- Top Navigation Tabs -->
+            <SettingsNavTabs />
 
             <!-- Page Header with Save Button -->
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

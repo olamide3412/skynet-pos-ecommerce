@@ -18,6 +18,18 @@ class StoreSetting extends Model
     }
 
     /**
+     * Get a boolean setting value by key.
+     */
+    public static function getBool(string $key, bool $default = false): bool
+    {
+        $val = static::get($key, null);
+        if ($val === null) {
+            return $default;
+        }
+        return filter_var($val, FILTER_VALIDATE_BOOLEAN);
+    }
+
+    /**
      * Set a setting value by key (create or update).
      */
     public static function set(string $key, mixed $value): void

@@ -1,6 +1,6 @@
 <script setup>
 import { Link, usePage } from '@inertiajs/vue3';
-import { ref, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import FlashMessages from '@/Components/FlashMessages.vue';
 import ThemeToggle from '@/Components/ThemeToggle.vue';
 import Logo from '../../images/logo.png';
@@ -17,48 +17,130 @@ const navLinks = [
         label: 'Dashboard',
         route: 'admin.dashboard',
         match: 'Admin/Dashboard',
+        permission: 'dashboard.view',
         icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6',
     },
     {
         label: 'Catalog',
         icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10',
         children: [
-            { label: 'Products', route: 'admin.products.index', match: 'Admin/Products' },
-            { label: 'Categories', route: 'admin.categories.index', match: 'Admin/Categories' },
-            { label: 'Attributes', route: 'admin.attributes.index', match: 'Admin/Attributes' },
+            { label: 'Products', route: 'admin.products.index', match: 'Admin/Products', permission: 'products.view' },
+            { label: 'Categories', route: 'admin.categories.index', match: 'Admin/Categories', permission: 'categories.manage' },
+            { label: 'Attributes', route: 'admin.attributes.index', match: 'Admin/Attributes', permission: 'attributes.manage' },
+            { label: 'Reviews', route: 'admin.reviews.index', match: 'Admin/Reviews', permission: 'reviews.moderate' },
         ]
     },
     {
         label: 'Sales',
         icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01',
         children: [
-            { label: 'Orders', route: 'admin.orders.index', match: 'Admin/Orders' },
-            { label: 'Revenue', route: 'admin.revenue.index', match: 'Admin/Revenue' },
+            { label: 'Orders', route: 'admin.orders.index', match: 'Admin/Orders', permission: 'orders.view' },
+            { label: 'POD Collections & Remittance', route: 'admin.pod-cash.index', match: 'Admin/PodCash', permissions: ['pod.view_assigned', 'pod.reconcile'] },
+            { label: 'Collections Received', route: 'admin.collections-received.index', match: 'Admin/CollectionsReceived', permissions: ['pod.reconcile', 'orders.view_all'] },
+            { label: 'Discounts & Flash Sales', route: 'admin.discounts.index', match: 'Admin/Discounts', permission: 'discounts.manage' },
+            { label: 'Coupons', route: 'admin.coupons.index', match: 'Admin/Coupons', permission: 'coupons.manage' },
         ]
+    },
+    {
+        label: 'Reports',
+        icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
+        children: [
+            { label: 'End of Day', route: 'admin.reports.end-of-day', match: 'Admin/Reports/EndOfDay', permission: 'reports.end_of_day' },
+            { label: 'Sales Report', route: 'admin.reports.sales', match: 'Admin/Reports/Sales', permission: 'reports.sales.view_own' },
+            { label: 'Revenue & Profit', route: 'admin.revenue.index', match: 'Admin/Revenue', permission: 'reports.revenue_profit' },
+            { label: 'Search Analytics', route: 'admin.reports.search-analytics', match: 'Admin/Reports/SearchAnalytics', permission: 'reports.sales.view_all' },
+        ]
+    },
+    {
+        label: 'Customers',
+        route: 'admin.customers.index',
+        match: 'Admin/Customers',
+        adminOnly: true,
+        icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z',
     },
     {
         label: 'Users',
         route: 'admin.users.index',
         match: 'Admin/Users',
+        permission: 'users.view',
         icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z',
+    },
+    {
+        label: 'Newsletter Subscribers',
+        route: 'admin.newsletter.index',
+        match: 'Admin/Newsletter',
+        permission: 'settings.store',
+        icon: 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z',
     },
     {
         label: 'POS Integration',
         route: 'admin.pos-integration.index',
         match: 'Admin/PosIntegration',
+        permission: 'pos.view',
         icon: 'M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2',
     },
     {
         label: 'Settings',
+        permission: 'settings.store',
         icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z',
         children: [
-            { label: 'Store Config', route: 'admin.settings.index', match: 'Admin/Settings' },
-            { label: 'Color Themes', route: 'admin.themes.index', match: 'Admin/Themes' },
-            { label: 'POS Connection', route: 'admin.pos-connection.index', match: 'Admin/PosConnection' },
-            { label: 'Sliders', route: 'admin.sliders.index', match: 'Admin/Sliders' },
+            { label: 'Store Config', route: 'admin.settings.index', match: 'Admin/Settings', permission: 'settings.store' },
+            { label: 'Roles & Permissions', route: 'admin.roles.index', match: 'Admin/Roles', superAdminOnly: true },
+            { label: 'POS Connection', route: 'admin.pos-connection.index', match: 'Admin/PosConnection', permission: 'pos.manage_connection' },
+            { label: 'Shipping Zones', route: 'admin.shipping-zones.index', match: 'Admin/ShippingZones', permission: 'settings.shipping_zones' },
+            { label: 'Color Themes', route: 'admin.themes.index', match: 'Admin/Themes', permission: 'settings.themes' },
+            { label: 'Sliders', route: 'admin.sliders.index', match: 'Admin/Sliders', permission: 'settings.sliders' },
         ]
     },
 ];
+
+const isSuperAdmin = computed(() => {
+    return !!page.props.auth?.isSuperAdmin;
+});
+
+const userPermissions = computed(() => {
+    return page.props.auth?.permissions || {};
+});
+
+const isAdmin = computed(() => {
+    const role = page.props.auth?.user?.role;
+    return role === 'administrator' || role === 'super administrator' || isSuperAdmin.value;
+});
+
+const hasAccess = (item) => {
+    if (isSuperAdmin.value) return true;
+    if (item.superAdminOnly) return isSuperAdmin.value;
+    if (item.permissions && Array.isArray(item.permissions)) {
+        return item.permissions.some(p => !!userPermissions.value[p]);
+    }
+    if (item.permission) {
+        return !!userPermissions.value[item.permission];
+    }
+    if (item.adminOnly) {
+        return isAdmin.value;
+    }
+    return true;
+};
+
+const filteredNavLinks = computed(() => {
+    return navLinks
+        .filter(link => {
+            if (!hasAccess(link)) return false;
+            if (link.children) {
+                // If all children are filtered out, don't show parent
+                const visibleChildren = link.children.filter(child => hasAccess(child));
+                return visibleChildren.length > 0;
+            }
+            return true;
+        })
+        .map(link => {
+            if (!link.children) return link;
+            return {
+                ...link,
+                children: link.children.filter(child => hasAccess(child)),
+            };
+        });
+});
 
 const expandedMenus = ref([]);
 
@@ -132,6 +214,17 @@ onMounted(() => {
         }
     });
 });
+
+watch(
+    () => page.component,
+    () => {
+        navLinks.forEach(link => {
+            if (link.children && isActive(link) && !expandedMenus.value.includes(link.label)) {
+                expandedMenus.value.push(link.label);
+            }
+        });
+    }
+);
 </script>
 
 <template>
@@ -181,7 +274,7 @@ onMounted(() => {
                         : 'px-3 overflow-y-auto overflow-x-hidden [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-thumb]:bg-gray-600'
                 ]"
             >
-                <template v-for="link in navLinks" :key="link.label">
+                <template v-for="link in filteredNavLinks" :key="link.label">
                     <div class="relative group">
                         
                         <!-- Standalone Link -->

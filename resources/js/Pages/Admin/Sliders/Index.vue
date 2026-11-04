@@ -1,7 +1,8 @@
 <script setup>
 import { ref } from 'vue';
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 import AdminLayout from '@/Layouts/AdminLayout.vue';
+import SettingsNavTabs from '@/Components/Admin/SettingsNavTabs.vue';
 import { useToast } from 'vue-toastification';
 
 const toast = useToast();
@@ -86,9 +87,7 @@ const save = () => {
 
 const deleteSlider = (id) => {
     if (!confirm('Are you sure you want to delete this slider?')) return;
-    useForm({}).delete(route('admin.sliders.destroy', id), {
-        onSuccess: () => toast.success('Slider deleted.'),
-    });
+    useForm({}).delete(route('admin.sliders.destroy', id));
 };
 
 const toggleVisibility = (slider) => {
@@ -108,13 +107,15 @@ const toggleVisibility = (slider) => {
     <Head title="Manage Sliders" />
     <AdminLayout>
         <div class="max-w-7xl mx-auto space-y-6">
+            <!-- Top Navigation Tabs -->
+            <SettingsNavTabs />
             
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Homepage Sliders</h1>
                     <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Add and manage image sliders for the homepage hero section.</p>
                 </div>
-                <button v-if="!showForm" @click="openNewForm" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-semibold shadow-sm hover:shadow transition-all flex items-center gap-2">
+                <button v-if="!showForm" @click="openNewForm" class="bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-xl font-semibold shadow-sm hover:shadow transition-all flex items-center gap-2">
                     <svg class="w-5 h-5 pristine" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                     New Slider
                 </button>
@@ -154,12 +155,12 @@ const toggleVisibility = (slider) => {
                         <div class="space-y-4">
                             <div>
                                 <label class="block text-sm font-semibold mb-1">Headline Text (Optional)</label>
-                                <input v-model="form.title" type="text" placeholder="e.g. Your Trusted Partner for Solar Solutions" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"/>
+                                <input v-model="form.title" type="text" placeholder="e.g. Your Trusted Partner for Solar Solutions" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-3 py-2 text-sm focus:ring-2 focus:ring-primary"/>
                                 <p v-if="form.errors.title" class="mt-1 text-xs text-red-500">{{ form.errors.title }}</p>
                             </div>
                             <div>
                                 <label class="block text-sm font-semibold mb-1">Subheadline (Optional)</label>
-                                <textarea v-model="form.subtitle" rows="2" placeholder="e.g. We sell all kinds of solar equipment..." class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"></textarea>
+                                <textarea v-model="form.subtitle" rows="2" placeholder="e.g. We sell all kinds of solar equipment..." class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-3 py-2 text-sm focus:ring-2 focus:ring-primary"></textarea>
                                 <p v-if="form.errors.subtitle" class="mt-1 text-xs text-red-500">{{ form.errors.subtitle }}</p>
                             </div>
                         </div>
@@ -168,21 +169,21 @@ const toggleVisibility = (slider) => {
                             <div class="grid grid-cols-2 gap-4">
                                 <div>
                                     <label class="block text-sm font-semibold mb-1">Button Text</label>
-                                    <input v-model="form.button_text" type="text" placeholder="e.g. Shop Now" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"/>
+                                    <input v-model="form.button_text" type="text" placeholder="e.g. Shop Now" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-3 py-2 text-sm focus:ring-2 focus:ring-primary"/>
                                 </div>
                                 <div>
                                     <label class="block text-sm font-semibold mb-1">Button Link</label>
-                                    <input v-model="form.button_link" type="text" placeholder="e.g. /shop" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"/>
+                                    <input v-model="form.button_link" type="text" placeholder="e.g. /shop" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-3 py-2 text-sm focus:ring-2 focus:ring-primary"/>
                                 </div>
                             </div>
                             <div class="flex items-center gap-6 mt-6">
                                 <div class="flex-1">
                                     <label class="block text-sm font-semibold mb-1">Sort Order (0 = first)</label>
-                                    <input v-model.number="form.order" type="number" min="0" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"/>
+                                    <input v-model.number="form.order" type="number" min="0" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-3 py-2 text-sm focus:ring-2 focus:ring-primary"/>
                                 </div>
                                 <div class="flex-1">
                                     <label class="block text-sm font-semibold mb-1">Status</label>
-                                    <button type="button" @click="form.is_active = !form.is_active" :class="form.is_active ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'" class="relative inline-flex h-8 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                                    <button type="button" @click="form.is_active = !form.is_active" :class="form.is_active ? 'bg-primary' : 'bg-gray-300 dark:bg-gray-600'" class="relative inline-flex h-8 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2">
                                         <span :class="form.is_active ? 'translate-x-7' : 'translate-x-1'" class="inline-block h-6 w-6 transform rounded-full bg-white transition duration-200 ease-in-out shadow-sm"></span>
                                     </button>
                                 </div>
@@ -195,7 +196,7 @@ const toggleVisibility = (slider) => {
                         <button type="button" @click="cancelForm" class="px-5 py-2.5 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 focus:ring-2 focus:ring-gray-200 transition dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">
                             Cancel
                         </button>
-                        <button type="submit" :disabled="form.processing" class="px-5 py-2.5 text-sm font-bold text-white bg-blue-600 rounded-xl shadow-sm hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition disabled:opacity-50 disabled:cursor-not-allowed">
+                        <button type="submit" :disabled="form.processing" class="px-5 py-2.5 text-sm font-bold text-white bg-primary hover:bg-primary-dark rounded-xl shadow-sm focus:ring-2 focus:ring-primary focus:ring-offset-2 transition disabled:opacity-50 disabled:cursor-not-allowed">
                             {{ form.processing ? 'Saving...' : (isEditing ? 'Update Slider' : 'Create Slider') }}
                         </button>
                     </div>
@@ -218,7 +219,7 @@ const toggleVisibility = (slider) => {
                         <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
                             <tr v-for="slider in sliders" :key="slider.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/60 transition">
                                 <td class="px-6 py-4">
-                                    <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 text-xs font-bold border border-blue-100 dark:border-blue-800">
+                                    <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-primary-soft text-primary text-xs font-bold border border-primary-soft">
                                         {{ slider.order }}
                                     </span>
                                 </td>
@@ -242,7 +243,7 @@ const toggleVisibility = (slider) => {
                                     </button>
                                 </td>
                                 <td class="px-6 py-4 text-right">
-                                    <button @click="editMode(slider)" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-semibold px-2 py-1 rounded transition hover:bg-blue-50 dark:hover:bg-blue-900/20 mr-2">
+                                    <button @click="editMode(slider)" class="text-primary font-semibold px-2 py-1 rounded transition hover:bg-primary-soft mr-2">
                                         Edit
                                     </button>
                                     <button @click="deleteSlider(slider.id)" class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 font-semibold px-2 py-1 rounded transition hover:bg-red-50 dark:hover:bg-red-900/20">

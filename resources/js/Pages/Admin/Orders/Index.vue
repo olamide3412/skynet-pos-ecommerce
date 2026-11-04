@@ -7,6 +7,10 @@ import debounce from 'lodash/debounce';
 
 const props = defineProps({
     orders: Object,
+    podCustody: {
+        type: Object,
+        default: () => ({ cash_in_hand: 0, count: 0 }),
+    },
     filters: {
         type: Object,
         default: () => ({}),
@@ -42,19 +46,45 @@ const clearFilters = () => {
     <AdminLayout>
         <div class="container mx-auto px-4 py-8 text-black dark:text-white max-w-7xl">
             <h1 class="text-3xl font-bold mb-6">Manage Orders</h1>
+
+            <!-- Floating Payments in Custody Alert -->
+            <div
+                v-if="podCustody?.cash_in_hand > 0"
+                class="mb-6 p-4 rounded-2xl bg-amber-500/10 border-2 border-amber-400 dark:border-amber-600 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+            >
+                <div class="flex items-center gap-3">
+                    <span class="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold text-lg flex-shrink-0">
+                        💼
+                    </span>
+                    <div>
+                        <h3 class="text-sm font-bold text-amber-900 dark:text-amber-200">
+                            Payments in Hand (Awaiting Remittance): ₦{{ Number(podCustody.cash_in_hand).toLocaleString('en-NG', { minimumFractionDigits: 2 }) }}
+                        </h3>
+                        <p class="text-xs text-amber-800/80 dark:text-amber-300/80">
+                            You have collected payment for <strong>{{ podCustody.count }}</strong> order(s). Hand these collections (Cash / Transfer / POS) over to the store cashier to clear your float.
+                        </p>
+                    </div>
+                </div>
+                <Link
+                    :href="route('admin.pod-cash.index', { tab: 'in_hand' })"
+                    class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-xs self-start sm:self-auto transition"
+                >
+                    View in POD Station →
+                </Link>
+            </div>
             
             <!-- Filters Bar -->
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border dark:border-gray-700 p-4 mb-6 flex flex-wrap gap-4 items-end">
                 <div class="flex-1 min-w-[200px]">
                     <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Search</label>
-                    <input v-model="search" type="text" placeholder="ID, tracking, email..." 
-                        class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500" />
+                    <input v-model="search" type="text" placeholder="ID, tracking, email, coupon..." 
+                        class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary focus:border-primary" />
                 </div>
                 
                 <div class="w-full sm:w-auto">
                     <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Status</label>
                     <select v-model="status" 
-                        class="w-full sm:w-40 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500">
+                        class="w-full sm:w-40 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary focus:border-primary">
                         <option value="">All Statuses</option>
                         <option value="pending">Pending</option>
                         <option value="processing">Processing</option>
@@ -68,12 +98,12 @@ const clearFilters = () => {
                     <div>
                         <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">From Date</label>
                         <input v-model="startDate" type="date" 
-                            class="w-full sm:w-auto rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500" />
+                            class="w-full sm:w-auto rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary focus:border-primary" />
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">To Date</label>
                         <input v-model="endDate" type="date" 
-                            class="w-full sm:w-auto rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500" />
+                            class="w-full sm:w-auto rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary focus:border-primary" />
                     </div>
                 </div>
 
@@ -102,18 +132,48 @@ const clearFilters = () => {
                             <tr v-for="order in orders.data" :key="order.id" class="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/60 transition">
                                 <td class="p-4 font-mono font-bold text-gray-700 dark:text-gray-300">#{{ order.id }}</td>
                                 <td class="p-4">
-                                    <span class="font-mono text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-2 py-1 rounded border border-blue-100 dark:border-blue-800">
+                                    <span class="font-mono text-xs bg-primary-soft text-primary px-2 py-1 rounded border border-primary-soft">
                                         {{ order.tracking_number || '—' }}
                                     </span>
                                 </td>
                                 <td class="p-4 font-semibold">{{ order.customer ? order.customer.name : order.guest_email }}</td>
-                                <td class="p-4 font-bold text-blue-600 dark:text-blue-400">₦{{ parseFloat(order.total_amount).toLocaleString() }}</td>
+                                <td class="p-4">
+                                    <div class="font-bold text-primary">
+                                        ₦{{ parseFloat(order.total_amount).toLocaleString('en-NG', { minimumFractionDigits: 2 }) }}
+                                    </div>
+                                    <div v-if="order.coupon_code" class="mt-1">
+                                        <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800" :title="'Coupon: ' + order.coupon_code + (parseFloat(order.discount_amount) > 0 ? ' (-₦' + parseFloat(order.discount_amount).toLocaleString() + ')' : '')">
+                                            <span>🎟️</span>
+                                            <span>{{ order.coupon_code }}</span>
+                                            <span v-if="parseFloat(order.discount_amount) > 0" class="font-sans font-normal opacity-85">(-₦{{ parseFloat(order.discount_amount).toLocaleString() }})</span>
+                                        </span>
+                                    </div>
+                                    <div v-if="parseFloat(order.shipping_fee) > 0" class="mt-1">
+                                        <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800" :title="'Shipping Fee: ₦' + parseFloat(order.shipping_fee).toLocaleString()">
+                                            <span>🚚</span>
+                                            <span>Ship: ₦{{ parseFloat(order.shipping_fee).toLocaleString() }}</span>
+                                        </span>
+                                    </div>
+                                    <div v-if="order.payment_method === 'pod' && order.pod_status && order.pod_status !== 'none'" class="mt-1">
+                                        <span
+                                            class="inline-block px-1.5 py-0.5 rounded text-[10px] font-extrabold uppercase"
+                                            :class="{
+                                                'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300': order.pod_status === 'cash_collected',
+                                                'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300': order.pod_status === 'remitted_to_store',
+                                                'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300': order.pod_status === 'reconciled',
+                                                'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300': order.pod_status === 'awaiting_collection',
+                                            }"
+                                        >
+                                            {{ order.pod_status === 'cash_collected' ? '💵 In Hand: ₦' + Number(order.pod_amount_collected || order.total_amount).toLocaleString() : (order.pod_status === 'remitted_to_store' ? '📥 Remitted' : (order.pod_status === 'reconciled' ? '✓ Reconciled' : '⏳ Awaiting Collect')) }}
+                                        </span>
+                                    </div>
+                                </td>
                                 <td class="p-4 text-center">
                                     <span class="px-3 py-1 rounded text-xs font-bold uppercase tracking-wider" 
                                           :class="{
                                             'bg-yellow-100 text-yellow-800': order.status === 'pending',
-                                            'bg-blue-100 text-blue-800': order.status === 'paid',
-                                            'bg-purple-100 text-purple-800': order.status === 'shipped',
+                                            'theme-primary-badge': order.status === 'paid',
+                                            'theme-secondary-badge': order.status === 'shipped',
                                             'bg-green-100 text-green-800': order.status === 'completed',
                                             'bg-red-100 text-red-800': order.status === 'cancelled'
                                           }">
@@ -122,7 +182,7 @@ const clearFilters = () => {
                                 </td>
                                 <td class="p-4 text-right text-gray-500">{{ new Date(order.created_at).toLocaleDateString() }}</td>
                                 <td class="p-4 text-right">
-                                    <Link :href="route('admin.orders.show', order.id)" class="text-blue-500 hover:text-blue-700 font-semibold border border-blue-500 px-3 py-1 rounded hover:bg-blue-50 dark:hover:bg-gray-700 transition">View</Link>
+                                    <Link :href="route('admin.orders.show', order.id)" class="text-primary font-semibold border border-primary px-3 py-1 rounded hover:bg-primary-soft transition">View</Link>
                                 </td>
                             </tr>
                             <tr v-if="!orders.data || orders.data.length === 0">

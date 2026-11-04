@@ -43,6 +43,7 @@ return [
     'flutterwave' => [
         'secret_key' => env('FLW_SECRET_KEY'),
         'base_url' => env('FLW_BASE_URL', 'https://api.flutterwave.com/v3'),
+        'secret_hash' => env('FLW_SECRET_HASH'),
     ],
 
     'paystack' => [

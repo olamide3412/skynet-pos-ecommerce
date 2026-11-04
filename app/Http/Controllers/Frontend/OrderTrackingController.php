@@ -15,6 +15,10 @@ class OrderTrackingController extends Controller
      */
     public function index()
     {
+        if (!StoreSetting::getBool('order_tracking_enabled', true)) {
+            return redirect()->route('home')->with('info', 'Order tracking is currently unavailable.');
+        }
+
         return Inertia::render('Frontend/OrderTracking/Index', [
             'order'      => null,
             'error'      => null,
@@ -28,6 +32,10 @@ class OrderTrackingController extends Controller
      */
     public function track(Request $request)
     {
+        if (!StoreSetting::getBool('order_tracking_enabled', true)) {
+            return redirect()->route('home')->with('info', 'Order tracking is currently unavailable.');
+        }
+
         $request->validate([
             'tracking_input' => 'required|string|max:50',
             'email'          => 'nullable|email',
@@ -71,6 +79,10 @@ class OrderTrackingController extends Controller
      */
     public function trackDirect(string $tracking)
     {
+        if (!StoreSetting::getBool('order_tracking_enabled', true)) {
+            return redirect()->route('home')->with('info', 'Order tracking is currently unavailable.');
+        }
+
         $order = Order::with('items.product')
             ->where('tracking_number', strtoupper($tracking))
             ->first();

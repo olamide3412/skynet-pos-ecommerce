@@ -23,6 +23,11 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin' => AdminMiddleware::class,
             'auth' => Authenticate::class,
             'guest' => RedirectIfAuthenticated::class,
+            'super_admin' => \App\Http\Middleware\SuperAdminOnly::class,
+            'admin_only' => \App\Http\Middleware\AdminOrSuperAdminOnly::class,
+            'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
+            'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
+            'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
         ]);
         $middleware->validateCsrfTokens(except:[
             'flw-webhook',

@@ -23,14 +23,21 @@ class OrderController extends Controller
 
     public function index(Request $request)
     {
+        $currentUser = auth('web')->user();
         $query = Order::with('customer')->latest();
 
-        // Search by tracking number or Order ID
+        // If user cannot view all orders (e.g., dedicated Rider / Dispatch staff), restrict to their assigned deliveries
+        if (!$currentUser->isSuperAdmin() && !$currentUser->can('orders.view_all')) {
+            $query->where('assigned_staff_id', $currentUser->id);
+        }
+
+        // Search by tracking number, Order ID, guest email, or coupon code
         if ($search = $request->input('search')) {
             $query->where(function($q) use ($search) {
                 $q->where('id', 'like', "%{$search}%")
                   ->orWhere('tracking_number', 'like', "%{$search}%")
                   ->orWhere('inventory_reference', 'like', "%{$search}%")
+                  ->orWhere('coupon_code', 'like', "%{$search}%")
                   ->orWhere('guest_email', 'like', "%{$search}%");
             });
         }
@@ -51,16 +58,46 @@ class OrderController extends Controller
             $query->whereDate('created_at', '<=', $endDate);
         }
 
+        $podCashInHand = (float) Order::where(function ($q) use ($currentUser) {
+                $q->where('assigned_staff_id', $currentUser->id)
+                  ->orWhere('remitted_by_staff_id', $currentUser->id);
+            })
+            ->where('payment_method', 'pod')
+            ->where('pod_status', 'cash_collected')
+            ->sum(\Illuminate\Support\Facades\DB::raw('COALESCE(pod_amount_collected, total_amount)'));
+
+        $podCashInHandCount = Order::where(function ($q) use ($currentUser) {
+                $q->where('assigned_staff_id', $currentUser->id)
+                  ->orWhere('remitted_by_staff_id', $currentUser->id);
+            })
+            ->where('payment_method', 'pod')
+            ->where('pod_status', 'cash_collected')
+            ->count();
+
         return Inertia::render('Admin/Orders/Index', [
-            'orders'  => $query->paginate(15)->withQueryString(),
-            'filters' => $request->only(['search', 'status', 'pos_reservation_status', 'start_date', 'end_date'])
+            'orders'     => $query->paginate(15)->withQueryString(),
+            'podCustody' => [
+                'cash_in_hand' => $podCashInHand,
+                'count'        => $podCashInHandCount,
+            ],
+            'filters'    => $request->only(['search', 'status', 'pos_reservation_status', 'start_date', 'end_date'])
         ]);
     }
 
     public function show(Order $order)
     {
+        $currentUser = auth('web')->user();
+        $canReconcile = $currentUser && ($currentUser->isSuperAdmin() || $currentUser->can('pod.reconcile') || in_array($currentUser->role, ['administrator', 'super administrator'], true));
+        $canUpdateStatus = $currentUser && ($currentUser->isSuperAdmin() || $currentUser->can('orders.update_status') || in_array($currentUser->role, ['administrator', 'super administrator'], true));
+
         return Inertia::render('Admin/Orders/Show', [
-            'order' => $order->load('items.product', 'customer'),
+            'order' => $order->load(['items.product', 'customer', 'assignedStaff', 'createdByStaff', 'remittedByStaff', 'reconciledByAdmin', 'statusHistories.user']),
+            'allStaff' => \App\Models\User::whereIn('role', ['staff', 'administrator', 'super administrator'])
+                ->select('id', 'name', 'role')
+                ->orderBy('name')
+                ->get(),
+            'canReconcile' => $canReconcile,
+            'canUpdateStatus' => $canUpdateStatus,
         ]);
     }
 
@@ -74,6 +111,22 @@ class OrderController extends Controller
 
     public function updateStatus(Request $request, Order $order)
     {
+        $user = $request->user();
+        $canUpdate = $user && (
+            $user->isSuperAdmin() ||
+            $user->can('orders.update_status') ||
+            in_array($user->role, ['administrator', 'super administrator'], true)
+        );
+
+        if (!$canUpdate) {
+            return back()->with('error', 'Unauthorized. You do not have permission to modify order fulfillment status.');
+        }
+
+        if (in_array($order->status, ['completed', 'cancelled'], true)) {
+            $formatted = ucfirst($order->status);
+            return back()->with('error', "This order is permanently {$formatted} and its status cannot be modified.");
+        }
+
         $validated = $request->validate([
             'status' => 'required|string|in:pending,paid,processing,shipped,completed,cancelled'
         ]);
@@ -83,10 +136,46 @@ class OrderController extends Controller
 
         $order->update(['status' => $newStatus]);
 
-        // When moving to processing, paid, shipped, or completed (e.g. COD order fulfilled)
+        $user = $request->user();
+        $userName = $user ? $user->name : 'System';
+        $oldFormatted = ucwords(str_replace('_', ' ', $oldStatus));
+        $newFormatted = ucwords(str_replace('_', ' ', $newStatus));
+
+        if ($oldStatus !== $newStatus) {
+            $order->recordStatusHistory(
+                toStatus: $newStatus,
+                fromStatus: $oldStatus,
+                event: 'status_change',
+                comment: "Order status updated from {$oldFormatted} to {$newFormatted} by {$userName}."
+            );
+
+            // Notify customer of order status change via queue
+            $customerEmail = $order->billing_email ?? $order->customer?->email ?? $order->guest_email;
+            if (!empty($customerEmail)) {
+                try {
+                    \Illuminate\Support\Facades\Mail::to($customerEmail)->queue(new \App\Mail\OrderStatusUpdatedMail($order, $newStatus));
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning("Could not queue order status update email for Order #{$order->id}: " . $e->getMessage());
+                }
+            }
+        } else {
+            $order->recordStatusHistory(
+                toStatus: $newStatus,
+                fromStatus: $oldStatus,
+                event: 'status_change',
+                comment: "Order status confirmed as {$newFormatted} by {$userName}."
+            );
+        }
+
+        // When moving to processing, paid, shipped, or completed (e.g. POD order fulfilled)
         if (in_array($newStatus, ['paid', 'processing', 'shipped', 'completed'], true)) {
             if ($order->pos_reservation_status === 'reserved') {
                 $this->reservationService->confirmReservation($order);
+            }
+
+            // Transition POD order to active delivery transit once marked shipped
+            if ($newStatus === 'shipped' && $order->payment_method === 'pod' && $order->pod_status === 'pending_dispatch') {
+                $order->update(['pod_status' => 'awaiting_collection']);
             }
         }
 
@@ -95,6 +184,36 @@ class OrderController extends Controller
             $this->inventoryService->restoreOrderInventory($order);
         }
 
+        // Send transactional email notification to customer on status update
+        if ($oldStatus !== $newStatus && !empty($order->billing_email)) {
+            try {
+                \Illuminate\Support\Facades\Mail::to($order->billing_email)->send(
+                    new \App\Mail\OrderStatusUpdatedMail($order, $newStatus)
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning("Order #{$order->id} status email delivery failed: " . $e->getMessage());
+            }
+        }
+
         return back()->with('success', 'Order status updated.');
+    }
+
+    /**
+     * Record an audit note on the order lifecycle timeline.
+     */
+    public function addNote(Request $request, Order $order)
+    {
+        $validated = $request->validate([
+            'note' => 'required|string|max:1000',
+        ]);
+
+        $order->recordStatusHistory(
+            toStatus: $order->status,
+            fromStatus: $order->status,
+            event: 'note_added',
+            comment: $validated['note']
+        );
+
+        return back()->with('success', 'Order note recorded in history timeline.');
     }
 }

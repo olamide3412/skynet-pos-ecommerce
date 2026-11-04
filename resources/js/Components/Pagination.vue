@@ -7,74 +7,51 @@ const props = defineProps({
     type: Object,
     default: () => null,
   },
+  links: {
+    type: Array,
+    default: () => null,
+  },
 });
 
-// Laravel-style truncation for pagination
-const paginationLinks = computed(() => {
-  if (!props.paginator || !props.paginator.last_page) return [];
-  const pages = [];
-  const total = props.paginator.last_page;
-  const current = props.paginator.current_page || 1;
-
-  if (total <= 7) {
-    for (let i = 1; i <= total; i++) pages.push(i);
-  } else {
-    if (current <= 4) {
-      pages.push(1, 2, 3, 4, 5, '...', total);
-    } else if (current >= total - 3) {
-      pages.push(1, '...', total - 4, total - 3, total - 2, total - 1, total);
-    } else {
-      pages.push(1, '...', current - 1, current, current + 1, '...', total);
-    }
+// Normalized links from either props.links or props.paginator.links
+const rawLinks = computed(() => {
+  if (props.links && Array.isArray(props.links) && props.links.length > 0) {
+    return props.links;
   }
-
-  return pages;
+  if (props.paginator && Array.isArray(props.paginator.links) && props.paginator.links.length > 0) {
+    return props.paginator.links;
+  }
+  return [];
 });
 
-const getUrlForPage = (page) => {
-  if (page === '...' || !props.paginator) return null;
-
-  const baseUrl = props.paginator.path || '';
-  const query = new URLSearchParams(props.paginator.query || {});
-  query.set('page', page);
-  return `${baseUrl}?${query.toString()}`;
-};
+const hasPagination = computed(() => {
+  if (rawLinks.value.length > 3) return true;
+  if (props.paginator && props.paginator.last_page > 1) return true;
+  return false;
+});
 </script>
 
 <template>
-  <div v-if="paginator && paginator.last_page > 1" class="flex justify-center items-center gap-2 mt-6">
-    <Link
-      v-if="paginator.current_page > 1"
-      :href="getUrlForPage(paginator.current_page - 1)"
-      class="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-900"
-    >
-       &lt;&lt;
-    </Link>
-
-    <div v-for="(page, i) in paginationLinks" :key="i" class=" hidden md:inline">
+  <div v-if="hasPagination" class="flex flex-wrap justify-center items-center gap-1.5 mt-6 no-print">
+    <template v-for="(link, index) in rawLinks" :key="index">
       <span
-        v-if="page === '...'"
-        class="px-3 py-1 rounded bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-default"
-      >...</span>
-
+        v-if="!link.url"
+        class="px-3 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-800/50 cursor-not-allowed select-none"
+        v-html="link.label"
+      />
       <Link
         v-else
-        :href="getUrlForPage(page)"
+        :href="link.url"
+        preserve-scroll
+        preserve-state
         :class="[
-          'px-3 py-1 rounded',
-          page === paginator.current_page ? 'bg-secondary-500 text-white ' : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-900',
+          'px-3 py-1.5 text-xs rounded-lg font-semibold transition-all select-none',
+          link.active
+            ? 'bg-primary text-white shadow-xs font-bold border border-primary'
+            : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
         ]"
-      >
-        {{ page }}
-      </Link>
-    </div>
-
-    <Link
-      v-if="paginator.current_page < paginator.last_page"
-      :href="getUrlForPage(paginator.current_page + 1)"
-      class="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300  dark:bg-gray-800 dark:hover:bg-gray-900"
-    >
-        &gt;&gt;
-    </Link>
+        v-html="link.label"
+      />
+    </template>
   </div>
 </template>

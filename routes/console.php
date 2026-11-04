@@ -17,3 +17,13 @@ Schedule::job(new SyncPosAvailabilityJob)->everyTenMinutes();
 // Periodic connection health check every 30 minutes
 Schedule::job(new CheckPosConnectionHealthJob)->everyThirtyMinutes();
 
+// Periodic release of abandoned checkouts and restoration of stock every 5 minutes
+Schedule::command('orders:expire-abandoned')->everyFiveMinutes();
+
+// Periodic sweep to retry unconfirmed POS reservations every 15 minutes
+Schedule::command('orders:retry-pos-confirmations')->everyFifteenMinutes();
+
+// Automatically process queued background jobs (order emails, alerts) every minute
+Schedule::command('queue:work --stop-when-empty --tries=3')
+    ->everyMinute()
+    ->withoutOverlapping();

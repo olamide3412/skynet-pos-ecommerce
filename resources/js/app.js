@@ -26,14 +26,7 @@ createInertiaApp({
     title: (title) => `${title}`,
     resolve: (name) => {
         const pages = import.meta.glob('./Pages/**/*.vue');
-        const page = pages[`./Pages/${name}.vue`]();
-
-        return page.then((module) => {
-            if (!name.startsWith('Admin/') && !name.startsWith('Auth/')) {
-                module.default.layout = module.default.layout || Layout;
-            }
-            return module;
-        });
+        return pages[`./Pages/${name}.vue`]();
     },
     setup({ el, App, props, plugin }) {
         const app = createApp({ render: () => h(App, props) });
@@ -58,6 +51,17 @@ createInertiaApp({
 
         app.mount(el);
 
+        // Smoothly dismiss initial splash screen once Vue app is mounted
+        const splash = document.getElementById('app-splash-screen');
+        if (splash) {
+            splash.classList.add('splash-fade-out');
+            setTimeout(() => {
+                if (splash && splash.parentNode) {
+                    splash.parentNode.removeChild(splash);
+                }
+            }, 380);
+        }
+
         // ✅ Dynamically import AOS to split the chunk (Non-critical)
         import('aos').then((AOS) => {
             const aos = AOS.default || AOS;
@@ -71,7 +75,7 @@ createInertiaApp({
     },
     progress: {
         delay: 250,
-        color: '#ad14f4ff',
+        color: '#FBA43D',
         includeCSS: true,
         showSpinner: false,
     },

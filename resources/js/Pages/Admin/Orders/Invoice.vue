@@ -11,8 +11,8 @@ const print = () => window.print();
 
 const statusBadgeClass = (status) => ({
     pending:   'bg-yellow-100 text-yellow-800',
-    paid:      'bg-blue-100 text-blue-800',
-    shipped:   'bg-purple-100 text-purple-800',
+    paid:      'theme-primary-badge',
+    shipped:   'theme-secondary-badge',
     completed: 'bg-green-100 text-green-800',
     cancelled: 'bg-red-100 text-red-800',
 }[status] || '');
@@ -30,11 +30,11 @@ const statusBadgeClass = (status) => ({
     <AdminLayout>
         <!-- Action Bar (hidden on print) -->
         <div class="no-print flex items-center justify-between mb-6">
-            <Link :href="route('admin.orders.show', order.id)" class="flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-blue-600 transition font-medium">
+            <Link :href="route('admin.orders.show', order.id)" class="flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-primary transition font-medium">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
                 Back to Order
             </Link>
-            <button @click="print" class="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2.5 rounded-lg transition shadow">
+            <button @click="print" class="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white font-bold px-5 py-2.5 rounded-lg transition shadow">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
                 Print / Save PDF
             </button>
@@ -46,7 +46,7 @@ const statusBadgeClass = (status) => ({
             <!-- Header -->
             <div class="flex items-start justify-between border-b border-gray-200 pb-8 mb-8">
                 <div>
-                    <h1 class="text-3xl font-extrabold text-blue-700">{{ ($page.props.store_settings.company_name || 'SKYNET DIGITAL').toUpperCase() }}</h1>
+                    <h1 class="text-3xl font-extrabold text-primary">{{ ($page.props.store_settings.company_name || 'SKYNET DIGITAL').toUpperCase() }}</h1>
                     <p class="text-gray-500 text-sm mt-1" v-if="$page.props.store_settings.company_tagline">{{ $page.props.store_settings.company_tagline }}</p>
                     <p class="text-gray-500 text-sm" v-if="$page.props.store_settings.company_email">{{ $page.props.store_settings.company_email }}</p>
                     <p class="text-gray-500 text-sm" v-if="$page.props.store_settings.company_phone">{{ $page.props.store_settings.company_phone }}</p>
@@ -54,9 +54,9 @@ const statusBadgeClass = (status) => ({
                     <p class="text-gray-500 text-sm mt-1">Delta State, Nigeria</p>
                 </div>
                 <div class="text-right">
-                    <div class="inline-block bg-blue-50 border border-blue-200 rounded-xl px-6 py-4">
-                        <p class="text-xs uppercase tracking-widest text-blue-500 font-bold mb-1">Invoice</p>
-                        <p class="text-4xl font-black text-blue-700">#{{ order.id }}</p>
+                    <div class="inline-block bg-primary-soft border border-primary-soft rounded-xl px-6 py-4">
+                        <p class="text-xs uppercase tracking-widest text-primary font-bold mb-1">Invoice</p>
+                        <p class="text-4xl font-black text-primary">#{{ order.id }}</p>
                     </div>
                     <p class="text-sm text-gray-500 mt-3">
                         Date: {{ new Date(order.created_at).toLocaleDateString('en-NG', { day:'numeric', month:'long', year:'numeric' }) }}
@@ -81,7 +81,7 @@ const statusBadgeClass = (status) => ({
                     <div class="space-y-1">
                         <div class="flex justify-between">
                             <span class="text-gray-500">Method</span>
-                            <span class="font-semibold capitalize">{{ order.payment_method }}</span>
+                            <span class="font-semibold capitalize">{{ ['cod', 'pod'].includes(order.payment_method) ? 'Payment on Delivery (POD)' : (order.payment_method === 'bank_transfer' ? 'Direct Bank Transfer' : order.payment_method) }}</span>
                         </div>
                         <div class="flex justify-between">
                             <span class="text-gray-500">Delivery</span>
@@ -123,11 +123,27 @@ const statusBadgeClass = (status) => ({
                 <div class="w-64 space-y-2 text-sm">
                     <div class="flex justify-between">
                         <span class="text-gray-500">Subtotal</span>
-                        <span class="font-semibold">₦{{ order.items.reduce((a,i) => a + i.price * i.quantity, 0).toLocaleString() }}</span>
+                        <span class="font-semibold">₦{{ order.items ? order.items.reduce((a,i) => a + i.price * i.quantity, 0).toLocaleString('en-NG', { minimumFractionDigits: 2 }) : (parseFloat(order.subtotal || 0).toLocaleString('en-NG', { minimumFractionDigits: 2 })) }}</span>
+                    </div>
+                    <div v-if="order.coupon_code || parseFloat(order.discount_amount) > 0" class="flex justify-between text-emerald-600">
+                        <span class="font-medium">Coupon Discount {{ order.coupon_code ? '(' + order.coupon_code + ')' : '' }}</span>
+                        <span class="font-semibold">-₦{{ parseFloat(order.discount_amount || 0).toLocaleString('en-NG', { minimumFractionDigits: 2 }) }}</span>
+                    </div>
+                    <div class="flex justify-between text-gray-700">
+                        <span class="text-gray-500">Shipping ({{ order.delivery_method || 'delivery' }})</span>
+                        <span class="font-semibold">{{ parseFloat(order.shipping_fee) > 0 ? '₦' + parseFloat(order.shipping_fee).toLocaleString('en-NG', { minimumFractionDigits: 2 }) : (order.delivery_method === 'pickup' ? 'Free Pickup' : 'Free') }}</span>
+                    </div>
+                    <div v-if="parseFloat(order.tax_amount) > 0" class="flex justify-between text-gray-700">
+                        <span class="text-gray-500">Tax / VAT</span>
+                        <span class="font-semibold">₦{{ parseFloat(order.tax_amount).toLocaleString('en-NG', { minimumFractionDigits: 2 }) }}</span>
+                    </div>
+                    <div v-if="parseFloat(order.service_fee) > 0" class="flex justify-between text-gray-700">
+                        <span class="text-gray-500">Service Fee</span>
+                        <span class="font-semibold">₦{{ parseFloat(order.service_fee).toLocaleString('en-NG', { minimumFractionDigits: 2 }) }}</span>
                     </div>
                     <div class="flex justify-between pt-3 border-t border-gray-300 text-lg font-extrabold">
                         <span>Grand Total</span>
-                        <span class="text-blue-700">₦{{ parseFloat(order.total_amount).toLocaleString() }}</span>
+                        <span class="text-primary">₦{{ parseFloat(order.total_amount).toLocaleString('en-NG', { minimumFractionDigits: 2 }) }}</span>
                     </div>
                 </div>
             </div>

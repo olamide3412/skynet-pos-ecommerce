@@ -5,6 +5,10 @@ import { computed, ref } from 'vue';
 
 const props = defineProps({
     order: Object,
+    bank_info: {
+        type: Object,
+        default: null,
+    },
 });
 
 const page = usePage();
@@ -96,7 +100,7 @@ const downloadPdf = async () => {
                     <div class="inline-flex items-center justify-center w-20 h-20 rounded-full bg-green-100 mb-4">
                         <svg class="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
                     </div>
-                    <h2 class="text-xl font-black tracking-widest text-blue-600 dark:text-blue-400 mb-2 uppercase">{{ companyName }}</h2>
+                    <h2 class="text-xl font-black tracking-widest text-primary mb-2 uppercase">{{ companyName }}</h2>
                     <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">Thank you for your order!</h1>
                     <p class="text-gray-500 dark:text-gray-400 max-w-lg mx-auto">
                         Your order has been placed successfully. We've sent a confirmation email to <span class="font-semibold text-gray-800 dark:text-gray-200">{{ order.billing_email }}</span> with your order details.
@@ -117,11 +121,45 @@ const downloadPdf = async () => {
                         </div>
                         <div>
                             <p class="text-xs text-gray-500 dark:text-gray-400 font-semibold uppercase tracking-wider mb-1">Total</p>
-                            <p class="font-bold text-blue-600 dark:text-blue-400 text-lg">₦{{ parseFloat(order.total_amount).toLocaleString() }}</p>
+                            <p class="font-bold text-primary text-lg">₦{{ parseFloat(order.total_amount).toLocaleString() }}</p>
                         </div>
                         <div>
                             <p class="text-xs text-gray-500 dark:text-gray-400 font-semibold uppercase tracking-wider mb-1">Payment Method</p>
-                            <p class="font-bold text-gray-900 dark:text-white capitalize">{{ order.payment_method === 'cod' ? 'Pay on Delivery' : order.payment_method }}</p>
+                            <p class="font-bold text-gray-900 dark:text-white capitalize">
+                                {{ (order.payment_method === 'cod' || order.payment_method === 'pod') ? 'Payment on Delivery (POD)' : (order.payment_method === 'bank_transfer' ? 'Direct Bank Transfer' : order.payment_method) }}
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Direct Bank Transfer Notice & Account Details -->
+                    <div v-if="order.payment_method === 'bank_transfer' && bank_info" class="p-6 bg-blue-50/80 dark:bg-blue-950/40 border-b border-blue-200 dark:border-blue-800">
+                        <div class="flex items-start gap-3">
+                            <div class="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 mt-0.5">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            </div>
+                            <div class="flex-1">
+                                <h3 class="font-bold text-blue-900 dark:text-blue-200 text-base mb-1">Bank Transfer Required</h3>
+                                <p class="text-sm text-blue-800 dark:text-blue-300 mb-4">
+                                    Please transfer exactly <span class="font-bold">₦{{ parseFloat(order.total_amount).toLocaleString() }}</span> to our account below. Use your tracking number <span class="font-mono font-bold bg-white dark:bg-gray-800 px-2 py-0.5 rounded border border-blue-300">{{ order.tracking_number }}</span> as payment reference/narration.
+                                </p>
+                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white dark:bg-gray-800 p-4 rounded-xl border border-blue-200 dark:border-blue-700 text-sm">
+                                    <div>
+                                        <p class="text-xs text-gray-500 uppercase font-semibold">Bank Name</p>
+                                        <p class="font-bold text-gray-900 dark:text-white">{{ bank_info.bank_name }}</p>
+                                    </div>
+                                    <div>
+                                        <p class="text-xs text-gray-500 uppercase font-semibold">Account Number</p>
+                                        <p class="font-mono font-extrabold text-primary text-base select-all">{{ bank_info.bank_account_number }}</p>
+                                    </div>
+                                    <div>
+                                        <p class="text-xs text-gray-500 uppercase font-semibold">Account Name</p>
+                                        <p class="font-bold text-gray-900 dark:text-white">{{ bank_info.bank_account_name }}</p>
+                                    </div>
+                                </div>
+                                <p v-if="bank_info.bank_instructions" class="text-xs text-blue-700 dark:text-blue-400 mt-3 font-medium">
+                                    ℹ️ {{ bank_info.bank_instructions }}
+                                </p>
+                            </div>
                         </div>
                     </div>
 
@@ -157,7 +195,7 @@ const downloadPdf = async () => {
                                             <p v-if="order.billing_address" class="mt-2 text-gray-800 dark:text-gray-300">{{ order.billing_address }}</p>
                                         </div>
                                         <div class="pt-4 border-t border-gray-200 dark:border-gray-700">
-                                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 font-medium text-xs capitalize uppercase tracking-wide">
+                                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium text-xs capitalize uppercase tracking-wide">
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path></svg>
                                                 {{ order.delivery_method === 'pickup' ? 'Store Pickup' : 'Home Delivery' }}
                                             </span>
@@ -169,19 +207,23 @@ const downloadPdf = async () => {
                             <!-- Right: Totals -->
                             <div>
                                 <h3 class="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider mb-3 w-full text-right">Order Summary</h3>
-                                <div class="bg-blue-50/50 dark:bg-gray-800/80 rounded-xl p-5 border border-blue-100 dark:border-gray-700">
+                                <div class="bg-primary/5 dark:bg-gray-800/80 rounded-xl p-5 border border-primary/20 dark:border-gray-700">
                                     <div class="space-y-3 text-sm">
                                         <div class="flex justify-between text-gray-600 dark:text-gray-400">
                                             <span>Subtotal</span>
                                             <span class="font-medium text-gray-900 dark:text-white">₦{{ subtotal.toLocaleString() }}</span>
                                         </div>
+                                        <div v-if="parseFloat(order.discount_amount || 0) > 0" class="flex justify-between text-green-600 dark:text-green-400">
+                                            <span>Coupon Discount ({{ order.coupon_code }})</span>
+                                            <span class="font-medium">-₦{{ parseFloat(order.discount_amount).toLocaleString() }}</span>
+                                        </div>
                                         <div v-if="additionalFees > 0" class="flex justify-between text-gray-600 dark:text-gray-400">
                                             <span>Tax & Shipping Fees</span>
                                             <span class="font-medium text-gray-900 dark:text-white">₦{{ additionalFees.toLocaleString() }}</span>
                                         </div>
-                                        <div class="border-t border-blue-200 dark:border-gray-600 pt-3 mt-3 flex justify-between items-center">
+                                        <div class="border-t border-primary/20 dark:border-gray-600 pt-3 mt-3 flex justify-between items-center">
                                             <span class="text-base font-bold text-gray-900 dark:text-white uppercase tracking-wider">Total</span>
-                                            <span class="text-2xl font-black text-blue-600 dark:text-blue-400">₦{{ parseFloat(order.total_amount).toLocaleString() }}</span>
+                                            <span class="text-2xl font-black text-primary">₦{{ parseFloat(order.total_amount).toLocaleString() }}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -201,7 +243,7 @@ const downloadPdf = async () => {
                 <Link :href="route('shop.index')" class="w-full sm:w-auto px-8 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-200 font-bold hover:bg-gray-50 dark:hover:bg-gray-700 transition text-center shadow-sm">
                     Continue Shopping
                 </Link>
-                <Link :href="route('order.track.direct', order.tracking_number)" class="w-full sm:w-auto px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold transition text-center shadow-md hover:shadow-lg flex justify-center items-center gap-2">
+                <Link :href="route('order.track.direct', order.tracking_number)" class="w-full sm:w-auto px-8 py-3 bg-primary hover:opacity-90 text-white rounded-lg font-bold transition text-center shadow-md hover:shadow-lg flex justify-center items-center gap-2">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
                     Track Order
                 </Link>

@@ -15,6 +15,10 @@ class WishlistController extends Controller
      */
     public function index()
     {
+        if (!StoreSetting::getBool('wishlist_enabled', false)) {
+            return redirect()->route('home')->with('info', 'Wishlist feature is currently disabled.');
+        }
+
         $wishlist = Wishlist::with('product.category')
             ->where('customer_id', auth('customer')->id())
             ->latest()
@@ -31,8 +35,8 @@ class WishlistController extends Controller
     public function toggle(Request $request)
     {
         // Check if wishlists are enabled
-        if (StoreSetting::get('wishlist_enabled', '0') !== '1') {
-            return back()->with('error', 'Wishlist is currently disabled.');
+        if (!StoreSetting::getBool('wishlist_enabled', false)) {
+            return back()->with('info', 'Wishlist feature is currently disabled.');
         }
 
         $request->validate(['product_id' => 'required|exists:products,id']);
@@ -46,13 +50,14 @@ class WishlistController extends Controller
 
         if ($existing) {
             $existing->delete();
-        } else {
-            Wishlist::create([
-                'customer_id' => $customerId,
-                'product_id'  => $productId,
-            ]);
+            return back()->with('info', 'Removed from wishlist.');
         }
 
-        return back();
+        Wishlist::create([
+            'customer_id' => $customerId,
+            'product_id'  => $productId,
+        ]);
+
+        return back()->with('success', 'Saved to wishlist!');
     }
 }

@@ -13,13 +13,26 @@ const props = defineProps({
     logs: Array,
     stats: Object,
     filters: Object,
+    pos_categories: Array,
+    ecommerce_categories: Array,
 });
 
 const search = ref(props.filters?.search || '');
 const mappingStatus = ref(props.filters?.mapping_status || '');
+const posCategory = ref(props.filters?.pos_category || '');
+const perPage = ref(props.filters?.per_page || '25');
 const activeTab = ref('catalog'); // 'catalog' | 'logs'
 const selectedItems = ref([]);
 const isSyncing = ref(false);
+
+// Import Modal State
+const showImportModal = ref(false);
+const importTargetItem = ref(null);
+const importTargetIds = ref([]);
+const isImportingAll = ref(false);
+const selectedTargetCategoryId = ref('');
+const makeActive = ref(true);
+const isSubmittingImport = ref(false);
 
 const webhookUrl = computed(() => {
     return props.connection?.webhook_url || (typeof window !== 'undefined' ? `${window.location.origin}/api/webhooks/pos-inventory` : '/api/webhooks/pos-inventory');
@@ -45,14 +58,18 @@ const showApiSecret = ref(false);
 
 const handleFilter = () => {
     router.get(route('admin.pos-integration.index'), {
-        search: search.value,
-        mapping_status: mappingStatus.value,
+        search: search.value || undefined,
+        mapping_status: mappingStatus.value || undefined,
+        pos_category: posCategory.value || undefined,
+        per_page: perPage.value !== '25' ? perPage.value : undefined,
     }, { preserveState: true, replace: true });
 };
 
 const resetFilter = () => {
     search.value = '';
     mappingStatus.value = '';
+    posCategory.value = '';
+    perPage.value = '25';
     handleFilter();
 };
 
@@ -99,11 +116,14 @@ const reconcileMappings = () => {
     });
 };
 
-const importSingle = (posItemId) => {
+const openSingleImport = (item) => {
     if (!props.connection?.is_connected) return;
-    router.post(route('admin.pos-integration.import-simple'), { pos_item_id: posItemId }, {
-        preserveScroll: true,
-    });
+    importTargetItem.value = item;
+    importTargetIds.value = [item.pos_item_id];
+    isImportingAll.value = false;
+    selectedTargetCategoryId.value = '';
+    makeActive.value = true;
+    showImportModal.value = true;
 };
 
 const toggleSelectAll = (e) => {
@@ -114,18 +134,70 @@ const toggleSelectAll = (e) => {
     }
 };
 
-const bulkImportSelected = () => {
+const openBulkImport = () => {
     if (!selectedItems.value.length || !props.connection?.is_connected) return;
-    router.post(route('admin.pos-integration.bulk-import'), { pos_item_ids: selectedItems.value }, {
-        preserveScroll: true,
-        onSuccess: () => { selectedItems.value = []; }
-    });
+    importTargetItem.value = null;
+    importTargetIds.value = [...selectedItems.value];
+    isImportingAll.value = false;
+    selectedTargetCategoryId.value = '';
+    makeActive.value = true;
+    showImportModal.value = true;
 };
 
-const importAllEligible = () => {
+const openImportAll = () => {
     if (!props.connection?.is_connected) return;
-    if (confirm('Import all unmapped active POS items as draft online products?')) {
-        router.post(route('admin.pos-integration.import-all'), {}, { preserveScroll: true });
+    importTargetItem.value = null;
+    importTargetIds.value = [];
+    isImportingAll.value = true;
+    selectedTargetCategoryId.value = '';
+    makeActive.value = true;
+    showImportModal.value = true;
+};
+
+const confirmImport = () => {
+    if (!props.connection?.is_connected) return;
+    if (!isImportingAll.value && !importTargetIds.value.length) return;
+    isSubmittingImport.value = true;
+
+    const payload = {
+        category_id: selectedTargetCategoryId.value || null,
+        is_active: makeActive.value,
+    };
+
+    if (isImportingAll.value) {
+        router.post(route('admin.pos-integration.import-all'), payload, {
+            preserveScroll: true,
+            onFinish: () => {
+                isSubmittingImport.value = false;
+                showImportModal.value = false;
+                isImportingAll.value = false;
+            }
+        });
+    } else if (importTargetIds.value.length === 1 && importTargetItem.value) {
+        router.post(route('admin.pos-integration.import-simple'), {
+            pos_item_id: importTargetIds.value[0],
+            ...payload,
+        }, {
+            preserveScroll: true,
+            onFinish: () => {
+                isSubmittingImport.value = false;
+                showImportModal.value = false;
+            }
+        });
+    } else {
+        router.post(route('admin.pos-integration.bulk-import'), {
+            pos_item_ids: importTargetIds.value,
+            ...payload,
+        }, {
+            preserveScroll: true,
+            onSuccess: () => {
+                selectedItems.value = [];
+            },
+            onFinish: () => {
+                isSubmittingImport.value = false;
+                showImportModal.value = false;
+            }
+        });
     }
 };
 </script>
@@ -151,7 +223,7 @@ const importAllEligible = () => {
                         :title="!connection.is_configured ? 'No POS connection configured' : 'Test connection with stored credentials'"
                         class="inline-flex items-center px-3.5 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        <svg class="w-4 h-4 mr-2 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                        <svg class="w-4 h-4 mr-2 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
                         Test Connection
                     </button>
                     <button
@@ -169,14 +241,14 @@ const importAllEligible = () => {
                         :title="!connection.is_connected ? 'Store must be connected to a POS branch to reconcile deletion locks' : 'Push and reconcile deletion-protection locks with POS for all active online products'"
                         class="inline-flex items-center px-3.5 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        <svg class="w-4 h-4 mr-2 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                        <svg class="w-4 h-4 mr-2 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
                         Reconcile Locks
                     </button>
                     <button
                         @click="syncCatalog(false)"
                         :disabled="isSyncing || !connection.is_connected"
                         :title="!connection.is_connected ? 'Store must be connected to a POS branch to sync catalog' : 'Sync catalog from connected branch'"
-                        class="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400"
+                        class="inline-flex items-center px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-sm font-medium shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400"
                     >
                         <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/></svg>
                         Sync Catalog
@@ -188,7 +260,7 @@ const importAllEligible = () => {
             <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 shadow-xs">
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div class="flex items-center space-x-3.5">
-                        <div class="w-12 h-12 rounded-xl flex items-center justify-center bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-bold text-xl">
+                        <div class="w-12 h-12 rounded-xl flex items-center justify-center bg-primary-soft text-primary font-bold text-xl">
                             POS
                         </div>
                         <div>
@@ -211,7 +283,7 @@ const importAllEligible = () => {
                                 <button
                                     type="button"
                                     @click="isRepairing = !isRepairing"
-                                    class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline ml-2"
+                                    class="text-xs font-semibold text-primary hover:underline ml-2"
                                 >
                                     {{ isRepairing ? 'Hide Pairing Form' : (connection.is_connected ? 'Re-pair / Rotate Credentials' : 'Configure Connection') }}
                                 </button>
@@ -241,10 +313,10 @@ const importAllEligible = () => {
             </div>
 
             <!-- Real-Time Webhook Configuration Banner -->
-            <div class="rounded-xl border border-indigo-200 dark:border-indigo-900/60 bg-gradient-to-r from-indigo-50/80 via-blue-50/60 to-purple-50/60 dark:from-indigo-950/40 dark:via-blue-950/30 dark:to-purple-950/30 p-4.5 shadow-xs">
+            <div class="rounded-xl border theme-gradient-banner p-4.5 shadow-xs">
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div class="flex items-start gap-3">
-                        <div class="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                        <div class="w-9 h-9 rounded-lg bg-primary text-white flex items-center justify-center shrink-0 shadow-xs">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
                         </div>
                         <div>
@@ -262,13 +334,13 @@ const importAllEligible = () => {
                         </div>
                     </div>
                     <div class="flex items-center gap-2 shrink-0">
-                        <code class="px-3 py-2 rounded-lg bg-white dark:bg-gray-800 border border-indigo-200 dark:border-indigo-800 text-xs font-mono text-indigo-700 dark:text-indigo-300 select-all shadow-xs break-all">
+                        <code class="px-3 py-2 rounded-lg bg-white dark:bg-gray-800 border border-primary-soft text-xs font-mono text-primary select-all shadow-xs break-all">
                             {{ webhookUrl }}
                         </code>
                         <button
                             type="button"
                             @click="copyWebhookUrl"
-                            class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-xs transition flex items-center gap-1.5 shrink-0"
+                            class="px-3.5 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-xs font-semibold shadow-xs transition flex items-center gap-1.5 shrink-0"
                         >
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
                             {{ copied ? 'Copied!' : 'Copy Link' }}
@@ -319,7 +391,7 @@ const importAllEligible = () => {
                                 v-model="pairingForm.pos_base_url"
                                 required
                                 placeholder="e.g. http://127.0.0.1:8000"
-                                class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500"
+                                class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
                             />
                             <p class="text-[11px] text-gray-400 mt-1">
                                 The base URL where the POS API is reachable (e.g., http://127.0.0.1:8000).
@@ -334,7 +406,7 @@ const importAllEligible = () => {
                                 v-model="pairingForm.client_id"
                                 required
                                 placeholder="e.g. branch-1 or client ID"
-                                class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500"
+                                class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
                             />
                         </div>
                         <div>
@@ -347,7 +419,7 @@ const importAllEligible = () => {
                                     v-model="pairingForm.api_secret"
                                     required
                                     placeholder="Paste the secret or token generated by POS"
-                                    class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 pr-10 text-sm focus:ring-2 focus:ring-indigo-500 font-mono"
+                                    class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 pr-10 text-sm focus:ring-2 focus:ring-primary font-mono"
                                 />
                                 <button
                                     type="button"
@@ -368,7 +440,7 @@ const importAllEligible = () => {
                         <button
                             type="submit"
                             :disabled="pairingForm.processing"
-                            class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-2.5 rounded-lg text-sm transition flex items-center gap-2 disabled:opacity-60 shadow-xs"
+                            class="bg-primary hover:bg-primary-dark text-white font-bold px-5 py-2.5 rounded-lg text-sm transition flex items-center gap-2 disabled:opacity-60 shadow-xs"
                         >
                             <svg v-if="pairingForm.processing" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
                             {{ pairingForm.processing ? 'Saving & Testing...' : 'Save & Test Connection' }}
@@ -383,9 +455,9 @@ const importAllEligible = () => {
                     <p class="text-xs font-medium text-gray-500 dark:text-gray-400">Synced Items</p>
                     <p class="text-2xl font-bold text-gray-900 dark:text-white mt-1">{{ stats.total_synced }}</p>
                 </div>
-                <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xs">
+                <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-primary-soft shadow-xs">
                     <p class="text-xs font-medium text-gray-500 dark:text-gray-400">Mapped Products</p>
-                    <p class="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mt-1">{{ stats.mapped_simple + stats.mapped_variant }}</p>
+                    <p class="text-2xl font-bold text-primary mt-1">{{ stats.mapped_simple + stats.mapped_variant }}</p>
                 </div>
                 <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xs">
                     <p class="text-xs font-medium text-gray-500 dark:text-gray-400">Unmapped Items</p>
@@ -404,14 +476,14 @@ const importAllEligible = () => {
                 <button
                     @click="activeTab = 'catalog'"
                     class="pb-3 text-sm font-medium border-b-2 transition"
-                    :class="activeTab === 'catalog' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'"
+                    :class="activeTab === 'catalog' ? 'border-primary text-primary font-bold' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'"
                 >
                     Synced POS Catalog ({{ stats.total_synced }})
                 </button>
                 <button
                     @click="activeTab = 'logs'"
                     class="pb-3 text-sm font-medium border-b-2 transition"
-                    :class="activeTab === 'logs' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'"
+                    :class="activeTab === 'logs' ? 'border-primary text-primary font-bold' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'"
                 >
                     Synchronization Logs ({{ logs.length }})
                 </button>
@@ -428,14 +500,14 @@ const importAllEligible = () => {
                                 @keyup.enter="handleFilter"
                                 type="text"
                                 placeholder="Search by name, barcode, SKU..."
-                                class="w-full text-sm pl-9 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500"
+                                class="w-full text-sm pl-9 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary"
                             />
                             <svg class="w-4 h-4 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                         </div>
                         <select
                             v-model="mappingStatus"
                             @change="handleFilter"
-                            class="text-sm py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                            class="text-sm py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-primary"
                         >
                             <option value="">All Statuses</option>
                             <option value="unmapped">Unmapped</option>
@@ -443,8 +515,29 @@ const importAllEligible = () => {
                             <option value="mapped_variant">Mapped Variant</option>
                             <option value="ignored">Ignored</option>
                         </select>
+                        <select
+                            v-if="pos_categories && pos_categories.length"
+                            v-model="posCategory"
+                            @change="handleFilter"
+                            class="text-sm py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-primary"
+                        >
+                            <option value="">All POS Categories</option>
+                            <option v-for="cat in pos_categories" :key="cat" :value="cat">
+                                {{ cat }}
+                            </option>
+                        </select>
+                        <select
+                            v-model="perPage"
+                            @change="handleFilter"
+                            class="text-sm py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-primary"
+                        >
+                            <option value="25">25 per page</option>
+                            <option value="50">50 per page</option>
+                            <option value="100">100 per page</option>
+                            <option value="all">All</option>
+                        </select>
                         <button
-                            v-if="search || mappingStatus"
+                            v-if="search || mappingStatus || posCategory || perPage !== '25'"
                             @click="resetFilter"
                             class="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 underline"
                         >
@@ -455,17 +548,17 @@ const importAllEligible = () => {
                     <div class="flex items-center space-x-2 w-full sm:w-auto justify-end">
                         <button
                             v-if="selectedItems.length > 0"
-                            @click="bulkImportSelected"
+                            @click="openBulkImport"
                             :disabled="!connection.is_connected"
-                            class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                            class="px-3 py-1.5 bg-primary hover:bg-primary-dark text-white rounded-lg text-xs font-semibold shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             Import Selected ({{ selectedItems.length }})
                         </button>
                         <button
-                            @click="importAllEligible"
+                            @click="openImportAll"
                             :disabled="!connection.is_connected"
                             :title="!connection.is_connected ? 'Store must be connected to a POS branch to import' : 'Import all unmapped active items'"
-                            class="px-3 py-1.5 border border-indigo-600 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-400"
+                            class="px-3 py-1.5 border border-primary text-primary hover:bg-primary-soft rounded-lg text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-400"
                         >
                             Import All Eligible
                         </button>
@@ -479,10 +572,11 @@ const importAllEligible = () => {
                             <thead class="bg-gray-50 dark:bg-gray-900/50 text-gray-600 dark:text-gray-400 font-medium">
                                 <tr>
                                     <th class="p-3 w-10">
-                                        <input type="checkbox" @change="toggleSelectAll" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                                        <input type="checkbox" @change="toggleSelectAll" class="rounded border-gray-300 text-primary focus:ring-primary" />
                                     </th>
                                     <th class="p-3">POS ID</th>
                                     <th class="p-3">Item Name</th>
+                                    <th class="p-3">Category</th>
                                     <th class="p-3">Units & Price</th>
                                     <th class="p-3">Availability</th>
                                     <th class="p-3">Mapping</th>
@@ -496,7 +590,7 @@ const importAllEligible = () => {
                                             type="checkbox"
                                             :value="item.pos_item_id"
                                             v-model="selectedItems"
-                                            class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                            class="rounded border-gray-300 text-primary focus:ring-primary"
                                         />
                                     </td>
                                     <td class="p-3 font-mono text-xs text-gray-500">
@@ -510,9 +604,18 @@ const importAllEligible = () => {
                                         </div>
                                     </td>
                                     <td class="p-3">
+                                        <span v-if="item.pos_category_name" class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium theme-primary-badge border border-primary-soft">
+                                            {{ item.pos_category_name }}
+                                        </span>
+                                        <span v-else class="text-xs text-gray-400 italic">None</span>
+                                    </td>
+                                    <td class="p-3">
                                         <div class="font-medium text-emerald-600 dark:text-emerald-400">
                                             ₦{{ Number(item.standard_price).toLocaleString('en-US', { minimumFractionDigits: 2 }) }}
                                             <span class="text-xs text-gray-500 font-normal">/ {{ item.base_unit_name }}</span>
+                                        </div>
+                                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                            Buying Cost: <span class="font-semibold text-gray-700 dark:text-gray-300">₦{{ Number(item.buying_price || 0).toLocaleString('en-US', { minimumFractionDigits: 2 }) }}</span>
                                         </div>
                                         <div v-if="item.units && item.units.length > 1" class="text-xs text-gray-400 mt-0.5">
                                             + {{ item.units.length - 1 }} additional selling unit(s)
@@ -529,13 +632,13 @@ const importAllEligible = () => {
                                     <td class="p-3">
                                         <span
                                             v-if="item.mapping_status === 'mapped_simple'"
-                                            class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300"
+                                            class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium theme-primary-badge"
                                         >
                                             Simple Product
                                         </span>
                                         <span
                                             v-else-if="item.mapping_status === 'mapped_variant'"
-                                            class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300"
+                                            class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium theme-secondary-badge"
                                         >
                                             Variant Mapped
                                         </span>
@@ -550,31 +653,37 @@ const importAllEligible = () => {
                                         <div v-if="item.mapped_product">
                                             <Link
                                                 :href="route('admin.products.index', { search: item.mapped_product.name })"
-                                                class="text-xs font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 underline"
+                                                class="text-xs font-semibold text-primary hover:opacity-80 underline"
                                             >
                                                 Edit Product #{{ item.mapped_product.id }}
                                             </Link>
                                         </div>
                                         <button
                                             v-else
-                                            @click="importSingle(item.pos_item_id)"
+                                            @click="openSingleImport(item)"
                                             :disabled="!connection.is_connected"
-                                            :title="!connection.is_connected ? 'Store must be connected to import' : 'Import as draft product'"
-                                            class="px-2.5 py-1 text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/40 hover:bg-indigo-100 rounded-md transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                            :title="!connection.is_connected ? 'Store must be connected to import' : 'Import item into catalog'"
+                                            class="px-2.5 py-1 text-xs font-semibold text-primary bg-primary-soft hover:bg-primary-soft rounded-md transition disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
-                                            Import as Draft
+                                            Import Item
                                         </button>
                                     </td>
                                 </tr>
                                 <tr v-if="!items.data || !items.data.length">
-                                    <td colspan="7" class="p-8 text-center text-gray-500">
+                                    <td colspan="8" class="p-8 text-center text-gray-500">
                                         No synchronized POS items found. Click "Sync Catalog" to pull items from your connected POS branch.
                                     </td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
-                    <div v-if="items && items.data && items.data.length" class="p-4 border-t border-gray-200 dark:border-gray-700">
+                    <div v-if="items && items.data && items.data.length" class="p-4 border-t border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <div class="text-xs text-gray-500 dark:text-gray-400">
+                            Showing <span class="font-semibold text-gray-700 dark:text-gray-200">{{ items.from || 0 }}</span> to <span class="font-semibold text-gray-700 dark:text-gray-200">{{ items.to || 0 }}</span> of <span class="font-semibold text-gray-700 dark:text-gray-200">{{ items.total || 0 }}</span> POS items
+                            <span v-if="perPage === 'all'" class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold theme-primary-badge">
+                                Showing All Records
+                            </span>
+                        </div>
                         <Pagination :paginator="items" />
                     </div>
                 </div>
@@ -611,7 +720,7 @@ const importAllEligible = () => {
                                             'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300': log.status === 'success',
                                             'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300': log.status === 'failed',
                                             'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300': log.status === 'warning',
-                                            'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300': log.status === 'started'
+                                            'theme-primary-badge': log.status === 'started'
                                         }"
                                     >
                                         {{ log.status }}
@@ -631,6 +740,127 @@ const importAllEligible = () => {
                             </tr>
                         </tbody>
                     </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Import Confirmation & Category Assignment Modal -->
+        <div v-if="showImportModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+            <div class="bg-white dark:bg-gray-800 rounded-2xl max-w-md w-full p-6 shadow-xl border border-gray-100 dark:border-gray-700 space-y-4">
+                <div class="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-700">
+                    <h3 class="text-base font-bold text-gray-900 dark:text-white">
+                        <template v-if="isImportingAll">
+                            Import All Eligible POS Items
+                        </template>
+                        <template v-else-if="importTargetItem">
+                            Import POS Item as Product
+                        </template>
+                        <template v-else>
+                            Bulk Import ({{ importTargetIds.length }}) Items
+                        </template>
+                    </h3>
+                    <button @click="showImportModal = false" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                        ✕
+                    </button>
+                </div>
+
+                <div v-if="isImportingAll" class="bg-primary-soft p-3 rounded-xl border border-primary-soft">
+                    <p class="text-sm font-semibold text-primary">
+                        All unmapped active POS items will be imported into your ecommerce catalog.
+                    </p>
+                </div>
+                <div v-else-if="importTargetItem" class="bg-gray-50 dark:bg-gray-900/50 p-3 rounded-xl space-y-1">
+                    <p class="text-sm font-semibold text-gray-900 dark:text-white">{{ importTargetItem.pos_item_name }}</p>
+                    <p class="text-xs text-gray-500">
+                        POS Category:
+                        <span v-if="importTargetItem.pos_category_name" class="font-medium text-primary">
+                            {{ importTargetItem.pos_category_name }}
+                        </span>
+                        <span v-else class="italic">None</span>
+                    </p>
+                </div>
+                <div v-else class="bg-gray-50 dark:bg-gray-900/50 p-3 rounded-xl">
+                    <p class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {{ importTargetIds.length }} items selected for import.
+                    </p>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+                        Target Ecommerce Category / Subcategory
+                    </label>
+                    <select
+                        v-model="selectedTargetCategoryId"
+                        class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white py-2 px-3 focus:ring-2 focus:ring-primary"
+                    >
+                        <option value="">
+                            Auto-match POS Category (or create if new)
+                        </option>
+                        <template v-for="cat in ecommerce_categories" :key="cat.id">
+                            <option :value="cat.id" class="font-bold">
+                                {{ cat.name }} (Parent)
+                            </option>
+                            <option
+                                v-for="sub in cat.children"
+                                :key="sub.id"
+                                :value="sub.id"
+                                class="pl-4"
+                            >
+                                &nbsp;&nbsp;&nbsp;&nbsp;↳ {{ sub.name }}
+                            </option>
+                        </template>
+                    </select>
+                    <p class="text-[11px] text-gray-400 mt-1.5">
+                        Leave as "Auto-match" to use the item's POS category, or select a specific subcategory above.
+                    </p>
+                </div>
+
+                <!-- Active / Published Status Checkbox Choice -->
+                <div class="pt-1">
+                    <label class="flex items-start gap-3 p-3 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition">
+                        <input
+                            type="checkbox"
+                            v-model="makeActive"
+                            class="mt-0.5 rounded border-gray-300 text-primary focus:ring-primary w-4 h-4 cursor-pointer"
+                        />
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-bold text-gray-900 dark:text-white">
+                                    Make Active / Published Immediately
+                                </span>
+                                <span
+                                    class="text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase"
+                                    :class="makeActive ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'"
+                                >
+                                    {{ makeActive ? 'Active' : 'Draft' }}
+                                </span>
+                            </div>
+                            <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 leading-snug">
+                                {{ makeActive
+                                    ? 'Products will be active and immediately visible in the store without needing to edit them in Products.'
+                                    : 'Products will be saved as unpublished drafts.' }}
+                            </p>
+                        </div>
+                    </label>
+                </div>
+
+                <div class="flex items-center justify-end space-x-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                    <button
+                        type="button"
+                        @click="showImportModal = false"
+                        class="px-4 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="button"
+                        @click="confirmImport"
+                        :disabled="isSubmittingImport"
+                        class="px-4 py-2 text-xs font-bold bg-primary hover:bg-primary-dark text-white rounded-lg transition disabled:opacity-50 flex items-center gap-1.5"
+                    >
+                        <svg v-if="isSubmittingImport" class="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+                        {{ makeActive ? 'Import & Make Active' : 'Import as Draft' }}
+                    </button>
                 </div>
             </div>
         </div>

@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Frontend;
 
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
+use App\Models\StoreSetting;
+use App\Traits\MergesGuestCart;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -13,6 +15,8 @@ use App\Rules\Turnstile;
 
 class CustomerAuthController extends Controller
 {
+    use MergesGuestCart;
+
     public function showLogin()
     {
         if (Auth::guard('customer')->check()) {
@@ -26,11 +30,20 @@ class CustomerAuthController extends Controller
         if (Auth::guard('customer')->check()) {
             return redirect()->route('home');
         }
+
+        if (!StoreSetting::getBool('customer_registration_enabled', true)) {
+            return redirect()->route('login')->with('warning', 'New customer registration is currently disabled.');
+        }
+
         return Inertia::render('Frontend/Auth/Register');
     }
 
     public function register(Request $request)
     {
+        if (!StoreSetting::getBool('customer_registration_enabled', true)) {
+            return redirect()->route('login')->with('error', 'New customer registration is currently disabled.');
+        }
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:customers',
@@ -38,6 +51,8 @@ class CustomerAuthController extends Controller
             'phone' => 'nullable|string|max:20',
             'cf_turnstile_response' => ['required', new Turnstile()],
         ]);
+
+        $guestSessionId = $request->session()->getId();
 
         $customer = Customer::create([
             'name' => $validated['name'],
@@ -47,6 +62,15 @@ class CustomerAuthController extends Controller
         ]);
 
         Auth::guard('customer')->login($customer);
+        $request->session()->regenerate();
+
+        $this->mergeGuestCart($guestSessionId, $customer);
+
+        try {
+            \Illuminate\Support\Facades\Mail::to($customer->email)->send(new \App\Mail\CustomerWelcomeMail($customer));
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning("Customer #{$customer->id} welcome email failed: " . $e->getMessage());
+        }
 
         return redirect()->route('home')->with('success', 'Registration successful! Welcome to Skynet Digital Store.');
     }
@@ -61,8 +85,13 @@ class CustomerAuthController extends Controller
         
         unset($credentials['cf_turnstile_response']);
 
+        $guestSessionId = $request->session()->getId();
+
         if (Auth::guard('customer')->attempt($credentials, $request->remember ?? false)) {
             $request->session()->regenerate();
+
+            $customer = Auth::guard('customer')->user();
+            $this->mergeGuestCart($guestSessionId, $customer);
             
             // If they are checking out, redirect them back to checkout
             if ($request->session()->pull('url.intended') == route('checkout.index')) {

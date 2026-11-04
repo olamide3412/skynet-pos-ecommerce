@@ -12,10 +12,38 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    reviews: {
+        type: Array,
+        default: () => [],
+    },
+    average_rating: {
+        type: Number,
+        default: 5.0,
+    },
+    reviews_count: {
+        type: Number,
+        default: 0,
+    },
+    user_review: {
+        type: Object,
+        default: null,
+    },
 });
 
 const page = usePage();
 const toast = useToast();
+
+const reviewsEnabled = computed(() => page.props.store_settings?.reviews_enabled === '1');
+const reviewForm = useForm({
+    rating: props.user_review?.rating || 5,
+    comment: props.user_review?.comment || '',
+});
+
+const submitReview = () => {
+    reviewForm.post(route('products.reviews.store', props.product.id), {
+        preserveScroll: true,
+    });
+};
 
 const wishlistEnabled = computed(() => page.props.store_settings?.wishlist_enabled === '1');
 const isWishlisted = ref(props.is_wishlisted);
@@ -64,6 +92,9 @@ const displayPrice = computed(() => {
     if (selectedVariant.value && selectedVariant.value.price) {
         return parseFloat(selectedVariant.value.price);
     }
+    if (props.product.is_on_flash_sale && props.product.special_price) {
+        return parseFloat(props.product.special_price);
+    }
     return props.product.discount_price 
         ? parseFloat(props.product.discount_price) 
         : parseFloat(props.product.price);
@@ -90,11 +121,57 @@ const isPurchasable = computed(() => {
     return maxStock.value > 0;
 });
 
+const stockDisplayMode = computed(() => page.props.store_settings?.stock_display_mode || 'threshold_only');
+const lowStockThreshold = computed(() => {
+    const val = parseInt(page.props.store_settings?.low_stock_threshold);
+    return isNaN(val) ? 5 : val;
+});
+
+const stockBadge = computed(() => {
+    if (!isPurchasable.value || maxStock.value <= 0) {
+        return {
+            text: 'Out of Stock',
+            class: 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 border-red-200 dark:border-red-800 font-semibold',
+        };
+    }
+
+    if (stockDisplayMode.value === 'threshold_only') {
+        if (maxStock.value <= lowStockThreshold.value) {
+            return {
+                text: `Only ${maxStock.value} left in stock`,
+                class: 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700 animate-pulse font-bold',
+            };
+        }
+        return {
+            text: 'In Stock',
+            class: 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800 font-semibold',
+        };
+    }
+
+    if (stockDisplayMode.value === 'always') {
+        if (props.product.show_stock_level) {
+            return {
+                text: `In Stock (${maxStock.value})`,
+                class: 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800 font-semibold',
+            };
+        }
+        return {
+            text: 'In Stock',
+            class: 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800 font-semibold',
+        };
+    }
+
+    // hidden / default
+    return {
+        text: 'In Stock',
+        class: 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800 font-semibold',
+    };
+});
+
 const addToCart = () => {
     if (!isPurchasable.value) return;
     form.post(route('cart.store'), {
         preserveScroll: true,
-        onSuccess: () => toast.success(`${props.product.name} added to cart!`),
     });
 };
 
@@ -119,7 +196,7 @@ const buyNow = () => {
 
 const toggleWishlist = () => {
     if (!page.props.auth.customer) {
-        toast.info('Please log in to save items to your wishlist.');
+        router.visit(route('login'));
         return;
     }
     togglingWishlist.value = true;
@@ -127,7 +204,6 @@ const toggleWishlist = () => {
         preserveScroll: true,
         onSuccess: () => {
             isWishlisted.value = !isWishlisted.value;
-            toast.success(isWishlisted.value ? 'Saved to wishlist!' : 'Removed from wishlist.');
         },
         onError: () => toast.error('Could not update wishlist.'),
         onFinish: () => { togglingWishlist.value = false; },
@@ -144,17 +220,89 @@ const breadcrumbs = computed(() => {
     crumbs.push({ label: props.product.name });
     return crumbs;
 });
+
+// SEO & Structured Data
+const pageUrl = computed(() => {
+    if (typeof window !== 'undefined') return window.location.href;
+    return route('shop.show', props.product.url_key);
+});
+
+const seoTitle = computed(() => {
+    const store = page.props.store_settings?.company_name || 'Skynet';
+    return props.product.meta_title ? `${props.product.meta_title} | ${store}` : `${props.product.name} | ${store}`;
+});
+
+const seoDescription = computed(() => {
+    if (props.product.meta_description) return props.product.meta_description;
+    if (props.product.description) {
+        return props.product.description.replace(/<[^>]*>?/gm, '').substring(0, 160).trim();
+    }
+    return `Buy ${props.product.name} online at best price in Nigeria. Fast nationwide delivery.`;
+});
+
+const seoImage = computed(() => {
+    const img = props.product.image || activeImage.value;
+    if (!img) return '';
+    if (img.startsWith('http')) return img;
+    const origin = typeof window !== 'undefined' ? window.location.origin : (page.props.app_url || '');
+    return `${origin}/storage/${img}`;
+});
+
+const structuredData = computed(() => JSON.stringify({
+    '@context': 'https://schema.org/',
+    '@type': 'Product',
+    'name': props.product.name,
+    'image': seoImage.value ? [seoImage.value] : [],
+    'description': seoDescription.value,
+    'sku': props.product.sku || props.product.product_number || `SKU-${props.product.id}`,
+    'offers': {
+        '@type': 'Offer',
+        'url': pageUrl.value,
+        'priceCurrency': 'NGN',
+        'price': Number(props.product.discount_price > 0 ? props.product.discount_price : props.product.price),
+        'availability': isPurchasable.value ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+        'itemCondition': 'https://schema.org/NewCondition'
+    }
+}));
 </script>
 
 <template>
-    <Head :title="product.name" />
+    <Head>
+        <title>{{ seoTitle }}</title>
+        <meta name="description" :content="seoDescription" />
+        <link rel="canonical" :href="pageUrl" />
+
+        <!-- Open Graph / Social Media -->
+        <meta property="og:type" content="product" />
+        <meta property="og:title" :content="seoTitle" />
+        <meta property="og:description" :content="seoDescription" />
+        <meta property="og:url" :content="pageUrl" />
+        <meta v-if="seoImage" property="og:image" :content="seoImage" />
+        <meta property="product:price:amount" :content="String(product.discount_price > 0 ? product.discount_price : product.price)" />
+        <meta property="product:price:currency" content="NGN" />
+        <meta property="product:availability" :content="isPurchasable ? 'in stock' : 'out of stock'" />
+
+        <!-- Twitter Card -->
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" :content="seoTitle" />
+        <meta name="twitter:description" :content="seoDescription" />
+        <meta v-if="seoImage" name="twitter:image" :content="seoImage" />
+
+        <!-- JSON-LD Structured Data for Rich Snippets -->
+        <component is="script" type="application/ld+json">{{ structuredData }}</component>
+    </Head>
     <Layout>
         <div class="container mx-auto px-4 pt-4 pb-8 text-black dark:text-white">
             <StorefrontBreadcrumb :items="breadcrumbs" />
             <div class="flex flex-col md:flex-row gap-8 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border dark:border-gray-700">
                 <div class="w-full md:w-1/2">
-                    <div class="mb-4">
-                        <img :src="activeImage ? '/storage/' + activeImage : 'https://placehold.co/600x600?text=' + product.name" :alt="product.name" class="w-full rounded-md object-cover max-h-[500px]" />
+                    <!-- Main Product Image (Full view, no cropping or excessive zoom) -->
+                    <div class="mb-4 bg-white dark:bg-gray-900/60 rounded-xl p-4 sm:p-6 flex items-center justify-center border border-gray-100 dark:border-gray-700/80 shadow-xs h-[320px] sm:h-[420px] md:h-[480px] overflow-hidden">
+                        <img
+                            :src="activeImage ? '/storage/' + activeImage : 'https://placehold.co/600x600?text=' + product.name"
+                            :alt="product.name"
+                            class="max-w-full max-h-full w-auto h-auto object-contain transition-transform duration-300 hover:scale-105"
+                        />
                     </div>
                     <!-- Thumbnails -->
                     <div v-if="allImages.length > 1" class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
@@ -162,10 +310,10 @@ const breadcrumbs = computed(() => {
                             v-for="(img, idx) in allImages" 
                             :key="idx" 
                             @click="activeImage = img"
-                            class="flex-shrink-0 w-20 h-20 rounded-md overflow-hidden border-2 transition-all"
-                            :class="activeImage === img ? 'border-blue-600 dark:border-blue-400' : 'border-transparent hover:border-gray-300 dark:hover:border-gray-600'"
+                            class="flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden border-2 bg-white dark:bg-gray-900/60 p-1 flex items-center justify-center transition-all"
+                            :class="activeImage === img ? 'border-primary ring-2 ring-primary/30' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'"
                         >
-                            <img :src="'/storage/' + img" :alt="product.name + ' thumbnail ' + (idx + 1)" class="w-full h-full object-cover" />
+                            <img :src="'/storage/' + img" :alt="product.name + ' thumbnail ' + (idx + 1)" class="max-w-full max-h-full w-auto h-auto object-contain" />
                         </button>
                     </div>
                 </div>
@@ -194,22 +342,41 @@ const breadcrumbs = computed(() => {
                         </button>
                     </div>
 
-                    <div class="mb-4 text-gray-500 dark:text-gray-400">Category: <Link :href="route('shop.index', {category: product.category.slug})" class="text-blue-600 dark:text-blue-400 hover:underline">{{ product.category.name }}</Link></div>
-                    
-                    <div class="flex items-center gap-4 mb-4">
-                        <div class="flex flex-col">
-                            <span v-if="product.discount_price && (!selectedVariant || !selectedVariant.price)" class="text-sm font-medium text-gray-400 line-through">₦{{ parseFloat(product.price).toLocaleString() }}</span>
-                            <span class="text-3xl font-black text-blue-600 dark:text-blue-400">₦{{ displayPrice.toLocaleString() }}</span>
-                        </div>
-                        <span v-if="isPurchasable && product.show_stock_level" class="px-3 py-1 bg-green-100 text-green-800 text-sm font-semibold rounded-full border border-green-200">In Stock ({{ maxStock }})</span>
-                        <span v-else-if="isPurchasable && !product.show_stock_level" class="px-3 py-1 bg-green-100 text-green-800 text-sm font-semibold rounded-full border border-green-200">In Stock</span>
-                        <span v-else class="px-3 py-1 bg-red-100 text-red-800 text-sm font-semibold rounded-full border border-red-200">Unavailable</span>
-                    </div>
+                    <div class="mb-4 text-gray-500 dark:text-gray-400">Category: <Link :href="route('shop.index', {category: product.category.slug})" class="text-primary hover:underline font-medium">{{ product.category.name }}</Link></div>
 
-                    <!-- Unavailable POS item warning banner -->
-                    <div v-if="!isPurchasable && product.inventory_source === 'pos'" class="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-lg text-sm text-amber-800 dark:text-amber-300 flex items-center gap-2">
-                        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-                        <span>This item is temporarily unavailable or out of stock at our connected fulfillment branch.</span>
+                    <!-- Star Rating Summary -->
+                    <div v-if="reviewsEnabled" class="flex items-center gap-2 mb-4">
+                        <div class="flex items-center text-amber-400">
+                            <svg v-for="star in 5" :key="star" class="w-4 h-4 fill-current" :class="star <= Math.round(average_rating) ? 'text-amber-400' : 'text-gray-300 dark:text-gray-600'" viewBox="0 0 20 20">
+                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                            </svg>
+                        </div>
+                        <span class="text-sm font-bold text-gray-800 dark:text-gray-200">{{ Number(average_rating).toFixed(1) }}</span>
+                        <a href="#customer-reviews" class="text-xs text-primary hover:underline">
+                            ({{ reviews_count }} {{ reviews_count === 1 ? 'customer review' : 'customer reviews' }})
+                        </a>
+                    </div>
+                    
+                    <div class="flex items-center flex-wrap gap-4 mb-4">
+                        <div class="flex flex-col">
+                            <span v-if="(props.product.is_on_flash_sale || props.product.discount_price) && (!selectedVariant || !selectedVariant.price) && (!selectedPosUnit || selectedPosUnit.unit_kind === 'base')"
+                                  class="text-sm font-medium text-gray-400 line-through">
+                                ₦{{ parseFloat(product.price).toLocaleString() }}
+                            </span>
+                            <span class="text-3xl font-black text-primary">₦{{ displayPrice.toLocaleString() }}</span>
+                        </div>
+                        <span v-if="props.product.is_on_flash_sale && (!selectedPosUnit || selectedPosUnit.unit_kind === 'base')"
+                              class="px-3 py-1 bg-amber-500 text-white text-xs font-black rounded-full shadow-xs animate-pulse flex items-center gap-1">
+                            ⚡ FLASH DEAL
+                        </span>
+                        <span v-else-if="product.discount_price && (!selectedPosUnit || selectedPosUnit.unit_kind === 'base')"
+                              class="px-3 py-1 bg-red-500 text-white text-xs font-bold rounded-full shadow-xs">
+                            SALE
+                        </span>
+
+                        <span :class="['px-3 py-1 text-sm rounded-full border shadow-xs transition-all', stockBadge.class]">
+                            {{ stockBadge.text }}
+                        </span>
                     </div>
 
                     <!-- POS Selling Units Selection -->
@@ -221,7 +388,7 @@ const breadcrumbs = computed(() => {
                                 :key="u.id"
                                 type="button"
                                 @click="selectedPosUnit = u"
-                                :class="selectedPosUnit?.id === u.id ? 'ring-2 ring-blue-600 bg-blue-50 dark:bg-blue-900/30 border-blue-500 text-blue-700 dark:text-blue-300 font-bold' : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-blue-400 font-medium'"
+                                :class="selectedPosUnit?.id === u.id ? 'ring-2 ring-primary bg-primary/10 border-primary text-primary font-bold' : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-primary font-medium'"
                                 class="px-3.5 py-2 rounded-lg border text-sm transition text-left flex flex-col shadow-sm"
                             >
                                 <span class="capitalize">{{ u.online_label || u.unit_name }}</span>
@@ -241,7 +408,7 @@ const breadcrumbs = computed(() => {
                                 v-for="(v, index) in product.variants" 
                                 :key="index"
                                 @click="selectedVariant = v"
-                                :class="selectedVariant?.name === v.name ? 'ring-2 ring-blue-600 bg-blue-50 dark:bg-blue-900/30 border-transparent dark:ring-blue-500' : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 hover:border-blue-400'"
+                                :class="selectedVariant?.name === v.name ? 'ring-2 ring-primary bg-primary/10 border-primary text-primary font-bold' : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 hover:border-primary'"
                                 class="px-4 py-2 rounded-md border text-sm font-semibold transition relative overflow-hidden"
                             >
                                 {{ v.name }}
@@ -259,20 +426,20 @@ const breadcrumbs = computed(() => {
                     <div class="flex flex-col gap-3 border-t dark:border-gray-700 pt-6 mt-auto">
                         <div class="flex items-center gap-3">
                             <div class="flex items-center border dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-900 relative h-12">
-                                <button type="button" @click="form.quantity > 1 ? form.quantity-- : 1" class="px-4 h-full text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition font-bold disabled:opacity-50">-</button>
-                                <input type="number" v-model="form.quantity" min="1" :max="maxStock" class="w-12 text-center border-none focus:ring-0 bg-transparent font-medium p-0" />
-                                <button type="button" @click="form.quantity < maxStock ? form.quantity++ : form.quantity" class="px-4 h-full text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition font-bold disabled:opacity-50">+</button>
+                                <button type="button" @click="form.quantity > 1 ? form.quantity-- : 1" class="px-4 h-full text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition font-bold disabled:opacity-50 select-none">-</button>
+                                <input type="number" v-model="form.quantity" min="1" :max="maxStock" class="w-12 text-center border-none focus:ring-0 bg-transparent font-medium p-0 no-spinner [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                                <button type="button" @click="form.quantity < maxStock ? form.quantity++ : form.quantity" class="px-4 h-full text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition font-bold disabled:opacity-50 select-none">+</button>
                             </div>
                             <button @click="addToCart" 
                                 :disabled="form.processing || !isPurchasable || (product.variants?.length > 0 && !selectedVariant)" 
-                                class="bg-gray-800 hover:bg-gray-900 dark:bg-blue-600 dark:hover:bg-blue-700 text-white font-bold transition flex-1 h-12 rounded-md disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wide flex items-center justify-center gap-2 text-sm">
+                                class="bg-gray-800 hover:bg-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 text-white font-bold transition flex-1 h-12 rounded-md disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wide flex items-center justify-center gap-2 text-sm shadow-sm">
                                 <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
-                                {{ !isPurchasable ? 'Unavailable' : 'Add to Cart' }}
+                                {{ !isPurchasable ? 'Out of Stock' : 'Add to Cart' }}
                             </button>
 
                             <button @click="addToCompare" :disabled="comparing"
                                 title="Compare Product"
-                                class="h-12 w-12 flex-shrink-0 rounded-md bg-white hover:bg-blue-50 text-gray-600 hover:text-blue-600 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-300 transition disabled:opacity-50 flex items-center justify-center border border-gray-300 dark:border-gray-600 shadow-sm">
+                                class="h-12 w-12 flex-shrink-0 rounded-md bg-white hover:bg-primary/10 text-gray-600 hover:text-primary dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-300 transition disabled:opacity-50 flex items-center justify-center border border-gray-300 dark:border-gray-600 shadow-sm">
                                 <svg v-if="!comparing" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
                                 </svg>
@@ -284,9 +451,9 @@ const breadcrumbs = computed(() => {
                         </div>
                         <button @click="buyNow" 
                             :disabled="form.processing || !isPurchasable || (product.variants?.length > 0 && !selectedVariant)" 
-                            class="bg-blue-600 hover:bg-blue-700 dark:bg-green-600 dark:hover:bg-green-700 text-white font-bold transition w-full h-12 rounded-md disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wide flex items-center justify-center gap-2 text-sm shadow-md hover:shadow-lg">
+                            class="bg-primary hover:opacity-90 text-white font-bold transition w-full h-12 rounded-md disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wide flex items-center justify-center gap-2 text-sm shadow-md hover:shadow-lg">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                            {{ !isPurchasable ? 'Unavailable' : ((product.variants?.length > 0 && !selectedVariant) ? 'Select Option to Buy Now' : 'Buy Now') }}
+                            {{ !isPurchasable ? 'Out of Stock' : ((product.variants?.length > 0 && !selectedVariant) ? 'Select Option to Buy Now' : 'Buy Now') }}
                         </button>
                     </div>
                 </div>
@@ -300,18 +467,135 @@ const breadcrumbs = computed(() => {
                 </div>
             </div>
 
+            <!-- Customer Reviews & Ratings Section -->
+            <div v-if="reviewsEnabled" id="customer-reviews" class="mt-12 bg-white dark:bg-gray-800 p-8 rounded-xl shadow-sm border dark:border-gray-700">
+                <div class="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b dark:border-gray-700 gap-4">
+                    <div>
+                        <h3 class="text-2xl font-bold text-black dark:text-white">Customer Reviews</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Verified buyer experiences and feedback</p>
+                    </div>
+                    <div class="flex items-center gap-4 bg-gray-50 dark:bg-gray-900/60 px-5 py-3 rounded-xl border dark:border-gray-700">
+                        <div class="text-3xl font-black text-amber-500">{{ Number(average_rating).toFixed(1) }}</div>
+                        <div>
+                            <div class="flex text-amber-400 text-sm">
+                                <svg v-for="star in 5" :key="star" class="w-4 h-4 fill-current" :class="star <= Math.round(average_rating) ? 'text-amber-400' : 'text-gray-300 dark:text-gray-600'" viewBox="0 0 20 20">
+                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                </svg>
+                            </div>
+                            <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Based on {{ reviews_count }} {{ reviews_count === 1 ? 'review' : 'reviews' }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-8">
+                    <!-- Left: Reviews List (7 cols) -->
+                    <div class="lg:col-span-7 space-y-4">
+                        <div v-if="reviews.length === 0" class="text-center py-12 bg-gray-50 dark:bg-gray-900/40 rounded-xl border border-dashed dark:border-gray-700">
+                            <svg class="w-12 h-12 mx-auto text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+                            <p class="font-bold text-gray-700 dark:text-gray-300">No reviews yet</p>
+                            <p class="text-xs text-gray-500 mt-1">Be the first to share your thoughts on this product!</p>
+                        </div>
+
+                        <div v-for="rev in reviews" :key="rev.id" class="p-5 bg-gray-50 dark:bg-gray-900/40 rounded-xl border dark:border-gray-700">
+                            <div class="flex items-center justify-between mb-2">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-8 h-8 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-xs uppercase">
+                                        {{ (rev.customer?.name || 'Customer').charAt(0) }}
+                                    </div>
+                                    <div>
+                                        <p class="font-bold text-sm text-gray-900 dark:text-white">{{ rev.customer?.name || 'Verified Buyer' }}</p>
+                                        <span v-if="rev.is_verified_buyer" class="inline-flex items-center gap-1 text-[11px] text-green-600 font-semibold">
+                                            ✓ Verified Buyer
+                                        </span>
+                                    </div>
+                                </div>
+                                <span class="text-xs text-gray-400">{{ new Date(rev.created_at).toLocaleDateString() }}</span>
+                            </div>
+
+                            <div class="flex text-amber-400 my-2">
+                                <svg v-for="s in 5" :key="s" class="w-4 h-4 fill-current" :class="s <= rev.rating ? 'text-amber-400' : 'text-gray-300 dark:text-gray-600'" viewBox="0 0 20 20">
+                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                </svg>
+                            </div>
+
+                            <p v-if="rev.comment" class="text-sm text-gray-700 dark:text-gray-300 mt-2 whitespace-pre-line leading-relaxed">
+                                {{ rev.comment }}
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Right: Review Form / Login Prompt (5 cols) -->
+                    <div class="lg:col-span-5">
+                        <div class="bg-gray-50 dark:bg-gray-900/60 p-6 rounded-xl border dark:border-gray-700">
+                            <h4 class="font-bold text-lg text-gray-900 dark:text-white mb-2">Write a Review</h4>
+                            <p class="text-xs text-gray-500 mb-5">Share your rating and feedback with other shoppers.</p>
+
+                            <!-- Authenticated Customer Review Form -->
+                            <form v-if="$page.props.auth?.customer" @submit.prevent="submitReview" class="space-y-4">
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Your Rating *</label>
+                                    <div class="flex items-center gap-1 text-amber-400 cursor-pointer">
+                                        <button
+                                            v-for="star in 5"
+                                            :key="star"
+                                            type="button"
+                                            @click="reviewForm.rating = star"
+                                            class="p-1 hover:scale-125 transition"
+                                        >
+                                            <svg class="w-6 h-6 fill-current" :class="star <= reviewForm.rating ? 'text-amber-400' : 'text-gray-300 dark:text-gray-600'" viewBox="0 0 20 20">
+                                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                            </svg>
+                                        </button>
+                                        <span class="ml-2 text-xs font-bold text-gray-600 dark:text-gray-300">{{ reviewForm.rating }} of 5 Stars</span>
+                                    </div>
+                                    <p v-if="reviewForm.errors.rating" class="text-red-500 text-xs mt-1">{{ reviewForm.errors.rating }}</p>
+                                </div>
+
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Review Comment (Optional)</label>
+                                    <textarea
+                                        v-model="reviewForm.comment"
+                                        rows="4"
+                                        maxlength="1000"
+                                        class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 text-sm px-3 py-2.5 focus:ring-primary focus:border-primary"
+                                        placeholder="What did you like or dislike? How did this product perform?"
+                                    ></textarea>
+                                    <p v-if="reviewForm.errors.comment" class="text-red-500 text-xs mt-1">{{ reviewForm.errors.comment }}</p>
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    :disabled="reviewForm.processing"
+                                    class="w-full py-3 bg-primary hover:opacity-90 text-white font-bold rounded-lg transition disabled:opacity-50 text-sm uppercase tracking-wider shadow-sm"
+                                >
+                                    {{ reviewForm.processing ? 'Submitting...' : 'Submit Review' }}
+                                </button>
+                            </form>
+
+                            <!-- Guest Prompt -->
+                            <div v-else class="text-center py-6">
+                                <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">You must be logged in as a customer to submit a review.</p>
+                                <Link :href="route('login')" class="inline-block px-6 py-2.5 bg-primary text-white font-bold text-sm rounded-lg hover:opacity-90 transition shadow-sm uppercase tracking-wide">
+                                    Sign In to Review
+                                </Link>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Related Products -->
             <div v-if="related && related.length > 0" class="mt-16">
-                <h3 class="text-2xl font-bold mb-6 text-black dark:text-white">You might also like</h3>
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <div v-for="rel in related" :key="rel.id" class="border dark:border-gray-700 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition bg-white dark:bg-gray-800 flex flex-col group">
-                        <Link :href="route('shop.show', rel.url_key)" class="block flex-1">
-                            <div class="overflow-hidden">
-                                <img :src="rel.image ? '/storage/' + rel.image : 'https://placehold.co/400x300?text=' + rel.name" class="w-full h-48 object-cover group-hover:scale-105 transition duration-300" />
+                <h3 class="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-black dark:text-white">You might also like</h3>
+                <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
+                    <div v-for="rel in related" :key="rel.id" class="border border-gray-100 dark:border-gray-700/80 rounded-xl overflow-hidden shadow-xs hover:shadow-md hover:border-gray-200 dark:hover:border-gray-600 transition-all bg-white dark:bg-gray-800 flex flex-col group">
+                        <Link :href="route('shop.show', rel.url_key)" class="block flex-1 flex flex-col">
+                            <div class="overflow-hidden bg-gray-50 dark:bg-gray-900/50 flex items-center justify-center p-2 h-36 sm:h-48">
+                                <img :src="rel.image ? '/storage/' + rel.image : 'https://placehold.co/400x300?text=' + rel.name" class="max-w-full max-h-full w-auto h-auto object-contain group-hover:scale-105 transition duration-300" />
                             </div>
-                            <div class="p-4">
-                                <h4 class="font-semibold text-gray-900 dark:text-white mb-1 group-hover:text-blue-500 transition">{{ rel.name }}</h4>
-                                <p class="text-blue-600 dark:text-blue-400 font-bold">₦{{ parseFloat(rel.price).toLocaleString() }}</p>
+                            <div class="p-2.5 sm:p-4 flex-1 flex flex-col">
+                                <h4 class="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white mb-1 group-hover:text-primary transition line-clamp-2">{{ rel.name }}</h4>
+                                <p class="text-primary font-bold text-sm sm:text-base mt-auto">₦{{ parseFloat(rel.price).toLocaleString() }}</p>
                             </div>
                         </Link>
                     </div>
@@ -327,5 +611,16 @@ const breadcrumbs = computed(() => {
 /* Remove default quill editor padding to align perfectly in the wrapper */
 .ql-editor {
     padding: 0 !important;
+}
+
+/* Remove default number input spinner arrows */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+input[type=number] {
+    -moz-appearance: textfield;
+    appearance: textfield;
 }
 </style>

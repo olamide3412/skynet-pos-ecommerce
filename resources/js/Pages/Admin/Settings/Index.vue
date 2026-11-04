@@ -2,6 +2,7 @@
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
 import AdminLayout from '@/Layouts/AdminLayout.vue';
+import SettingsNavTabs from '@/Components/Admin/SettingsNavTabs.vue';
 import { useToast } from 'vue-toastification';
 
 const toast = useToast();
@@ -32,6 +33,13 @@ const form = useForm({
     hero_cta_primary:       props.settings.hero_cta_primary || 'Shop Now',
     hero_cta_secondary:     props.settings.hero_cta_secondary || 'Explore Categories',
     hero_image:             null,
+    // Promotional Flyer / Banner
+    promo_banner_enabled:     props.settings.promo_banner_enabled === '1',
+    promo_banner_title:       props.settings.promo_banner_title || '',
+    promo_banner_subtitle:    props.settings.promo_banner_subtitle || '',
+    promo_banner_link:        props.settings.promo_banner_link || '',
+    promo_banner_button_text: props.settings.promo_banner_button_text || 'Explore Offer',
+    promo_banner_image:       null,
     // Homepage Feature Blocks
     feature_1_title:        props.settings.feature_1_title || 'Secure Payments',
     feature_1_desc:         props.settings.feature_1_desc || '100% secure checkout via Paystack & Flutterwave.',
@@ -43,6 +51,11 @@ const form = useForm({
     paystack_enabled:       props.settings.paystack_enabled === '1',
     flutterwave_enabled:    props.settings.flutterwave_enabled === '1',
     cod_enabled:            props.settings.cod_enabled === '1',
+    bank_transfer_enabled:  props.settings.bank_transfer_enabled === '1',
+    bank_name:              props.settings.bank_name || '',
+    bank_account_number:    props.settings.bank_account_number || '',
+    bank_account_name:      props.settings.bank_account_name || '',
+    bank_instructions:      props.settings.bank_instructions || '',
     // Tax & Service Fee
     tax_enabled:            props.settings.tax_enabled === '1',
     tax_rate:               props.settings.tax_rate || '7.5',
@@ -54,6 +67,7 @@ const form = useForm({
     pickup_enabled:         props.settings.pickup_enabled === '1',
     pickup_address:         props.settings.pickup_address || '',
     free_shipping_threshold: props.settings.free_shipping_threshold || '50000',
+    default_delivery_address_hint: props.settings.default_delivery_address_hint || '',
     // Store Features
     order_tracking_enabled:         props.settings.order_tracking_enabled === '1',
     customer_registration_enabled:  props.settings.customer_registration_enabled === '1',
@@ -61,8 +75,11 @@ const form = useForm({
     guest_checkout_enabled:         props.settings.guest_checkout_enabled === '1',
     reviews_enabled:                props.settings.reviews_enabled === '1',
     wishlist_enabled:               props.settings.wishlist_enabled === '1',
+    show_cart_total_header:         props.settings.show_cart_total_header !== '0',
     tracking_number_prefix:         props.settings.tracking_number_prefix || 'SKY-',
     show_stock_level_default:       props.settings.show_stock_level_default !== '0',
+    stock_display_mode:             props.settings.stock_display_mode || 'threshold_only',
+    low_stock_threshold:            props.settings.low_stock_threshold || '5',
     // Authentication Providers
     google_auth_enabled:            props.settings.google_auth_enabled === '1',
     google_client_id:               props.settings.google_client_id || '',
@@ -80,6 +97,10 @@ const handleHeroImageUpload = (e) => {
     form.hero_image = e.target.files[0];
 };
 
+const handlePromoBannerUpload = (e) => {
+    form.promo_banner_image = e.target.files[0];
+};
+
 const save = () => {
     form.post(route('admin.settings.update'), {
         forceFormData: true,
@@ -87,6 +108,8 @@ const save = () => {
         onSuccess: () => {
             //toast.success('Settings saved successfully!');
             form.company_logo = null;
+            form.hero_image = null;
+            form.promo_banner_image = null;
         },
         onError: () => toast.error('Failed to save settings, please check the form.'),
     });
@@ -99,61 +122,36 @@ const storeFeatures = computed(() => ({
     guest_checkout_enabled:        { label: 'Guest Checkout',            desc: 'Let customers checkout without creating an account.' },
     reviews_enabled:               { label: 'Product Reviews',           desc: 'Show and allow customer reviews on products.' },
     wishlist_enabled:              { label: 'Wishlist',                  desc: 'Let customers save products to a wishlist.' },
+    show_cart_total_header:        { label: 'Show Cart Total in Header', desc: 'Display live total monetary worth of cart items in the storefront top bar and navigation bar.' },
     show_stock_level_default:      { label: 'Show Stock Level (Default)', desc: 'Pre-fills the stock level toggle ON when creating new products.' },
 }));
 
 // Reusable toggle row component logic
-const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600`;
+const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary`;
 </script>
 
 <template>
     <Head title="Store Settings" />
     <AdminLayout>
         <div class="max-w-4xl mx-auto space-y-6">
-            <!-- Top Navigation Tabs (Matching POS Super Admin Settings Style) -->
-            <div class="flex items-center gap-2 overflow-x-auto border-b border-gray-200 dark:border-gray-700 pb-3">
-                <Link
-                    :href="route('admin.themes.index')"
-                    class="px-4 py-2 rounded-lg text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition flex items-center gap-2"
-                >
-                    <span>🎨</span> Branding & Color Themes
-                </Link>
-                <Link
-                    :href="route('admin.settings.index')"
-                    class="px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-2 text-white shadow-xs"
-                    :style="{ background: `linear-gradient(135deg, var(--color-primary, #7B00FF), var(--color-secondary-500, #FBA43D))` }"
-                >
-                    <span>⚙️</span> General Store Config
-                </Link>
-                <Link
-                    :href="route('admin.pos-connection.index')"
-                    class="px-4 py-2 rounded-lg text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition flex items-center gap-2"
-                >
-                    <span>🔗</span> POS Connection & Pairing
-                </Link>
-                <Link
-                    :href="route('admin.sliders.index')"
-                    class="px-4 py-2 rounded-lg text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition flex items-center gap-2"
-                >
-                    <span>🖼️</span> Sliders & Banners
-                </Link>
-            </div>
+            <!-- Top Navigation Tabs -->
+            <SettingsNavTabs />
 
             <div class="flex items-center justify-between mb-8">
                 <div>
                     <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Store Settings</h1>
                     <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Control all store features, payment methods, taxes, and shipping.</p>
                 </div>
-                <button @click="save" :disabled="form.processing" class="text-white hover:opacity-90 font-bold px-6 py-2.5 rounded-lg transition flex items-center gap-2 disabled:opacity-60 shadow-xs" :style="{ backgroundColor: 'var(--color-primary, #7B00FF)' }">
+                <button @click="save" :disabled="form.processing" class="bg-primary hover:bg-primary-dark text-white font-bold px-6 py-2.5 rounded-lg transition flex items-center gap-2 disabled:opacity-60 shadow-xs">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                     {{ form.processing ? 'Saving...' : 'Save Settings' }}
                 </button>
             </div>
 
             <!-- POS Connection Quick Link Notice -->
-            <div class="mb-8 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-800/80 rounded-xl border border-blue-200 dark:border-blue-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div class="mb-8 p-4 theme-gradient-banner rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div class="flex items-center gap-3">
-                    <div class="p-2.5 text-white rounded-lg shrink-0 shadow-xs" :style="{ backgroundColor: 'var(--color-primary, #7B00FF)' }">
+                    <div class="p-2.5 bg-primary text-white rounded-lg shrink-0 shadow-xs">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
                     </div>
                     <div>
@@ -169,8 +167,7 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                 </div>
                 <Link
                     :href="route('admin.pos-connection.index')"
-                    class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg text-white hover:opacity-90 transition shrink-0 shadow-xs"
-                    :style="{ backgroundColor: 'var(--color-primary, #7B00FF)' }"
+                    class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg bg-primary hover:bg-primary-dark text-white transition shrink-0 shadow-xs"
                 >
                     Manage POS Connection &rarr;
                 </Link>
@@ -224,7 +221,7 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                                     <p class="text-sm font-medium text-gray-900 dark:text-white mb-1">Upload a new logo</p>
                                     <p class="text-xs text-gray-500 mb-3">PNG, JPG up to 2MB</p>
                                 </template>
-                                <input type="file" @change="handleLogoUpload" accept="image/*" class="text-sm text-gray-500 file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer w-full max-w-[200px]" />
+                                <input type="file" @change="handleLogoUpload" accept="image/*" class="text-sm text-gray-500 file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-gray-100 dark:file:bg-gray-700 file:text-primary cursor-pointer w-full max-w-[200px]" />
                             </div>
                         </div>
                     </div>
@@ -233,14 +230,14 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                 <!-- ─── Homepage Content ──────────────────────────────────── -->
                 <section class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
                     <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60">
-                        <h2 class="text-lg font-semibold">🏠 Homepage Content</h2>
+                        <h2 class="text-lg font-semibold">Homepage Content</h2>
                         <p class="text-sm text-gray-500 dark:text-gray-400">Edit the text and image displayed on the storefront homepage hero and feature blocks.</p>
                     </div>
                     <div class="p-6 space-y-6">
 
                         <!-- Slider & Marquee Setting -->
-                        <div class="border border-indigo-100 dark:border-indigo-900/50 bg-indigo-50/30 dark:bg-indigo-900/10 rounded-xl p-5 mb-6 shadow-sm">
-                            <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400 mb-4 flex items-center gap-2">
+                        <div class="border border-primary-soft bg-primary-soft rounded-xl p-5 mb-6 shadow-sm">
+                            <h3 class="text-sm font-bold uppercase tracking-wider text-primary mb-4 flex items-center gap-2">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                                 Dynamic Hero Slider & Marquee
                             </h3>
@@ -254,7 +251,7 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                                             <div :class="toggleSwitch"></div>
                                         </label>
                                     </div>
-                                    <p class="text-xs text-gray-500">Replaces the static hero section with the slides managed in the <a href="/admin/sliders" class="text-indigo-600 font-bold hover:underline" target="_blank">Sliders menu</a>.</p>
+                                    <p class="text-xs text-gray-500">Replaces the static hero section with the slides managed in the <a href="/admin/sliders" class="text-primary font-bold hover:underline" target="_blank">Sliders menu</a>.</p>
                                 </div>
                                 <!-- Marquee Setting -->
                                 <div class="flex-1 space-y-4 border-t md:border-t-0 md:border-l border-gray-200 dark:border-gray-700 pt-4 md:pt-0 md:pl-8">
@@ -277,7 +274,7 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                         <!-- Hero Badge + Title -->
                         <div>
                             <div class="flex items-center justify-between mb-4">
-                                <h3 class="text-sm font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">Hero Section</h3>
+                                <h3 class="text-sm font-bold uppercase tracking-wider text-primary">Hero Section</h3>
                                 <label class="inline-flex items-center cursor-pointer">
                                     <input type="checkbox" v-model="form.hero_enabled" class="sr-only peer">
                                     <div :class="toggleSwitch"></div>
@@ -324,16 +321,84 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                                     <div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center bg-gray-50 dark:bg-gray-900/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition">
                                         <svg class="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
                                         <p class="text-xs text-gray-500 mb-2">Upload a new hero image (PNG, JPG, max 4MB)</p>
-                                        <input type="file" @change="handleHeroImageUpload" accept="image/*" class="text-sm text-gray-500 file:mr-2 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer" />
+                                        <input type="file" @change="handleHeroImageUpload" accept="image/*" class="text-sm text-gray-500 file:mr-2 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-gray-100 dark:file:bg-gray-700 file:text-primary cursor-pointer" />
                                     </div>
                                     <p v-if="form.hero_image" class="text-xs text-green-600 mt-2 font-semibold">✓ New image selected — will be applied on save.</p>
                                 </div>
                             </div>
                         </div>
 
+                        <!-- Promotional Flyer / Mid-Page Banner Setting -->
+                        <div class="border border-blue-200 dark:border-blue-900/60 bg-blue-50/50 dark:bg-blue-950/20 rounded-xl p-5 mb-6 shadow-xs">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="flex items-center gap-2">
+                                    <span class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/>
+                                        </svg>
+                                    </span>
+                                    <div>
+                                        <h3 class="text-sm font-bold uppercase tracking-wider text-blue-900 dark:text-blue-200">
+                                            Promotional Flyer / Mid-Page Banner
+                                        </h3>
+                                        <p class="text-xs text-blue-700/80 dark:text-blue-300/70">
+                                            Display a full-width responsive promo flyer between Best Sellers and Most Searched Items.
+                                        </p>
+                                    </div>
+                                </div>
+                                <label class="inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" v-model="form.promo_banner_enabled" class="sr-only peer">
+                                    <div :class="toggleSwitch"></div>
+                                    <span class="ml-3 text-xs sm:text-sm font-bold text-gray-900 dark:text-gray-300">
+                                        {{ form.promo_banner_enabled ? 'Active' : 'Disabled' }}
+                                    </span>
+                                </label>
+                            </div>
+
+                            <div v-if="form.promo_banner_enabled" class="space-y-4 pt-3 border-t border-blue-200/60 dark:border-blue-900/60">
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Promo Title (Optional)</label>
+                                        <input type="text" v-model="form.promo_banner_title" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-3 py-2 text-sm" placeholder="e.g. Mega Clearance Sale — Up to 50% Off" />
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Button Text (Optional)</label>
+                                        <input type="text" v-model="form.promo_banner_button_text" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-3 py-2 text-sm" placeholder="e.g. Shop the Sale" />
+                                    </div>
+                                    <div class="sm:col-span-2">
+                                        <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Subtitle / Promo Description (Optional)</label>
+                                        <textarea v-model="form.promo_banner_subtitle" rows="2" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-3 py-2 text-sm" placeholder="Short description or terms..."></textarea>
+                                    </div>
+                                    <div class="sm:col-span-2">
+                                        <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Target Link / URL (Where clicking the flyer goes)</label>
+                                        <input type="text" v-model="form.promo_banner_link" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-3 py-2 text-sm" placeholder="e.g. /shop?collection=featured or https://..." />
+                                    </div>
+                                </div>
+
+                                <!-- Flyer Image Upload -->
+                                <div class="pt-3 border-t border-blue-200/60 dark:border-blue-900/60">
+                                    <label class="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-2">Flyer / Banner Image (Recommended ~1200x400 or ~16:9 banner)</label>
+                                    <div class="flex flex-col sm:flex-row items-start gap-4">
+                                        <div class="w-full sm:w-64 h-32 rounded-xl overflow-hidden border dark:border-gray-600 bg-gray-100 dark:bg-gray-900 flex-shrink-0">
+                                            <img v-if="props.settings.promo_banner_image" :src="'/storage/' + props.settings.promo_banner_image" class="w-full h-full object-cover" alt="Active flyer" />
+                                            <div v-else class="w-full h-full flex items-center justify-center text-gray-400 text-xs">No flyer uploaded</div>
+                                        </div>
+                                        <div class="flex-1 w-full">
+                                            <div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                                                <svg class="w-7 h-7 text-gray-400 mx-auto mb-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                                                <p class="text-xs text-gray-500 mb-2">Upload promotional flyer (PNG, JPG, WebP up to 6MB)</p>
+                                                <input type="file" @change="handlePromoBannerUpload" accept="image/*" class="text-xs text-gray-500 file:mr-2 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary cursor-pointer" />
+                                            </div>
+                                            <p v-if="form.promo_banner_image" class="text-xs text-green-600 mt-2 font-semibold">✓ New flyer selected — click Save Settings below to apply.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Feature Blocks -->
                         <div class="border-t dark:border-gray-700 pt-5">
-                            <h3 class="text-sm font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 mb-4">Feature Blocks (bottom of homepage)</h3>
+                            <h3 class="text-sm font-bold uppercase tracking-wider text-primary mb-4">Feature Blocks (bottom of homepage)</h3>
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <div v-for="n in 3" :key="n" class="bg-gray-50 dark:bg-gray-900/40 rounded-xl p-4 border dark:border-gray-700 space-y-3">
                                     <p class="text-xs font-bold text-gray-500 uppercase tracking-wider">Feature {{ n }}</p>
@@ -432,7 +497,7 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                                 </div>
                                 <label class="relative inline-flex items-center cursor-pointer">
                                     <input type="checkbox" v-model="form[key]" class="sr-only peer" />
-                                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                                 </label>
                             </div>
                         </template>
@@ -445,6 +510,39 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                             </div>
                             <input type="text" v-model="form.tracking_number_prefix" maxlength="10"
                                 class="w-28 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-center font-mono uppercase tracking-wider" />
+                        </div>
+
+                        <!-- Stock Display Mode & Low Stock Urgency Threshold -->
+                        <div class="p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/40 space-y-4">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div>
+                                    <p class="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                                        <span>📦</span> Front Store Stock Display Mode
+                                    </p>
+                                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                                        Choose how product stock quantities are displayed to storefront shoppers.
+                                    </p>
+                                </div>
+                                <select v-model="form.stock_display_mode" class="rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white font-medium focus:ring-primary focus:border-primary">
+                                    <option value="threshold_only">Smart Urgency (Show "In Stock" if high, exact count if low)</option>
+                                    <option value="always">Always Show Exact Count (e.g. "In Stock (58)")</option>
+                                    <option value="hidden">Never Show Exact Count (Always show "In Stock")</option>
+                                </select>
+                            </div>
+
+                            <div v-if="form.stock_display_mode === 'threshold_only'" class="flex items-center justify-between pt-3 border-t border-gray-200 dark:border-gray-700">
+                                <div>
+                                    <p class="text-sm font-medium text-gray-800 dark:text-gray-200">Low Stock Alert Threshold</p>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                                        If stock is above this number, shows <strong>"In Stock"</strong>. If stock is at or below this number, shows <strong>"Only X left in stock"</strong>.
+                                    </p>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <input type="number" min="1" max="100" v-model="form.low_stock_threshold"
+                                        class="w-20 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-1.5 text-center font-bold text-sm" />
+                                    <span class="text-xs text-gray-500 dark:text-gray-400">units</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -469,7 +567,7 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                             </div>
                             <label class="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" v-model="form.paystack_enabled" class="sr-only peer" />
-                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                             </label>
                         </div>
                         <!-- Flutterwave -->
@@ -485,10 +583,10 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                             </div>
                             <label class="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" v-model="form.flutterwave_enabled" class="sr-only peer" />
-                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                             </label>
                         </div>
-                        <!-- COD -->
+                        <!-- POD (Payment on Delivery) -->
                         <div class="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700">
                             <div class="flex items-center gap-3">
                                 <div class="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/20 flex items-center justify-center">
@@ -496,13 +594,49 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                                 </div>
                                 <div>
                                     <p class="font-semibold text-gray-900 dark:text-white">Payment on Delivery (POD)</p>
-                                    <p class="text-sm text-gray-500 dark:text-gray-400">Customer pays when order is delivered</p>
+                                    <p class="text-sm text-gray-500 dark:text-gray-400">Customer pays with cash, bank transfer, or card when order is delivered</p>
                                 </div>
                             </div>
                             <label class="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" v-model="form.cod_enabled" class="sr-only peer" />
                                 <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
                             </label>
+                        </div>
+                        <!-- Bank Transfer -->
+                        <div class="p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center">
+                                        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z"/></svg>
+                                    </div>
+                                    <div>
+                                        <p class="font-semibold text-gray-900 dark:text-white">Direct Bank Transfer</p>
+                                        <p class="text-sm text-gray-500 dark:text-gray-400">Customer transfers payment directly to your bank account</p>
+                                    </div>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" v-model="form.bank_transfer_enabled" class="sr-only peer" />
+                                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                                </label>
+                            </div>
+                            <div v-if="form.bank_transfer_enabled" class="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Bank Name</label>
+                                    <input type="text" v-model="form.bank_name" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm" placeholder="e.g. Zenith Bank" />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Account Number</label>
+                                    <input type="text" v-model="form.bank_account_number" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm" placeholder="e.g. 1012345678" />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Account Name</label>
+                                    <input type="text" v-model="form.bank_account_name" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm" placeholder="e.g. Skynet Digital Ltd" />
+                                </div>
+                                <div class="md:col-span-3">
+                                    <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Instructions for Customer</label>
+                                    <input type="text" v-model="form.bank_instructions" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm" placeholder="Please use your tracking number as transfer narration..." />
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -518,7 +652,7 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                         <div class="flex flex-col sm:flex-row sm:items-center gap-4">
                             <div class="flex-1">
                                 <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" v-model="form.tax_enabled" class="w-4 h-4 text-blue-600 rounded" />
+                                    <input type="checkbox" v-model="form.tax_enabled" class="w-4 h-4 text-primary rounded" />
                                     <span class="font-semibold text-gray-900 dark:text-white">Enable VAT / Tax</span>
                                 </label>
                                 <p class="text-sm text-gray-500 dark:text-gray-400 ml-6">Automatically calculate and add tax to the order total.</p>
@@ -532,7 +666,7 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                         <div class="flex flex-col sm:flex-row sm:items-center gap-4 border-t dark:border-gray-700 pt-6">
                             <div class="flex-1">
                                 <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" v-model="form.service_fee_enabled" class="w-4 h-4 text-blue-600 rounded" />
+                                    <input type="checkbox" v-model="form.service_fee_enabled" class="w-4 h-4 text-primary rounded" />
                                     <span class="font-semibold text-gray-900 dark:text-white">Enable Service Fee</span>
                                 </label>
                                 <p class="text-sm text-gray-500 dark:text-gray-400 ml-6">A flat fee applied to every order at checkout.</p>
@@ -548,15 +682,25 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                 <!-- ─── Shipping & Delivery ────────────────────────────── -->
                 <section class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
                     <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60">
-                        <h2 class="text-lg font-semibold">🚚 Shipping & Delivery</h2>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">Configure waybill charges and pickup options.</p>
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div>
+                                <h2 class="text-lg font-semibold">🚚 Shipping & Delivery</h2>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">Configure waybill charges and pickup options.</p>
+                            </div>
+                            <Link
+                                :href="route('admin.shipping-zones.index')"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-primary/10 hover:bg-primary/20 text-primary transition shrink-0"
+                            >
+                                🗺️ State-by-State Shipping Rates &rarr;
+                            </Link>
+                        </div>
                     </div>
                     <div class="p-6 space-y-6">
                         <!-- Waybill -->
                         <div class="flex flex-col sm:flex-row sm:items-center gap-4">
                             <div class="flex-1">
                                 <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" v-model="form.shipping_enabled" class="w-4 h-4 text-blue-600 rounded" />
+                                    <input type="checkbox" v-model="form.shipping_enabled" class="w-4 h-4 text-primary rounded" />
                                     <span class="font-semibold text-gray-900 dark:text-white">Enable Waybill / Delivery Fee</span>
                                 </label>
                                 <p class="text-sm text-gray-500 dark:text-gray-400 ml-6">Charge customers a shipping fee for home delivery.</p>
@@ -577,10 +721,19 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                                 <input type="number" v-model="form.free_shipping_threshold" :disabled="!form.shipping_enabled" min="0" class="w-36 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-center disabled:opacity-40" />
                             </div>
                         </div>
+
+                        <!-- Default Delivery Town / Area Hint -->
+                        <div class="border-t dark:border-gray-700 pt-4 space-y-2">
+                            <div>
+                                <p class="font-semibold text-gray-900 dark:text-white">Default Delivery Town / Area Hint</p>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">Pre-populates the customer's delivery address field at checkout (e.g. "Abraka, Delta State", "Benin City, Edo State", or "Ikeja, Lagos"). Customers can simply add their street name or leave it as-is.</p>
+                            </div>
+                            <input type="text" v-model="form.default_delivery_address_hint" placeholder="e.g. Abraka, Delta State" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm" />
+                        </div>
                         <!-- Pickup -->
                         <div class="border-t dark:border-gray-700 pt-6 space-y-4">
                             <label class="flex items-center gap-2 cursor-pointer">
-                                <input type="checkbox" v-model="form.pickup_enabled" class="w-4 h-4 text-blue-600 rounded" />
+                                <input type="checkbox" v-model="form.pickup_enabled" class="w-4 h-4 text-primary rounded" />
                                 <span class="font-semibold text-gray-900 dark:text-white">Enable Store Pickup</span>
                             </label>
                             <p class="text-sm text-gray-500 dark:text-gray-400 ml-6">Allow customers to pick up their order at your store for free.</p>
@@ -594,7 +747,7 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
 
                 <!-- Save (bottom) -->
                 <div class="flex justify-end">
-                    <button type="submit" :disabled="form.processing" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-8 py-3 rounded-lg transition disabled:opacity-60">
+                    <button type="submit" :disabled="form.processing" class="bg-primary hover:bg-primary-dark text-white font-bold px-8 py-3 rounded-lg transition disabled:opacity-60">
                         {{ form.processing ? 'Saving...' : 'Save All Settings' }}
                     </button>
                 </div>

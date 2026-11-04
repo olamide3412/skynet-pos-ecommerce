@@ -40,9 +40,20 @@ class Product extends Model
         'last_pos_sync_at'     => 'datetime',
     ];
 
+    protected $appends = [
+        'is_on_flash_sale',
+        'is_on_sale',
+        'effective_price',
+    ];
+
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
+    }
+
+    public function orderItems(): HasMany
+    {
+        return $this->hasMany(OrderItem::class);
     }
 
     public function posUnits(): HasMany
@@ -58,6 +69,21 @@ class Product extends Model
     public function syncedPosItem(): BelongsTo
     {
         return $this->belongsTo(SyncedPosItem::class, 'pos_item_id', 'pos_item_id');
+    }
+
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(ProductReview::class);
+    }
+
+    public function approvedReviews(): HasMany
+    {
+        return $this->hasMany(ProductReview::class)->where('is_approved', true);
+    }
+
+    public function getAverageRatingAttribute(): float
+    {
+        return (float) ($this->approvedReviews()->avg('rating') ?: 5.0);
     }
 
     /**
@@ -87,6 +113,24 @@ class Product extends Model
     }
 
     /**
+     * Check if product is currently within an active Flash Sale window.
+     */
+    public function getIsOnFlashSaleAttribute(): bool
+    {
+        return !empty($this->special_price) &&
+            (!$this->special_price_from || now()->gte($this->special_price_from)) &&
+            (!$this->special_price_to   || now()->lte($this->special_price_to));
+    }
+
+    /**
+     * Check if product has any active price discount (Flash Sale or standard markdown).
+     */
+    public function getIsOnSaleAttribute(): bool
+    {
+        return $this->is_on_flash_sale || (!empty($this->discount_price) && (float) $this->discount_price < (float) $this->price);
+    }
+
+    /**
      * Get effective price for a specific POS unit or base product.
      */
     public function getEffectivePriceForUnit(?ProductPosUnit $unit = null): float
@@ -99,15 +143,15 @@ class Product extends Model
     }
 
     /**
-     * Get the effective current price (respects special price window).
+     * Get the effective current price (respects hierarchy: Flash Sale -> Regular Discount -> Base Price).
      */
     public function getEffectivePriceAttribute(): float
     {
-        if ($this->special_price &&
-            (!$this->special_price_from || now()->gte($this->special_price_from)) &&
-            (!$this->special_price_to   || now()->lte($this->special_price_to))) {
+        if ($this->is_on_flash_sale) {
             return (float) $this->special_price;
         }
-        return $this->discount_price ? (float) $this->discount_price : (float) $this->price;
+        return (!empty($this->discount_price) && (float) $this->discount_price < (float) $this->price)
+            ? (float) $this->discount_price
+            : (float) $this->price;
     }
 }

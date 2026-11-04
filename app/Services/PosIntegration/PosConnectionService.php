@@ -107,6 +107,13 @@ class PosConnectionService
 
             PosSyncLog::log('connection_handshake', 'success', "Successfully linked and authenticated with POS branch: {$conn->pos_branch_name}");
 
+            // Automatically sync & reconcile all mapped products with the newly connected POS integration
+            try {
+                app(\App\Services\PosIntegration\PosCatalogService::class)->reconcileAllMappings();
+            } catch (\Throwable $e) {
+                Log::warning("Automatic mapping reconciliation on connection failed: " . $e->getMessage());
+            }
+
             return [
                 'status'  => true,
                 'message' => "Successfully connected to POS Branch: {$conn->pos_branch_name}",

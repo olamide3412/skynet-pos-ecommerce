@@ -16,10 +16,10 @@ class PosConnectionController extends Controller
     {
         return Inertia::render('Admin/PosConnection/Index', [
             'pos_connection' => $connectionService->getConnectionSummary(),
-            'connection_logs' => PosSyncLog::whereIn('type', ['connection_test', 'webhook_ping', 'webhook_inventory'])
+            'connection_logs' => PosSyncLog::whereIn('type', ['connection_test', 'webhook_ping', 'webhook_inventory', 'webhook_auth'])
                 ->latest()
-                ->limit(20)
-                ->get(),
+                ->paginate(25)
+                ->withQueryString(),
         ]);
     }
 }

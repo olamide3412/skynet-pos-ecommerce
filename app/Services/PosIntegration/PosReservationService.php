@@ -99,9 +99,9 @@ class PosReservationService
     }
 
     /**
-     * Confirm reservation when payment succeeds or COD is formally accepted.
+     * Confirm reservation when payment succeeds or POD (Payment on Delivery) is formally accepted.
      */
-    public function confirmReservation(Order $order): bool
+    public function confirmReservation(Order $order, bool $isRetry = false): bool
     {
         if (empty($order->inventory_reference) || $order->pos_reservation_status === 'confirmed') {
             return true;
@@ -132,10 +132,20 @@ class PosReservationService
             ]);
 
             Log::warning("POS reservation confirmation failed for Order #{$order->id} (Ref: {$order->inventory_reference}). Will queue for retry.");
+
+            if (!$isRetry) {
+                \App\Jobs\RetryPosReservationConfirmationJob::dispatch($order)->delay(now()->addMinutes(1));
+            }
+
             return false;
         } catch (\Throwable $e) {
             $order->update(['pos_sync_error' => $e->getMessage()]);
             Log::error("POS reservation confirmation exception for Order #{$order->id}: " . $e->getMessage());
+
+            if (!$isRetry) {
+                \App\Jobs\RetryPosReservationConfirmationJob::dispatch($order)->delay(now()->addMinutes(1));
+            }
+
             return false;
         }
     }
@@ -145,7 +155,7 @@ class PosReservationService
      */
     public function releaseReservation(Order $order): bool
     {
-        if (empty($order->inventory_reference) || in_array($order->pos_reservation_status, ['none', 'released', 'confirmed'], true)) {
+        if (empty($order->inventory_reference) || in_array($order->pos_reservation_status, ['none', 'released'], true)) {
             return true;
         }
 

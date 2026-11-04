@@ -2,7 +2,7 @@
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import AdminLayout from '@/Layouts/AdminLayout.vue';
 import Pagination from '@/Components/Pagination.vue';
-import { ref, watch, computed } from 'vue';
+import { ref, watch, computed, nextTick, onMounted, onUnmounted } from 'vue';
 import { useToast } from 'vue-toastification';
 import debounce from 'lodash/debounce';
 import { QuillEditor } from '@vueup/vue-quill';
@@ -27,21 +27,24 @@ const props = defineProps({
 const search = ref(props.filters?.search || '');
 const filterCategory = ref(props.filters?.category_id || '');
 const filterStatus = ref(props.filters?.status || '');
+const perPage = ref(props.filters?.per_page || '25');
 
 const applyFilters = debounce(() => {
     router.get(route('admin.products.index'), {
         search: search.value || undefined,
         category_id: filterCategory.value || undefined,
         status: filterStatus.value || undefined,
+        per_page: perPage.value !== '25' ? perPage.value : undefined,
     }, { preserveState: true, replace: true });
 }, 300);
 
-watch([search, filterCategory, filterStatus], applyFilters);
+watch([search, filterCategory, filterStatus, perPage], applyFilters);
 
 const clearFilters = () => {
     search.value = '';
     filterCategory.value = '';
     filterStatus.value = '';
+    perPage.value = '25';
 };
 
 const isFormVisible = ref(false);
@@ -87,26 +90,82 @@ const form = useForm({
     attributes: {},
 });
 
-const onPosItemSelect = (e) => {
-    const val = e.target.value;
-    if (!val) {
-        form.pos_item_id = null;
-        return;
-    }
-    const id = parseInt(val);
-    const item = props.synced_pos_items.find(i => i.pos_item_id === id);
-    if (item) {
-        form.pos_item_id = item.pos_item_id;
-        form.price = item.standard_price;
-        form.stock = Math.round(Number(item.effective_availability || 0));
-        if (!form.name || !isEditing.value) {
-            form.name = item.pos_item_name;
-        }
-        if (!form.sku) {
-            form.sku = item.sku || '';
-        }
+// ── Searchable POS Item Picker ────────────────────────────────
+const posDropdownOpen   = ref(false);
+const posSearchQuery    = ref('');
+const posSearchInputRef = ref(null);
+const posDropdownRef    = ref(null);
+
+const selectedPosItem = computed(() => {
+    if (!form.pos_item_id) return null;
+    return props.synced_pos_items.find(i => Number(i.pos_item_id) === Number(form.pos_item_id)) || null;
+});
+
+const filteredPosItemsAll = computed(() => {
+    const q = posSearchQuery.value.trim().toLowerCase();
+    if (!q) return props.synced_pos_items;
+    return props.synced_pos_items.filter(item => {
+        const name = (item.pos_item_name || '').toLowerCase();
+        const sku  = (item.sku || '').toLowerCase();
+        const bar  = (item.barcode || '').toLowerCase();
+        const ref  = (item.item_reference || '').toLowerCase();
+        const cat  = (item.pos_category_name || '').toLowerCase();
+        const id   = String(item.pos_item_id || '');
+        return name.includes(q) || sku.includes(q) || bar.includes(q) || ref.includes(q) || cat.includes(q) || id.includes(q);
+    });
+});
+
+const filteredPosItems = computed(() => filteredPosItemsAll.value.slice(0, 25));
+
+const togglePosDropdown = () => {
+    posDropdownOpen.value = !posDropdownOpen.value;
+    if (posDropdownOpen.value) {
+        nextTick(() => {
+            posSearchInputRef.value?.focus();
+        });
     }
 };
+
+const selectPosItem = (item) => {
+    if (!item) {
+        form.pos_item_id = null;
+        posDropdownOpen.value = false;
+        return;
+    }
+    form.pos_item_id = item.pos_item_id;
+    form.price = item.standard_price;
+    if (item.buying_price !== undefined && item.buying_price !== null) {
+        form.cost_price = item.buying_price;
+    }
+    form.stock = Math.round(Number(item.effective_availability || 0));
+    if (!form.name || !isEditing.value) {
+        form.name = item.pos_item_name;
+    }
+    if (!form.sku) {
+        form.sku = item.sku || '';
+    }
+    posDropdownOpen.value = false;
+    posSearchQuery.value = '';
+};
+
+const clearPosItem = () => {
+    form.pos_item_id = null;
+    posSearchQuery.value = '';
+};
+
+const handleClickOutsidePosDropdown = (e) => {
+    if (posDropdownOpen.value && posDropdownRef.value && !posDropdownRef.value.contains(e.target)) {
+        posDropdownOpen.value = false;
+    }
+};
+
+onMounted(() => {
+    document.addEventListener('mousedown', handleClickOutsidePosDropdown);
+});
+
+onUnmounted(() => {
+    document.removeEventListener('mousedown', handleClickOutsidePosDropdown);
+});
 
 // ── Related products AJAX picker ─────────────────────────────
 const relatedSearch          = ref('');
@@ -269,6 +328,8 @@ const resetFormState = () => {
     form.reset(); form.clearErrors();
     form.inventory_source = 'ecommerce';
     form.pos_item_id = null;
+    posDropdownOpen.value = false;
+    posSearchQuery.value = '';
     editId.value = null; imagePreview.value = null; galleryPreviews.value = [];
     form.status = true; form.visible_individually = true; form.show_stock_level = true;
     form.related_products = [];
@@ -383,19 +444,19 @@ const submitBulkDelete = () => {
             <div class="flex items-center justify-between mb-8" :class="isFormVisible ? 'pb-4 border-b dark:border-gray-700' : ''">
                 <div>
                     <h1 class="text-2xl font-bold">{{ isFormVisible ? (isEditing ? 'Edit Product' : 'Create New Product') : 'Catalog Management' }}</h1>
-                    <button v-if="isFormVisible" @click="closeForm" class="text-sm text-blue-500 hover:text-blue-700 font-medium mt-1 flex items-center gap-1">
+                    <button v-if="isFormVisible" @click="closeForm" class="text-sm text-primary hover:opacity-80 font-medium mt-1 flex items-center gap-1">
                         ← Back to Catalog
                     </button>
                 </div>
                 <div class="flex gap-3">
                     <template v-if="isFormVisible">
                         <button @click="closeForm" class="border dark:border-gray-600 font-semibold py-2 px-5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition text-sm">Cancel</button>
-                        <button @click="save" :disabled="form.processing" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-7 rounded-lg shadow transition disabled:opacity-50 flex items-center gap-2 text-sm">
+                        <button @click="save" :disabled="form.processing" class="bg-primary hover:bg-primary-dark text-white font-bold py-2 px-7 rounded-lg shadow transition disabled:opacity-50 flex items-center gap-2 text-sm">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                             Save Product
                         </button>
                     </template>
-                    <button v-else @click="openCreateForm" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-5 rounded-lg shadow flex items-center gap-2 text-sm">
+                    <button v-else @click="openCreateForm" class="bg-primary hover:bg-primary-dark text-white font-bold py-2 px-5 rounded-lg shadow flex items-center gap-2 text-sm">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                         Add Product
                     </button>
@@ -407,13 +468,13 @@ const submitBulkDelete = () => {
                 <div class="flex-1 min-w-[200px]">
                     <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Search Products</label>
                     <input v-model="search" type="text" placeholder="Name, SKU, URL Key..." 
-                        class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500" />
+                        class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary focus:border-primary" />
                 </div>
                 
                 <div class="w-full sm:w-auto min-w-[150px]">
                     <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Category</label>
                     <select v-model="filterCategory" 
-                        class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500">
+                        class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary focus:border-primary">
                         <option value="">All Categories</option>
                         <template v-for="parent in categories" :key="parent.id">
                             <optgroup v-if="parent.children?.length" :label="parent.name">
@@ -428,14 +489,25 @@ const submitBulkDelete = () => {
                 <div class="w-full sm:w-auto min-w-[150px]">
                     <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Status</label>
                     <select v-model="filterStatus" 
-                        class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500">
+                        class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary focus:border-primary">
                         <option value="">All Statuses</option>
                         <option value="active">Active</option>
                         <option value="inactive">Inactive</option>
                     </select>
                 </div>
 
-                <div v-if="search || filterCategory || filterStatus">
+                <div class="w-full sm:w-auto min-w-[130px]">
+                    <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Per Page</label>
+                    <select v-model="perPage" 
+                        class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary focus:border-primary">
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="all">All</option>
+                    </select>
+                </div>
+
+                <div v-if="search || filterCategory || filterStatus || perPage !== '25'">
                     <button @click="clearFilters" class="px-4 py-2 text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition h-[38px]">
                         Clear
                     </button>
@@ -451,18 +523,18 @@ const submitBulkDelete = () => {
                 leave-from-class="transform translate-y-0 opacity-100"
                 leave-to-class="transform -translate-y-2 opacity-0"
             >
-                <div v-if="!isFormVisible && selectedIds.length > 0" class="mb-4 bg-blue-50/90 dark:bg-blue-950/70 border border-blue-200 dark:border-blue-800 rounded-xl p-3.5 shadow-sm flex flex-wrap items-center justify-between gap-3">
+                <div v-if="!isFormVisible && selectedIds.length > 0" class="mb-4 bg-primary-soft border border-primary-soft rounded-xl p-3.5 shadow-sm flex flex-wrap items-center justify-between gap-3">
                     <div class="flex items-center gap-2.5">
-                        <span class="inline-flex items-center justify-center bg-blue-600 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-xs">
+                        <span class="inline-flex items-center justify-center bg-primary text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-xs">
                             {{ selectedIds.length }}
                         </span>
-                        <span class="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                        <span class="text-sm font-semibold text-primary">
                             {{ selectedIds.length === 1 ? '1 product selected' : `${selectedIds.length} products selected` }}
                         </span>
                         <button
                             type="button"
                             @click="clearSelection"
-                            class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 underline cursor-pointer ml-1"
+                            class="text-xs text-primary hover:opacity-80 underline cursor-pointer ml-1"
                         >
                             Deselect all
                         </button>
@@ -476,7 +548,7 @@ const submitBulkDelete = () => {
                             :disabled="bulkProcessing"
                             class="px-3 py-1.5 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg text-xs font-semibold border border-gray-300 dark:border-gray-600 transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
                         >
-                            <svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
+                            <svg class="w-3.5 h-3.5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
                             Change Category
                         </button>
 
@@ -518,7 +590,7 @@ const submitBulkDelete = () => {
                             type="button"
                             @click="executeBulkAction('update_new', { is_new: true })"
                             :disabled="bulkProcessing"
-                            class="px-3 py-1.5 bg-white dark:bg-gray-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 rounded-lg text-xs font-semibold border border-indigo-200 dark:border-indigo-800 transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
+                            class="px-3 py-1.5 bg-white dark:bg-gray-800 hover:bg-primary-soft text-primary rounded-lg text-xs font-semibold border border-primary-soft transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
                             title="Mark with 'NEW' badge"
                         >
                             ✦ Tag New
@@ -529,7 +601,7 @@ const submitBulkDelete = () => {
                             type="button"
                             @click="showBulkPriceModal = true"
                             :disabled="bulkProcessing"
-                            class="px-3 py-1.5 bg-white dark:bg-gray-800 hover:bg-purple-50 dark:hover:bg-purple-950/40 text-purple-700 dark:text-purple-400 rounded-lg text-xs font-semibold border border-purple-200 dark:border-purple-800 transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
+                            class="px-3 py-1.5 bg-white dark:bg-gray-800 hover:bg-secondary-soft text-secondary rounded-lg text-xs font-semibold border border-secondary-soft transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
                         >
                             ₦ Adjust Prices
                         </button>
@@ -560,7 +632,7 @@ const submitBulkDelete = () => {
                                         :checked="isAllSelected"
                                         :indeterminate.prop="isIndeterminate"
                                         @change="toggleSelectAll"
-                                        class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 bg-white dark:bg-gray-800 cursor-pointer"
+                                        class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary bg-white dark:bg-gray-800 cursor-pointer"
                                         title="Select all products on this page"
                                     />
                                 </th>
@@ -575,13 +647,13 @@ const submitBulkDelete = () => {
                         <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
                             <tr v-for="p in products.data" :key="p.id" 
                                 class="hover:bg-gray-50 dark:hover:bg-gray-700/60 transition"
-                                :class="selectedIds.includes(p.id) ? 'bg-blue-50/70 dark:bg-blue-900/25' : ''">
+                                :class="selectedIds.includes(p.id) ? 'bg-primary-soft' : ''">
                                 <td class="px-4 py-3 text-center" @click.stop>
                                     <input
                                         type="checkbox"
                                         :checked="selectedIds.includes(p.id)"
                                         @change="toggleSelect(p.id)"
-                                        class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 bg-white dark:bg-gray-800 cursor-pointer"
+                                        class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary bg-white dark:bg-gray-800 cursor-pointer"
                                     />
                                 </td>
                                 <td class="px-5 py-3">
@@ -590,7 +662,7 @@ const submitBulkDelete = () => {
                                         <div>
                                             <div class="flex items-center gap-1.5">
                                                 <span class="font-semibold line-clamp-1 text-gray-900 dark:text-white">{{ p.name }}</span>
-                                                <span v-if="p.inventory_source === 'pos'" class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+                                                <span v-if="p.inventory_source === 'pos'" class="text-[10px] font-bold px-1.5 py-0.2 rounded theme-primary-badge">
                                                     POS #{{ p.pos_item_id }}
                                                 </span>
                                                 <span v-if="p.pos_sync_status === 'missing_pos_item'" class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-rose-100 text-rose-700">
@@ -602,12 +674,15 @@ const submitBulkDelete = () => {
                                     </div>
                                 </td>
                                 <td class="px-5 py-3">
-                                    <span class="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">{{ p.category?.name }}</span>
+                                    <span class="text-xs theme-primary-badge px-2 py-0.5 rounded-full font-medium">{{ p.category?.name }}</span>
                                 </td>
                                 <td class="px-5 py-3">
                                     <div class="font-bold text-gray-900 dark:text-white">₦{{ parseFloat(p.price).toLocaleString() }}</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                                        Cost: <span class="font-semibold text-gray-700 dark:text-gray-300">₦{{ parseFloat(p.cost_price || 0).toLocaleString() }}</span>
+                                    </div>
                                     <div v-if="p.discount_price" class="text-xs text-red-400 line-through">₦{{ parseFloat(p.discount_price).toLocaleString() }}</div>
-                                    <div v-if="p.special_price" class="text-xs text-orange-500 font-semibold">Special: ₦{{ parseFloat(p.special_price).toLocaleString() }}</div>
+                                    <div v-if="p.special_price" class="text-xs text-secondary font-semibold">Special: ₦{{ parseFloat(p.special_price).toLocaleString() }}</div>
                                 </td>
                                 <td class="px-5 py-3">
                                     <span class="text-sm font-bold flex items-center gap-1.5"
@@ -622,13 +697,13 @@ const submitBulkDelete = () => {
                                         <span v-if="p.is_new" class="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-bold">NEW</span>
                                         <span v-if="p.is_featured" class="text-[10px] bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded font-bold">★ FEAT</span>
                                         <span class="text-[10px] px-1.5 py-0.5 rounded font-bold"
-                                            :class="p.status ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'">
+                                            :class="p.status ? 'theme-primary-badge' : 'bg-gray-100 text-gray-500'">
                                             {{ p.status ? 'Active' : 'Inactive' }}
                                         </span>
                                     </div>
                                 </td>
                                 <td class="px-5 py-3 text-right">
-                                    <button @click="openEditForm(p)" class="text-blue-500 hover:text-blue-700 font-medium text-sm mr-3">Edit</button>
+                                    <button @click="openEditForm(p)" class="text-primary hover:opacity-80 font-semibold text-sm mr-3">Edit</button>
                                     <button @click="deleteProduct(p.id)" class="text-red-500 hover:text-red-700 font-medium text-sm">Delete</button>
                                 </td>
                             </tr>
@@ -638,7 +713,13 @@ const submitBulkDelete = () => {
                         </tbody>
                     </table>
                 </div>
-                <div class="px-5 py-3 border-t dark:border-gray-700">
+                <div class="px-5 py-3 border-t dark:border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                        Showing <span class="font-semibold text-gray-700 dark:text-gray-200">{{ products.from || 0 }}</span> to <span class="font-semibold text-gray-700 dark:text-gray-200">{{ products.to || 0 }}</span> of <span class="font-semibold text-gray-700 dark:text-gray-200">{{ products.total || 0 }}</span> products
+                        <span v-if="perPage === 'all'" class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold theme-primary-badge">
+                            Showing All Records
+                        </span>
+                    </div>
                     <Pagination v-if="products.data?.length" :paginator="products"/>
                 </div>
             </div>
@@ -652,14 +733,14 @@ const submitBulkDelete = () => {
                     <!-- General Information -->
                     <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border dark:border-gray-700">
                         <h3 class="text-base font-bold mb-5 flex items-center gap-2">
-                            <span class="w-6 h-6 bg-blue-100 dark:bg-blue-900/40 text-blue-600 rounded flex items-center justify-center text-sm">📋</span>
+                            <span class="w-6 h-6 bg-primary-soft text-primary rounded flex items-center justify-center text-sm">📋</span>
                             General Information
                         </h3>
                         <div class="space-y-4">
                             <div>
                                 <label class="block text-sm font-semibold mb-1">Product Title *</label>
                                 <input v-model="form.name" type="text" required placeholder="e.g. iPhone 16 Pro Max"
-                                    class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-blue-500 shadow-sm"/>
+                                    class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-primary shadow-sm"/>
                                 <p v-if="form.errors.name" class="text-red-500 text-xs mt-1">{{ form.errors.name }}</p>
                             </div>
 
@@ -667,7 +748,7 @@ const submitBulkDelete = () => {
                                 <div>
                                     <label class="block text-sm font-semibold mb-1">Category *</label>
                                     <select v-model="form.category_id" required
-                                        class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-blue-500 shadow-sm">
+                                        class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-primary shadow-sm">
                                         <option value="" disabled>— Select a category —</option>
                                         <template v-for="parent in categories" :key="parent.id">
                                             <!-- If parent has subcategories, use optgroup -->
@@ -692,7 +773,7 @@ const submitBulkDelete = () => {
                                     <div class="relative">
                                         <span class="absolute inset-y-0 left-3 flex items-center text-gray-400 text-xs pointer-events-none">/product/</span>
                                         <input v-model="form.url_key" type="text" required placeholder="iphone-16-pro-max"
-                                            class="w-full pl-16 rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-blue-500 shadow-sm font-mono text-sm"/>
+                                            class="w-full pl-16 rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-primary shadow-sm font-mono text-sm"/>
                                     </div>
                                     <p v-if="form.errors.url_key" class="text-red-500 text-xs mt-1">{{ form.errors.url_key }}</p>
                                 </div>
@@ -702,13 +783,13 @@ const submitBulkDelete = () => {
                                 <div>
                                     <label class="block text-sm font-semibold mb-1">Product Number <span class="font-normal text-gray-400">(optional)</span></label>
                                     <input v-model="form.product_number" type="text" placeholder="e.g. PRD-001"
-                                        class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-blue-500 shadow-sm font-mono text-sm"/>
+                                        class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-primary shadow-sm font-mono text-sm"/>
                                     <p v-if="form.errors.product_number" class="text-red-500 text-xs mt-1">{{ form.errors.product_number }}</p>
                                 </div>
                                 <div>
                                     <label class="block text-sm font-semibold mb-1">SKU <span class="font-normal text-gray-400">(optional)</span></label>
                                     <input v-model="form.sku" type="text" placeholder="e.g. APPLE-IP16-PRO"
-                                        class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-blue-500 shadow-sm font-mono text-sm"/>
+                                        class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-primary shadow-sm font-mono text-sm"/>
                                     <p v-if="form.errors.sku" class="text-red-500 text-xs mt-1">{{ form.errors.sku }}</p>
                                 </div>
                             </div>
@@ -716,7 +797,7 @@ const submitBulkDelete = () => {
                             <div>
                                 <label class="block text-sm font-semibold mb-1">Short Description <span class="font-normal text-gray-400">(optional)</span></label>
                                 <textarea v-model="form.short_description" rows="2" placeholder="Brief summary of the product..."
-                                    class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-blue-500 shadow-sm resize-none"></textarea>
+                                    class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-primary shadow-sm resize-none"></textarea>
                             </div>
 
                             <div>
@@ -750,7 +831,7 @@ const submitBulkDelete = () => {
                                     <button v-for="opt in attr.options" :key="opt"
                                         @click.prevent="form.attributes[attr.id] = (form.attributes[attr.id] === opt ? '' : opt)"
                                         class="w-7 h-7 rounded-full border-2 transition-transform duration-200"
-                                        :class="form.attributes[attr.id] === opt ? 'scale-110 border-blue-500 shadow-md ring-2 ring-blue-200 dark:ring-blue-900' : 'border-gray-200 dark:border-gray-600 hover:scale-110'"
+                                        :class="form.attributes[attr.id] === opt ? 'scale-110 border-primary shadow-md ring-2 ring-primary' : 'border-gray-200 dark:border-gray-600 hover:scale-110'"
                                         :style="{ backgroundColor: opt.startsWith('#') ? opt : opt.toLowerCase().replace(/\s+/g, '') }"
                                         :title="opt">
                                     </button>
@@ -758,7 +839,7 @@ const submitBulkDelete = () => {
                                 
                                 <!-- Default Text Wrapper -->
                                 <input v-else type="text" v-model="form.attributes[attr.id]" :placeholder="`Enter ${attr.name}...`"
-                                    class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-yellow-500 shadow-sm text-sm" />
+                                    class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-primary shadow-sm text-sm" />
                             </div>
                         </div>
                     </div>
@@ -776,9 +857,9 @@ const submitBulkDelete = () => {
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <label
                                     class="flex items-center p-3 rounded-lg border cursor-pointer transition"
-                                    :class="form.inventory_source === 'pos' ? 'border-indigo-600 bg-indigo-50/50 dark:bg-indigo-900/20' : 'border-gray-200 dark:border-gray-700'"
+                                    :class="form.inventory_source === 'pos' ? 'border-primary bg-primary-soft' : 'border-gray-200 dark:border-gray-700'"
                                 >
-                                    <input type="radio" value="pos" v-model="form.inventory_source" class="text-indigo-600 focus:ring-indigo-500" />
+                                    <input type="radio" value="pos" v-model="form.inventory_source" class="text-primary focus:ring-primary" />
                                     <div class="ml-3">
                                         <div class="text-sm font-semibold text-gray-900 dark:text-white">Connected POS Item</div>
                                         <div class="text-xs text-gray-500">Physical stock & standard price synced from POS</div>
@@ -786,9 +867,9 @@ const submitBulkDelete = () => {
                                 </label>
                                 <label
                                     class="flex items-center p-3 rounded-lg border cursor-pointer transition"
-                                    :class="form.inventory_source === 'ecommerce' ? 'border-indigo-600 bg-indigo-50/50 dark:bg-indigo-900/20' : 'border-gray-200 dark:border-gray-700'"
+                                    :class="form.inventory_source === 'ecommerce' ? 'border-primary bg-primary-soft' : 'border-gray-200 dark:border-gray-700'"
                                 >
-                                    <input type="radio" value="ecommerce" v-model="form.inventory_source" class="text-indigo-600 focus:ring-indigo-500" />
+                                    <input type="radio" value="ecommerce" v-model="form.inventory_source" class="text-primary focus:ring-primary" />
                                     <div class="ml-3">
                                         <div class="text-sm font-semibold text-gray-900 dark:text-white">Ecommerce Only Item</div>
                                         <div class="text-xs text-gray-500">Independent local stock & pricing</div>
@@ -797,19 +878,130 @@ const submitBulkDelete = () => {
                             </div>
 
                             <!-- POS Item Picker if POS is selected -->
-                            <div v-if="form.inventory_source === 'pos'" class="mt-4 pt-3 border-t border-gray-200 dark:border-gray-700">
+                            <div v-if="form.inventory_source === 'pos'" ref="posDropdownRef" class="mt-4 pt-3 border-t border-gray-200 dark:border-gray-700 relative">
                                 <label class="block text-sm font-semibold mb-1">Select Synced POS Item *</label>
-                                <select
-                                    :value="form.pos_item_id"
-                                    @change="onPosItemSelect"
-                                    class="w-full text-sm py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-800"
+
+                                <!-- Trigger Button -->
+                                <div
+                                    @click="togglePosDropdown"
+                                    class="w-full text-sm py-2.5 px-3 border rounded-lg bg-white dark:bg-gray-800 cursor-pointer flex items-center justify-between gap-2 transition shadow-xs"
+                                    :class="posDropdownOpen ? 'border-primary ring-2 ring-primary/20' : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'"
                                 >
-                                    <option :value="null">-- Choose an item from connected POS branch --</option>
-                                    <option v-for="item in synced_pos_items" :key="item.pos_item_id" :value="item.pos_item_id">
-                                        {{ item.pos_item_name }} (Stock: {{ Math.round(Number(item.effective_availability || 0)) }} {{ item.base_unit_name }} | ₦{{ Number(item.standard_price).toLocaleString() }})
-                                    </option>
-                                </select>
-                                <p v-if="form.pos_item_id" class="text-xs text-indigo-600 dark:text-indigo-400 mt-1.5 flex items-center">
+                                    <div v-if="selectedPosItem" class="flex-1 min-w-0 flex flex-wrap items-center gap-2">
+                                        <span class="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded theme-primary-badge shrink-0">
+                                            #{{ selectedPosItem.pos_item_id }}
+                                        </span>
+                                        <span class="font-semibold text-gray-900 dark:text-white truncate">
+                                            {{ selectedPosItem.pos_item_name }}
+                                        </span>
+                                        <span class="text-xs text-gray-500 dark:text-gray-400 shrink-0">
+                                            (Stock: {{ Math.round(Number(selectedPosItem.effective_availability || 0)) }} {{ selectedPosItem.base_unit_name }} | ₦{{ Number(selectedPosItem.standard_price).toLocaleString() }})
+                                        </span>
+                                    </div>
+                                    <span v-else-if="form.pos_item_id" class="text-gray-700 dark:text-gray-200 font-medium">
+                                        POS Item #{{ form.pos_item_id }}
+                                    </span>
+                                    <span v-else class="text-gray-400 dark:text-gray-500">
+                                        -- Search or choose an item from connected POS branch --
+                                    </span>
+
+                                    <div class="flex items-center gap-1.5 shrink-0">
+                                        <button
+                                            v-if="form.pos_item_id"
+                                            type="button"
+                                            @click.stop="clearPosItem"
+                                            class="p-1 rounded-md text-gray-400 hover:text-rose-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                                            title="Clear selected POS item"
+                                        >
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                        </button>
+                                        <svg class="w-4 h-4 text-gray-400 transition-transform duration-150" :class="posDropdownOpen ? 'rotate-180 text-primary' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                        </svg>
+                                    </div>
+                                </div>
+
+                                <!-- Searchable Dropdown Panel -->
+                                <div
+                                    v-if="posDropdownOpen"
+                                    class="absolute left-0 right-0 z-40 mt-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl overflow-hidden"
+                                >
+                                    <!-- Search Input Header (matches POS All Items search bar) -->
+                                    <div class="p-2.5 border-b border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/50">
+                                        <div class="relative">
+                                            <input
+                                                ref="posSearchInputRef"
+                                                v-model="posSearchQuery"
+                                                type="text"
+                                                placeholder="Search by name, barcode, SKU, category, or POS #ID..."
+                                                @keydown.escape.stop="posDropdownOpen = false"
+                                                class="w-full text-sm pl-9 pr-8 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary"
+                                            />
+                                            <svg class="w-4 h-4 text-gray-400 absolute left-3 top-2.5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                                            </svg>
+                                            <button
+                                                v-if="posSearchQuery"
+                                                type="button"
+                                                @click="posSearchQuery = ''; posSearchInputRef?.focus()"
+                                                class="absolute right-2.5 top-2.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                                            >
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                            </button>
+                                        </div>
+                                        <div class="flex items-center justify-between mt-1.5 px-1 text-[11px] text-gray-500 dark:text-gray-400">
+                                            <span>{{ filteredPosItemsAll.length.toLocaleString() }} matching POS item(s)</span>
+                                            <span v-if="filteredPosItemsAll.length > 25">Showing first 25 — type to refine</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Options List -->
+                                    <div class="max-h-72 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700/60">
+                                        <button
+                                            v-for="item in filteredPosItems"
+                                            :key="item.pos_item_id"
+                                            type="button"
+                                            @click="selectPosItem(item)"
+                                            class="w-full text-left px-3.5 py-2.5 flex items-center justify-between gap-3 transition"
+                                            :class="Number(form.pos_item_id) === Number(item.pos_item_id) ? 'bg-primary-soft text-primary' : 'hover:bg-gray-50 dark:hover:bg-gray-700/60 text-gray-800 dark:text-gray-200'"
+                                        >
+                                            <div class="min-w-0 flex-1">
+                                                <div class="flex items-center gap-2 flex-wrap">
+                                                    <span class="font-mono text-xs text-gray-500 dark:text-gray-400">#{{ item.pos_item_id }}</span>
+                                                    <span class="font-semibold text-sm text-gray-900 dark:text-white truncate">{{ item.pos_item_name }}</span>
+                                                    <span v-if="item.pos_category_name" class="text-[10px] px-1.5 py-0.5 rounded theme-primary-badge">
+                                                        {{ item.pos_category_name }}
+                                                    </span>
+                                                </div>
+                                                <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 flex flex-wrap items-center gap-3">
+                                                    <span v-if="item.sku">SKU: <strong class="font-mono">{{ item.sku }}</strong></span>
+                                                    <span v-if="item.barcode">Bar: <strong class="font-mono">{{ item.barcode }}</strong></span>
+                                                    <span v-if="item.mapping_status && item.mapping_status !== 'unmapped'" class="text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                                                        ● Already Mapped
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div class="text-right shrink-0">
+                                                <div class="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                                                    ₦{{ Number(item.standard_price).toLocaleString('en-US', { minimumFractionDigits: 2 }) }}
+                                                </div>
+                                                <div
+                                                    class="text-[11px] font-semibold"
+                                                    :class="Number(item.effective_availability) > 0 ? 'text-gray-600 dark:text-gray-300' : 'text-rose-500'"
+                                                >
+                                                    {{ Math.round(Number(item.effective_availability || 0)) }} {{ item.base_unit_name }}
+                                                </div>
+                                            </div>
+                                        </button>
+
+                                        <div v-if="!filteredPosItems.length" class="p-6 text-center text-sm text-gray-400">
+                                            No synced POS items match "{{ posSearchQuery }}".
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <p v-if="form.errors.pos_item_id" class="text-red-500 text-xs mt-1">{{ form.errors.pos_item_id }}</p>
+                                <p v-if="form.pos_item_id" class="text-xs text-primary mt-1.5 flex items-center">
                                     <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                                     Linked to POS item #{{ form.pos_item_id }}. Base price & stock are controlled by POS.
                                 </p>
@@ -820,7 +1012,7 @@ const submitBulkDelete = () => {
                             <div>
                                 <label class="block text-sm font-semibold mb-1">
                                     Base Price (₦) *
-                                    <span v-if="form.inventory_source === 'pos'" class="text-[10px] text-indigo-600 font-bold ml-1">(POS)</span>
+                                    <span v-if="form.inventory_source === 'pos'" class="text-[10px] text-primary font-bold ml-1">(POS)</span>
                                 </label>
                                 <input
                                     v-model="form.price"
@@ -831,24 +1023,24 @@ const submitBulkDelete = () => {
                                     placeholder="0.00"
                                     :readonly="form.inventory_source === 'pos'"
                                     :class="form.inventory_source === 'pos' ? 'bg-gray-100 dark:bg-gray-800/80 cursor-not-allowed text-gray-500' : ''"
-                                    class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-blue-500 shadow-sm"
+                                    class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-primary shadow-sm"
                                 />
                                 <p v-if="form.errors.price" class="text-red-500 text-xs mt-1">{{ form.errors.price }}</p>
                             </div>
                             <div>
                                 <label class="block text-sm font-semibold mb-1">Cost Price (₦)</label>
                                 <input v-model="form.cost_price" type="number" step="0.01" min="0" placeholder="Internal cost"
-                                    class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-blue-500 shadow-sm"/>
+                                    class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-primary shadow-sm"/>
                             </div>
                             <div>
                                 <label class="block text-sm font-semibold mb-1">Discount Price (₦)</label>
                                 <input v-model="form.discount_price" type="number" step="0.01" min="0" placeholder="Optional"
-                                    class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-blue-500 shadow-sm"/>
+                                    class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-primary shadow-sm"/>
                             </div>
                             <div>
                                 <label class="block text-sm font-semibold mb-1">
                                     Stock Qty *
-                                    <span v-if="form.inventory_source === 'pos'" class="text-[10px] text-indigo-600 font-bold ml-1">(POS)</span>
+                                    <span v-if="form.inventory_source === 'pos'" class="text-[10px] text-primary font-bold ml-1">(POS)</span>
                                 </label>
                                 <input
                                     v-model="form.stock"
@@ -858,33 +1050,33 @@ const submitBulkDelete = () => {
                                     placeholder="0"
                                     :readonly="form.inventory_source === 'pos'"
                                     :class="form.inventory_source === 'pos' ? 'bg-gray-100 dark:bg-gray-800/80 cursor-not-allowed text-gray-500' : ''"
-                                    class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-blue-500 shadow-sm"
+                                    class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-primary shadow-sm"
                                 />
                                 <p v-if="form.errors.stock" class="text-red-500 text-xs mt-1">{{ form.errors.stock }}</p>
                             </div>
                         </div>
 
                         <!-- Special Price Section -->
-                        <div class="bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800 rounded-xl p-4">
-                            <p class="text-sm font-bold text-orange-700 dark:text-orange-400 mb-3">⚡ Special / Flash Price (time-limited)</p>
+                        <div class="bg-secondary-soft border border-secondary-soft rounded-xl p-4">
+                            <p class="text-sm font-bold text-secondary mb-3">⚡ Special / Flash Price (time-limited)</p>
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div>
                                     <label class="block text-xs font-semibold mb-1 text-gray-600 dark:text-gray-400">Special Price (₦)</label>
                                     <input v-model="form.special_price" type="number" step="0.01" min="0" placeholder="e.g. 149000"
-                                        class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-orange-400 shadow-sm text-sm"/>
+                                        class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-primary shadow-sm text-sm"/>
                                 </div>
                                 <div>
                                     <label class="block text-xs font-semibold mb-1 text-gray-600 dark:text-gray-400">Active From</label>
                                     <input v-model="form.special_price_from" type="date"
-                                        class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-orange-400 shadow-sm text-sm"/>
+                                        class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-primary shadow-sm text-sm"/>
                                 </div>
                                 <div>
                                     <label class="block text-xs font-semibold mb-1 text-gray-600 dark:text-gray-400">Active Until</label>
                                     <input v-model="form.special_price_to" type="date"
-                                        class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-orange-400 shadow-sm text-sm"/>
+                                        class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-primary shadow-sm text-sm"/>
                                 </div>
                             </div>
-                            <p class="text-xs text-orange-600 dark:text-orange-400 mt-2 opacity-75">Leave dates empty for an always-active special price.</p>
+                            <p class="text-xs text-secondary mt-2 opacity-75">Leave dates empty for an always-active special price.</p>
                         </div>
                     </div>
 
@@ -892,11 +1084,11 @@ const submitBulkDelete = () => {
                     <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border dark:border-gray-700">
                         <div class="flex items-center justify-between mb-4">
                             <h3 class="text-base font-bold flex items-center gap-2">
-                                <span class="w-6 h-6 bg-purple-100 dark:bg-purple-900/40 text-purple-600 rounded flex items-center justify-center text-sm">🎛️</span>
+                                <span class="w-6 h-6 bg-primary-soft text-primary rounded flex items-center justify-center text-sm">🎛️</span>
                                 Product Variants
                             </h3>
                             <button @click.prevent="addVariant"
-                                class="text-sm bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:hover:bg-indigo-800/50 text-indigo-700 dark:text-indigo-300 px-3 py-1.5 rounded-lg font-semibold transition flex items-center gap-1">
+                                class="text-sm bg-primary-soft hover:bg-primary-soft text-primary px-3 py-1.5 rounded-lg font-semibold transition flex items-center gap-1">
                                 + Add Variant
                             </button>
                         </div>
@@ -930,7 +1122,7 @@ const submitBulkDelete = () => {
                     <!-- Related Products Picker -->
                     <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border dark:border-gray-700">
                         <h3 class="text-base font-bold mb-1 flex items-center gap-2">
-                            <span class="w-6 h-6 bg-cyan-100 dark:bg-cyan-900/40 text-cyan-600 rounded flex items-center justify-center text-sm">🔗</span>
+                            <span class="w-6 h-6 bg-primary-soft text-primary rounded flex items-center justify-center text-sm">🔗</span>
                             Related Products
                         </h3>
                         <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
@@ -940,10 +1132,10 @@ const submitBulkDelete = () => {
                         <!-- Selected chips -->
                         <div v-if="selectedRelatedProducts.length" class="flex flex-wrap gap-2 mb-4">
                             <div v-for="rp in selectedRelatedProducts" :key="rp.id"
-                                class="flex items-center gap-1.5 bg-cyan-50 dark:bg-cyan-900/30 text-cyan-800 dark:text-cyan-200 text-xs font-medium px-2 py-1 rounded-full border border-cyan-200 dark:border-cyan-700">
+                                class="flex items-center gap-1.5 bg-primary-soft text-primary text-xs font-medium px-2 py-1 rounded-full border border-primary-soft">
                                 <img v-if="rp.image" :src="'/storage/' + rp.image" class="w-4 h-4 rounded-full object-cover"/>
                                 {{ rp.name.length > 25 ? rp.name.substring(0,25) + '…' : rp.name }}
-                                <button @click.prevent="removeRelated(rp.id)" class="text-cyan-600 hover:text-red-500 ml-1 font-bold leading-none">&times;</button>
+                                <button @click.prevent="removeRelated(rp.id)" class="text-primary hover:text-red-500 ml-1 font-bold leading-none">&times;</button>
                             </div>
                         </div>
                         <p v-else class="text-xs text-gray-400 italic mb-4">No products selected — using same-category fallback.</p>
@@ -951,7 +1143,7 @@ const submitBulkDelete = () => {
                         <!-- Search -->
                         <input v-model="relatedSearch" @input="searchRelated" type="text"
                             placeholder="Search products by name…"
-                            class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-cyan-400 shadow-sm text-sm mb-3"/>
+                            class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-primary shadow-sm text-sm mb-3"/>
 
                         <!-- Scrollable product list (AJAX results) -->
                         <div class="max-h-60 overflow-y-auto space-y-1 pr-1">
@@ -968,13 +1160,13 @@ const submitBulkDelete = () => {
                                 :class="[
                                     'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-left transition',
                                     isRelated(rp.id)
-                                        ? 'bg-cyan-50 dark:bg-cyan-900/30 border border-cyan-300 dark:border-cyan-700 text-cyan-800 dark:text-cyan-200'
+                                        ? 'bg-primary-soft border border-primary-soft text-primary'
                                         : 'hover:bg-gray-50 dark:hover:bg-gray-700 border border-transparent text-gray-700 dark:text-gray-300'
                                 ]">
                                 <img :src="rp.image ? '/storage/' + rp.image : 'https://placehold.co/32x32?text=P'"
                                     class="w-8 h-8 rounded object-cover flex-shrink-0 border dark:border-gray-600"/>
                                 <span class="flex-1 line-clamp-1">{{ rp.name }}</span>
-                                <svg v-if="isRelated(rp.id)" class="w-4 h-4 text-cyan-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg v-if="isRelated(rp.id)" class="w-4 h-4 text-primary flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
                                 </svg>
                             </button>
@@ -988,7 +1180,7 @@ const submitBulkDelete = () => {
                     <!-- Publish / Flags Panel -->
                     <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border dark:border-gray-700">
                         <h3 class="text-base font-bold mb-4 flex items-center gap-2">
-                            <span class="w-6 h-6 bg-yellow-100 dark:bg-yellow-900/40 text-yellow-600 rounded flex items-center justify-center text-sm">🏷️</span>
+                            <span class="w-6 h-6 bg-secondary-soft text-secondary rounded flex items-center justify-center text-sm">🏷️</span>
                             Product Labels & Visibility
                         </h3>
 
@@ -1001,7 +1193,7 @@ const submitBulkDelete = () => {
                                 </div>
                                 <button type="button" @click="form.status = !form.status"
                                     class="relative inline-flex h-6 w-11 items-center rounded-full transition"
-                                    :class="form.status ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'">
+                                    :class="form.status ? 'bg-primary' : 'bg-gray-200 dark:bg-gray-600'">
                                     <span class="inline-block h-4 w-4 transform rounded-full bg-white transition shadow"
                                         :class="form.status ? 'translate-x-6' : 'translate-x-1'"/>
                                 </button>
@@ -1029,7 +1221,7 @@ const submitBulkDelete = () => {
                                 </div>
                                 <button type="button" @click="form.is_featured = !form.is_featured"
                                     class="relative inline-flex h-6 w-11 items-center rounded-full transition"
-                                    :class="form.is_featured ? 'bg-yellow-500' : 'bg-gray-200 dark:bg-gray-600'">
+                                    :class="form.is_featured ? 'bg-secondary' : 'bg-gray-200 dark:bg-gray-600'">
                                     <span class="inline-block h-4 w-4 transform rounded-full bg-white transition shadow"
                                         :class="form.is_featured ? 'translate-x-6' : 'translate-x-1'"/>
                                 </button>
@@ -1043,7 +1235,7 @@ const submitBulkDelete = () => {
                                 </div>
                                 <button type="button" @click="form.visible_individually = !form.visible_individually"
                                     class="relative inline-flex h-6 w-11 items-center rounded-full transition"
-                                    :class="form.visible_individually ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'">
+                                    :class="form.visible_individually ? 'bg-primary' : 'bg-gray-200 dark:bg-gray-600'">
                                     <span class="inline-block h-4 w-4 transform rounded-full bg-white transition shadow"
                                         :class="form.visible_individually ? 'translate-x-6' : 'translate-x-1'"/>
                                 </button>
@@ -1057,7 +1249,7 @@ const submitBulkDelete = () => {
                                 </div>
                                 <button type="button" @click="form.show_stock_level = !form.show_stock_level"
                                     class="relative inline-flex h-6 w-11 items-center rounded-full transition"
-                                    :class="form.show_stock_level ? 'bg-teal-500' : 'bg-gray-200 dark:bg-gray-600'">
+                                    :class="form.show_stock_level ? 'bg-primary' : 'bg-gray-200 dark:bg-gray-600'">
                                     <span class="inline-block h-4 w-4 transform rounded-full bg-white transition shadow"
                                         :class="form.show_stock_level ? 'translate-x-6' : 'translate-x-1'"/>
                                 </button>
@@ -1081,7 +1273,7 @@ const submitBulkDelete = () => {
                     <!-- Media Panel -->
                     <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border dark:border-gray-700">
                         <h3 class="text-base font-bold mb-4 flex items-center gap-2">
-                            <span class="w-6 h-6 bg-pink-100 dark:bg-pink-900/40 text-pink-500 rounded flex items-center justify-center text-sm">🖼️</span>
+                            <span class="w-6 h-6 bg-primary-soft text-primary rounded flex items-center justify-center text-sm">🖼️</span>
                             Product Media
                         </h3>
 
@@ -1091,7 +1283,7 @@ const submitBulkDelete = () => {
                             <label class="relative block w-full aspect-square bg-gray-50 dark:bg-gray-900 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer overflow-hidden group">
                                 <input type="file" @change="handleImageUpload" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer z-10"/>
                                 <img v-if="imagePreview" :src="imagePreview" class="absolute inset-0 w-full h-full object-cover"/>
-                                <div v-else class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 group-hover:text-blue-500 transition">
+                                <div v-else class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 group-hover:text-primary transition">
                                     <svg class="w-9 h-9 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
                                     <span class="text-sm font-medium">Upload Thumbnail</span>
                                 </div>
@@ -1126,11 +1318,11 @@ const submitBulkDelete = () => {
                         <button @click="showBulkCategoryModal = false" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-lg">✕</button>
                     </div>
                     <p class="text-sm text-gray-600 dark:text-gray-300">
-                        Assign <span class="font-bold text-blue-600 dark:text-blue-400">{{ selectedIds.length }}</span> selected product(s) to a new category:
+                        Assign <span class="font-bold text-primary">{{ selectedIds.length }}</span> selected product(s) to a new category:
                     </p>
                     <div>
                         <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Target Category</label>
-                        <select v-model="targetCategoryId" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500">
+                        <select v-model="targetCategoryId" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary focus:border-primary">
                             <option value="" disabled>Select target category...</option>
                             <template v-for="parent in categories" :key="parent.id">
                                 <optgroup v-if="parent.children?.length" :label="parent.name">
@@ -1153,7 +1345,7 @@ const submitBulkDelete = () => {
                             type="button"
                             @click="submitBulkCategory"
                             :disabled="!targetCategoryId || bulkProcessing"
-                            class="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold shadow transition disabled:opacity-50 flex items-center gap-1.5"
+                            class="px-5 py-2 rounded-lg bg-primary hover:bg-primary-dark text-white text-sm font-bold shadow transition disabled:opacity-50 flex items-center gap-1.5"
                         >
                             <svg v-if="bulkProcessing" class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
                             Apply Category
@@ -1173,19 +1365,19 @@ const submitBulkDelete = () => {
                         <button @click="showBulkPriceModal = false" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-lg">✕</button>
                     </div>
                     <p class="text-sm text-gray-600 dark:text-gray-300">
-                        Quickly update prices across <span class="font-bold text-blue-600 dark:text-blue-400">{{ selectedIds.length }}</span> selected product(s):
+                        Quickly update prices across <span class="font-bold text-primary">{{ selectedIds.length }}</span> selected product(s):
                     </p>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
                             <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Action</label>
-                            <select v-model="bulkPriceOperation" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-blue-500">
+                            <select v-model="bulkPriceOperation" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary">
                                 <option value="increase">Increase (+)</option>
                                 <option value="decrease">Decrease (-)</option>
                             </select>
                         </div>
                         <div>
                             <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Type</label>
-                            <select v-model="bulkPriceType" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-blue-500">
+                            <select v-model="bulkPriceType" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary">
                                 <option value="percentage">Percentage (%)</option>
                                 <option value="fixed">Fixed Amount (₦)</option>
                             </select>
@@ -1199,7 +1391,7 @@ const submitBulkDelete = () => {
                             min="0"
                             step="any"
                             placeholder="e.g. 10"
-                            class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-blue-500"
+                            class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary"
                         />
                     </div>
                     <div class="flex items-center justify-end gap-2.5 pt-3">
@@ -1214,7 +1406,7 @@ const submitBulkDelete = () => {
                             type="button"
                             @click="submitBulkPrice"
                             :disabled="!bulkPriceAmount || bulkPriceAmount <= 0 || bulkProcessing"
-                            class="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold shadow transition disabled:opacity-50 flex items-center gap-1.5"
+                            class="px-5 py-2 rounded-lg bg-primary hover:bg-primary-dark text-white text-sm font-bold shadow transition disabled:opacity-50 flex items-center gap-1.5"
                         >
                             <svg v-if="bulkProcessing" class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
                             Apply Price Adjustment

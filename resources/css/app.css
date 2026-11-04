@@ -3,7 +3,7 @@
 
 @import 'tailwindcss';
 @plugin "@tailwindcss/typography";
-@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *, .dark, .dark *));
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
@@ -25,6 +25,7 @@
     --color-dark: #0a0a0a;
     --color-light: #fcfafa;
     --color-gray-750: #29303d;
+    --color-gray-850: #1b2432;
     --color-slate-750: #243042;
     --color-slate-850: #172033;
 
@@ -43,21 +44,128 @@
 
     --background-size-200: 200% 200%;
 }
+@layer base {
+  *, ::after, ::before {
+    border-color: var(--color-gray-200, #e5e7eb);
+  }
+}
+
 @layer utilities {
     .bg-primary {
-      background-color: var(--color-primary);
+      background-color: var(--color-primary) !important;
+    }
+    .bg-primary-dark,
+    .hover\:bg-primary-dark:hover,
+    button.bg-primary:hover,
+    a.bg-primary:hover {
+      background-color: color-mix(in srgb, var(--color-primary, #7B00FF) 85%, #000000) !important;
     }
     .text-primary {
-      color: var(--color-primary);
+      color: var(--color-primary) !important;
+    }
+    [data-theme="dark"] .text-primary,
+    [data-theme="dark"] .dark\:text-primary {
+      color: color-mix(in srgb, var(--color-primary, #7B00FF) 70%, #ffffff) !important;
     }
     .border-primary {
-      border-color: var(--color-primary);
+      border-color: var(--color-primary) !important;
     }
     .bg-secondary {
-      background-color: var(--color-secondary-500);
+      background-color: var(--color-secondary-500) !important;
+    }
+    .hover\:bg-secondary-dark:hover,
+    button.bg-secondary:hover,
+    a.bg-secondary:hover {
+      background-color: color-mix(in srgb, var(--color-secondary-500, #FBA43D) 85%, #000000) !important;
     }
     .text-secondary {
-      color: var(--color-secondary-500);
+      color: var(--color-secondary-500) !important;
+    }
+    .border-secondary {
+      border-color: var(--color-secondary-500) !important;
+    }
+
+    .bg-primary-soft {
+      background-color: color-mix(in srgb, var(--color-primary, #7B00FF) 10%, transparent) !important;
+    }
+    [data-theme="dark"] .bg-primary-soft {
+      background-color: color-mix(in srgb, var(--color-primary, #7B00FF) 20%, transparent) !important;
+    }
+    .hover\:bg-primary-soft:hover {
+      background-color: color-mix(in srgb, var(--color-primary, #7B00FF) 16%, transparent) !important;
+    }
+    .border-primary-soft {
+      border-color: color-mix(in srgb, var(--color-primary, #7B00FF) 28%, transparent) !important;
+    }
+
+    .bg-secondary-soft {
+      background-color: color-mix(in srgb, var(--color-secondary-500, #FBA43D) 12%, transparent) !important;
+    }
+    [data-theme="dark"] .bg-secondary-soft {
+      background-color: color-mix(in srgb, var(--color-secondary-500, #FBA43D) 22%, transparent) !important;
+    }
+    .border-secondary-soft {
+      border-color: color-mix(in srgb, var(--color-secondary-500, #FBA43D) 30%, transparent) !important;
+    }
+
+    .theme-gradient-banner {
+      background: linear-gradient(135deg, color-mix(in srgb, var(--color-primary, #7B00FF) 9%, transparent), color-mix(in srgb, var(--color-secondary-500, #FBA43D) 9%, transparent)) !important;
+      border-color: color-mix(in srgb, var(--color-primary, #7B00FF) 25%, transparent) !important;
+    }
+    [data-theme="dark"] .theme-gradient-banner {
+      background: linear-gradient(135deg, color-mix(in srgb, var(--color-primary, #7B00FF) 20%, transparent), color-mix(in srgb, var(--color-secondary-500, #FBA43D) 15%, transparent)) !important;
+      border-color: color-mix(in srgb, var(--color-primary, #7B00FF) 38%, transparent) !important;
+    }
+
+    .hover\:bg-primary:hover {
+      background-color: var(--color-primary) !important;
+    }
+    .hover\:text-primary:hover {
+      color: var(--color-primary) !important;
+    }
+    .hover\:border-primary:hover {
+      border-color: var(--color-primary) !important;
+    }
+    .focus\:ring-primary:focus {
+      --tw-ring-color: var(--color-primary) !important;
+    }
+    .focus\:border-primary:focus {
+      border-color: var(--color-primary) !important;
+    }
+
+    .peer:checked ~ .peer-checked\:bg-primary {
+      background-color: var(--color-primary) !important;
+    }
+
+    input[type="checkbox"],
+    input[type="radio"] {
+      accent-color: var(--color-primary);
+    }
+
+    .theme-primary-btn {
+      background-color: var(--color-primary) !important;
+      color: #ffffff !important;
+    }
+    .theme-primary-btn:hover {
+      background-color: color-mix(in srgb, var(--color-primary, #7B00FF) 85%, #000000) !important;
+    }
+
+    .theme-primary-badge {
+      background-color: color-mix(in srgb, var(--color-primary, #7B00FF) 12%, transparent) !important;
+      color: var(--color-primary, #7B00FF) !important;
+    }
+    [data-theme="dark"] .theme-primary-badge {
+      background-color: color-mix(in srgb, var(--color-primary, #7B00FF) 22%, transparent) !important;
+      color: color-mix(in srgb, var(--color-primary, #7B00FF) 70%, #ffffff) !important;
+    }
+
+    .theme-secondary-badge {
+      background-color: color-mix(in srgb, var(--color-secondary-500, #FBA43D) 14%, transparent) !important;
+      color: color-mix(in srgb, var(--color-secondary-500, #FBA43D) 85%, #000000) !important;
+    }
+    [data-theme="dark"] .theme-secondary-badge {
+      background-color: color-mix(in srgb, var(--color-secondary-500, #FBA43D) 22%, transparent) !important;
+      color: color-mix(in srgb, var(--color-secondary-500, #FBA43D) 75%, #ffffff) !important;
     }
 
     .theme-sidebar-active {
@@ -177,7 +285,7 @@ body, html {
     margin: 0;
     padding: 0;
     width: 100%;
-    overflow-x: hidden;
+    overflow-x: clip;
 }
 
 
@@ -196,6 +304,34 @@ input[type="password"]::-ms-clear {
 .scrollbar-hide::-webkit-scrollbar {
   display: none; /* Safari and Chrome */
 }
+
+/* Inertia progress loading bar using dynamic theme accent color */
+#nprogress .bar {
+    background: var(--theme-secondary, var(--color-secondary-500, #FBA43D)) !important;
+    height: 3px !important;
+    box-shadow: 0 0 10px var(--theme-secondary, var(--color-secondary-500, #FBA43D)), 0 0 5px var(--theme-secondary, var(--color-secondary-500, #FBA43D)) !important;
+    z-index: 99999 !important;
+}
+
+#nprogress .peg {
+    box-shadow: 0 0 10px var(--theme-secondary, var(--color-secondary-500, #FBA43D)), 0 0 5px var(--theme-secondary, var(--color-secondary-500, #FBA43D)) !important;
+}
+
+/* Remove default number input spinner arrows */
+.no-spinner::-webkit-outer-spin-button,
+.no-spinner::-webkit-inner-spin-button,
+input[type=number].no-spinner::-webkit-outer-spin-button,
+input[type=number].no-spinner::-webkit-inner-spin-button {
+    -webkit-appearance: none !important;
+    margin: 0 !important;
+}
+
+.no-spinner,
+input[type=number].no-spinner {
+    -moz-appearance: textfield !important;
+    appearance: textfield !important;
+}
+
 
 
 

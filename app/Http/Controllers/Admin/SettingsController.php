@@ -40,6 +40,13 @@ class SettingsController extends Controller
             'hero_cta_primary'              => 'nullable|string|max:50',
             'hero_cta_secondary'            => 'nullable|string|max:50',
 
+            // Homepage Promo Flyer / Banner
+            'promo_banner_enabled'          => 'boolean',
+            'promo_banner_title'            => 'nullable|string|max:255',
+            'promo_banner_subtitle'         => 'nullable|string|max:500',
+            'promo_banner_link'             => 'nullable|string|max:500',
+            'promo_banner_button_text'      => 'nullable|string|max:50',
+
             // Homepage Feature Blocks
             'feature_1_title'               => 'nullable|string|max:100',
             'feature_1_desc'                => 'nullable|string|max:255',
@@ -55,9 +62,12 @@ class SettingsController extends Controller
             'guest_checkout_enabled'        => 'boolean',
             'reviews_enabled'               => 'boolean',
             'wishlist_enabled'              => 'boolean',
+            'show_cart_total_header'        => 'boolean',
             'tracking_number_prefix'        => 'nullable|string|max:10',
             // Product display
             'show_stock_level_default'      => 'boolean',
+            'stock_display_mode'            => 'nullable|string|in:threshold_only,always,hidden',
+            'low_stock_threshold'           => 'nullable|integer|min:1|max:100',
 
             // Authentication Providers
             'google_auth_enabled'           => 'boolean',
@@ -71,6 +81,11 @@ class SettingsController extends Controller
             'paystack_enabled'              => 'boolean',
             'flutterwave_enabled'           => 'boolean',
             'cod_enabled'                   => 'boolean',
+            'bank_transfer_enabled'         => 'boolean',
+            'bank_name'                     => 'nullable|string|max:255',
+            'bank_account_number'           => 'nullable|string|max:100',
+            'bank_account_name'             => 'nullable|string|max:255',
+            'bank_instructions'             => 'nullable|string|max:1000',
 
             // Store charges
             'tax_enabled'                   => 'boolean',
@@ -84,6 +99,7 @@ class SettingsController extends Controller
             'pickup_enabled'                => 'boolean',
             'pickup_address'                => 'nullable|string|max:500',
             'free_shipping_threshold'       => 'nullable|numeric|min:0',
+            'default_delivery_address_hint' => 'nullable|string|max:500',
         ]);
 
         if ($request->hasFile('company_logo')) {
@@ -96,6 +112,12 @@ class SettingsController extends Controller
             $request->validate(['hero_image' => 'image|max:4096']);
             $heroPath = $request->file('hero_image')->store('settings', 'public');
             StoreSetting::set('hero_image', $heroPath);
+        }
+
+        if ($request->hasFile('promo_banner_image')) {
+            $request->validate(['promo_banner_image' => 'image|max:6144']);
+            $bannerPath = $request->file('promo_banner_image')->store('settings', 'public');
+            StoreSetting::set('promo_banner_image', $bannerPath);
         }
 
         foreach ($data as $key => $value) {

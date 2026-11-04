@@ -17,7 +17,6 @@ const updatePassword = () => {
         preserveScroll: true,
         onSuccess: () => {
             form.reset();
-            toast.success('Password updated successfully.');
         },
         onError: () => {
             if (form.errors.password) {

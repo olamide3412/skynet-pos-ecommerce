@@ -57,7 +57,7 @@ const removeEditOption = (i) => editForm.options.splice(i, 1);
 
 const submitEdit = (id) => {
     editForm.put(route('admin.attributes.update', id), {
-        //onSuccess: () => { toast.success('Attribute updated!'); editing.value = null; },
+        onSuccess: () => { editing.value = null; },
     });
 };
 
@@ -84,7 +84,7 @@ const typeColors = { select: 'blue', color: 'pink', range: 'green', text: 'gray'
                     <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Define attributes like Color, Size, Brand that can be assigned to categories as filters.</p>
                 </div>
                 <button @click="showCreate = !showCreate"
-                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2.5 rounded-lg transition flex items-center gap-2">
+                    class="bg-primary hover:bg-primary-dark text-white font-bold px-5 py-2.5 rounded-lg transition flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                     New Attribute
                 </button>
@@ -98,13 +98,13 @@ const typeColors = { select: 'blue', color: 'pink', range: 'green', text: 'gray'
                         <div>
                             <label class="block text-sm font-medium mb-1">Attribute Name *</label>
                             <input v-model="createForm.name" type="text" required placeholder="e.g. Color, Size, Brand"
-                                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 focus:ring-2 focus:ring-blue-500"/>
+                                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 focus:ring-2 focus:ring-primary"/>
                             <p v-if="createForm.errors.name" class="text-red-500 text-xs mt-1">{{ createForm.errors.name }}</p>
                         </div>
                         <div>
                             <label class="block text-sm font-medium mb-1">Type *</label>
                             <select v-model="createForm.type"
-                                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 focus:ring-2 focus:ring-primary">
                                 <option value="select">Select / Dropdown</option>
                                 <option value="color">Color Picker</option>
                                 <option value="range">Price Range</option>
@@ -118,10 +118,10 @@ const typeColors = { select: 'blue', color: 'pink', range: 'green', text: 'gray'
                         <label class="block text-sm font-medium mb-2">Predefined Options</label>
                         <div class="flex flex-wrap gap-2 mb-2">
                             <span v-for="(opt, i) in createForm.options" :key="i"
-                                class="inline-flex items-center gap-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 px-3 py-1 rounded-full text-sm">
+                                class="inline-flex items-center gap-1.5 theme-primary-badge px-3 py-1 rounded-full text-sm">
                                 <span v-if="createForm.type === 'color'" class="w-3.5 h-3.5 rounded-full border border-white/50 inline-block" :style="`background:${opt}`"></span>
                                 {{ opt }}
-                                <button type="button" @click="removeOption(i)" class="text-blue-500 hover:text-blue-800 font-bold leading-none">×</button>
+                                <button type="button" @click="removeOption(i)" class="text-primary hover:opacity-75 font-bold leading-none">×</button>
                             </span>
                         </div>
                         <div class="flex gap-2">
@@ -138,7 +138,7 @@ const typeColors = { select: 'blue', color: 'pink', range: 'green', text: 'gray'
 
                     <div class="flex gap-3 pt-2">
                         <button type="submit" :disabled="createForm.processing"
-                            class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2 rounded-lg transition disabled:opacity-60">
+                            class="bg-primary hover:bg-primary-dark text-white font-bold px-6 py-2 rounded-lg transition disabled:opacity-60">
                             Create Attribute
                         </button>
                         <button type="button" @click="showCreate = false"
@@ -165,7 +165,7 @@ const typeColors = { select: 'blue', color: 'pink', range: 'green', text: 'gray'
                                 <p class="font-bold text-gray-900 dark:text-white">{{ attr.name }}</p>
                                 <span class="text-xs px-2 py-0.5 rounded-full font-medium"
                                     :class="{
-                                        'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300': attr.type === 'select',
+                                        'theme-primary-badge': attr.type === 'select',
                                         'bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300': attr.type === 'color',
                                         'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300': attr.type === 'range',
                                         'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300': attr.type === 'text',
@@ -185,24 +185,24 @@ const typeColors = { select: 'blue', color: 'pink', range: 'green', text: 'gray'
                         </div>
                         <div class="flex items-center gap-2">
                             <button @click="startEdit(attr)"
-                                class="text-sm font-semibold text-blue-600 dark:text-blue-400 hover:underline px-2 py-1">Edit</button>
+                                class="text-sm font-semibold text-primary hover:underline px-2 py-1">Edit</button>
                             <button @click="deleteAttr(attr.id)"
                                 class="text-sm font-semibold text-red-500 hover:text-red-700 px-2 py-1">Delete</button>
                         </div>
                     </div>
 
                     <!-- Inline Edit Form -->
-                    <div v-else class="p-5 space-y-4 bg-blue-50 dark:bg-blue-900/10">
+                    <div v-else class="p-5 space-y-4 bg-primary-soft">
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-sm font-medium mb-1">Name</label>
                                 <input v-model="editForm.name" type="text" required
-                                    class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 focus:ring-2 focus:ring-blue-500"/>
+                                    class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 focus:ring-2 focus:ring-primary"/>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium mb-1">Type</label>
                                 <select v-model="editForm.type"
-                                    class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                                    class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 focus:ring-2 focus:ring-primary">
                                     <option value="select">Select / Dropdown</option>
                                     <option value="color">Color Picker</option>
                                     <option value="range">Price Range</option>
@@ -214,10 +214,10 @@ const typeColors = { select: 'blue', color: 'pink', range: 'green', text: 'gray'
                             <label class="block text-sm font-medium mb-2">Options</label>
                             <div class="flex flex-wrap gap-2 mb-2">
                                 <span v-for="(opt, i) in editForm.options" :key="i"
-                                    class="inline-flex items-center gap-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 px-3 py-1 rounded-full text-sm">
+                                    class="inline-flex items-center gap-1.5 theme-primary-badge px-3 py-1 rounded-full text-sm">
                                     <span v-if="editForm.type === 'color'" class="w-3.5 h-3.5 rounded-full border border-white/50 inline-block" :style="`background:${opt}`"></span>
                                     {{ opt }}
-                                    <button type="button" @click="removeEditOption(i)" class="text-blue-500 hover:text-blue-800 font-bold">×</button>
+                                    <button type="button" @click="removeEditOption(i)" class="text-primary hover:opacity-75 font-bold">×</button>
                                 </span>
                             </div>
                             <div class="flex gap-2">
@@ -231,7 +231,7 @@ const typeColors = { select: 'blue', color: 'pink', range: 'green', text: 'gray'
                         </div>
                         <div class="flex gap-3">
                             <button @click="submitEdit(attr.id)" :disabled="editForm.processing"
-                                class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2 rounded-lg transition disabled:opacity-60">Save</button>
+                                class="bg-primary hover:bg-primary-dark text-white font-bold px-5 py-2 rounded-lg transition disabled:opacity-60">Save</button>
                             <button @click="editing = null"
                                 class="px-5 py-2 rounded-lg border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition">Cancel</button>
                         </div>

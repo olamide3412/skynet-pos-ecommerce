@@ -15,6 +15,59 @@ class ProductController extends Controller
     {
         $query = Product::where('status', true)->with('category');
         
+        $collection = $request->input('collection', $request->input('filter'));
+
+        if ($collection === 'featured') {
+            if (Product::where('status', true)->where('is_featured', true)->exists()) {
+                $query->where('is_featured', true);
+            } else {
+                $query->orderByDesc('is_featured')->latest();
+            }
+        } elseif ($collection === 'best-sellers' || $collection === 'best_sellers') {
+            $query->withSum('orderItems', 'quantity')
+                ->orderByDesc('order_items_sum_quantity')
+                ->orderByDesc('id');
+        } elseif ($collection === 'most-searched' || $collection === 'most_searched') {
+            $topTerms = \App\Models\SearchLog::select('normalized_query')
+                ->selectRaw('COUNT(*) as search_count')
+                ->where('results_count', '>', 0)
+                ->where('created_at', '>=', now()->subDays(30))
+                ->groupBy('normalized_query')
+                ->orderByDesc('search_count')
+                ->limit(10)
+                ->pluck('normalized_query')
+                ->toArray();
+
+            if (!empty($topTerms)) {
+                $query->where(function ($sub) use ($topTerms) {
+                    foreach ($topTerms as $term) {
+                        $sub->orWhere('name', 'like', '%' . $term . '%');
+                    }
+                });
+            } else {
+                $query->latest();
+            }
+        } elseif ($collection === 'new-arrivals' || $collection === 'new_arrivals') {
+            if (Product::where('status', true)->where('is_new', true)->exists()) {
+                $query->where('is_new', true)->latest();
+            } else {
+                $query->latest();
+            }
+        } elseif ($collection === 'flash-sales' || $collection === 'flash_sales' || $collection === 'flash_sale') {
+            $now = now();
+            $query->whereNotNull('special_price')
+                ->where('special_price', '>', 0)
+                ->where(function ($q) use ($now) {
+                    $q->whereNull('special_price_from')
+                      ->orWhere('special_price_from', '<=', $now);
+                })
+                ->where(function ($q) use ($now) {
+                    $q->whereNull('special_price_to')
+                      ->orWhere('special_price_to', '>=', $now);
+                })
+                ->orderByRaw('CASE WHEN special_price_to IS NOT NULL THEN special_price_to ELSE "9999-12-31" END ASC');
+        }
+
         if ($request->has('category')) {
             $slug = $request->category;
             // Find the category by slug
@@ -33,7 +86,23 @@ class ProductController extends Controller
         }
         
         if ($request->has('search')) {
-            $query->where('name', 'like', '%' . $request->search . '%');
+            $searchTerm = trim($request->search);
+            if ($searchTerm !== '') {
+                $query->where('name', 'like', '%' . $searchTerm . '%');
+
+                // Log full shop search (first page only to avoid inflating count on pagination clicks)
+                if ((int) $request->input('page', 1) <= 1) {
+                    try {
+                        \App\Models\SearchLog::record(
+                            query: $searchTerm,
+                            resultsCount: (clone $query)->count(),
+                            customerId: auth('customer')->id(),
+                            ip: $request->ip(),
+                            userAgent: $request->userAgent()
+                        );
+                    } catch (\Throwable $e) {}
+                }
+            }
         }
 
         $attrs = $request->input('attrs', []);
@@ -45,6 +114,37 @@ class ProductController extends Controller
             }
         }
 
+        // Standard e-commerce sorting: A-Z, Z-A, Price Low-High, Price High-Low, Newest, Best Selling
+        $sort = $request->input('sort', 'default');
+        switch ($sort) {
+            case 'name_asc':
+                $query->orderBy('name', 'asc');
+                break;
+            case 'name_desc':
+                $query->orderBy('name', 'desc');
+                break;
+            case 'price_asc':
+                $query->orderByRaw('COALESCE(NULLIF(discount_price, 0), price) ASC');
+                break;
+            case 'price_desc':
+                $query->orderByRaw('COALESCE(NULLIF(discount_price, 0), price) DESC');
+                break;
+            case 'newest':
+                $query->latest();
+                break;
+            case 'popular':
+            case 'best_selling':
+                $query->withSum('orderItems', 'quantity')
+                    ->orderByDesc('order_items_sum_quantity')
+                    ->orderByDesc('id');
+                break;
+            default:
+                if (!$collection) {
+                    $query->latest();
+                }
+                break;
+        }
+
         // Pass the authenticated customer's wishlist product IDs
         $wishlistIds = [];
         if (auth('customer')->check()) {
@@ -53,8 +153,10 @@ class ProductController extends Controller
                 ->toArray();
         }
 
-        $filters = $request->only(['search', 'category']);
-        $filters['attrs'] = $attrs;
+        $filters = $request->only(['search', 'category', 'collection', 'sort']);
+        $filters['collection'] = $collection ?: '';
+        $filters['sort']       = $sort ?: 'default';
+        $filters['attrs']      = $attrs;
 
         // Build categories with parent/child grouping for the sidebar filter
         $categories = Category::whereNull('parent_id')
@@ -63,7 +165,7 @@ class ProductController extends Controller
             ->get(['id','name','slug','parent_id']);
 
         return Inertia::render('Frontend/Products/Index', [
-            'products'     => $query->paginate(12)->withQueryString(),
+            'products'     => $query->paginate(16)->withQueryString(),
             'categories'   => $categories,
             'filters'      => $filters,
             'wishlist_ids' => $wishlistIds,
@@ -72,28 +174,45 @@ class ProductController extends Controller
 
     public function show(string $url_key)
     {
-        // Resolve by url_key first, fall back to slug for old links
-        $product = Product::where('url_key', $url_key)
-            ->orWhere('slug', $url_key)
-            ->where('status', true)
+        // Resolve active product by url_key first, fall back to slug for old links
+        $product = Product::where('status', true)
+            ->where(function ($q) use ($url_key) {
+                $q->where('url_key', $url_key)
+                  ->orWhere('slug', $url_key);
+            })
             ->firstOrFail();
 
         // Check if this product is in the authenticated customer's wishlist
         $isWishlisted = false;
+        $userReview = null;
         if (auth('customer')->check()) {
-            $isWishlisted = Wishlist::where('customer_id', auth('customer')->id())
+            $customerId = auth('customer')->id();
+            $isWishlisted = Wishlist::where('customer_id', $customerId)
                 ->where('product_id', $product->id)
                 ->exists();
+            $userReview = $product->reviews()->where('customer_id', $customerId)->first();
         }
+
+        $reviews = $product->approvedReviews()
+            ->with('customer:id,name')
+            ->latest()
+            ->take(20)
+            ->get();
+        $avgRating = round((float) ($product->approvedReviews()->avg('rating') ?: 5.0), 1);
+        $reviewsCount = $product->approvedReviews()->count();
         
         return Inertia::render('Frontend/Products/Show', [
-            'product'       => $product->load([
+            'product'        => $product->load([
                 'category',
                 'posUnits' => fn($q) => $q->where('is_enabled_online', true)->orderBy('sort_order'),
                 'variantMappings' => fn($q) => $q->where('is_active', true)->orderBy('sort_order'),
             ]),
-            'is_wishlisted' => $isWishlisted,
-            'related'       => $this->getRelated($product),
+            'is_wishlisted'  => $isWishlisted,
+            'related'        => $this->getRelated($product),
+            'reviews'        => $reviews,
+            'average_rating' => $avgRating,
+            'reviews_count'  => $reviewsCount,
+            'user_review'    => $userReview,
         ]);
     }
 

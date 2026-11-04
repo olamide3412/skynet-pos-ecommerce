@@ -52,8 +52,8 @@ const addToCart = (product) => {
             <StorefrontBreadcrumb :items="breadcrumbs" />
             
             <div class="flex items-center justify-between mb-8">
-                <h1 class="text-3xl font-extrabold text-blue-900 dark:text-blue-100 uppercase tracking-tight">Compare Products</h1>
-                <Link :href="route('shop.index')" class="text-sm font-semibold text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 flex items-center gap-1 bg-blue-50 dark:bg-gray-800 px-4 py-2 rounded-full border border-blue-200 dark:border-gray-700 transition">
+                <h1 class="text-3xl font-extrabold text-gray-900 dark:text-white uppercase tracking-tight">Compare Products</h1>
+                <Link :href="route('shop.index')" class="text-sm font-semibold text-primary hover:opacity-80 flex items-center gap-1 bg-primary/10 dark:bg-gray-800 px-4 py-2 rounded-full border border-primary/20 dark:border-gray-700 transition">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
                     Continue Shopping
                 </Link>
@@ -61,14 +61,14 @@ const addToCart = (product) => {
 
             <!-- Empty State -->
             <div v-if="!hasItems" class="text-center py-20 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-                <div class="w-24 h-24 mx-auto bg-blue-50 dark:bg-gray-700 rounded-full flex items-center justify-center mb-6 border border-blue-100 dark:border-gray-600">
-                    <svg class="w-12 h-12 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="w-24 h-24 mx-auto bg-primary/10 dark:bg-gray-700 rounded-full flex items-center justify-center mb-6 border border-primary/20 dark:border-gray-600">
+                    <svg class="w-12 h-12 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
                     </svg>
                 </div>
                 <h2 class="text-2xl font-bold mb-3 text-gray-900 dark:text-gray-100">No products to compare</h2>
                 <p class="text-gray-500 mb-8 max-w-md mx-auto">You haven't added any products to your comparison list yet. Browse our store and click the compare icon on products you want to evaluate side-by-side.</p>
-                <Link :href="route('shop.index')" class="inline-flex items-center justify-center px-8 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition shadow-lg hover:shadow-blue-500/30">
+                <Link :href="route('shop.index')" class="inline-flex items-center justify-center px-8 py-3.5 bg-primary hover:opacity-90 text-white font-bold rounded-xl transition shadow-lg">
                     Discover Products
                 </Link>
             </div>
@@ -96,22 +96,22 @@ const addToCart = (product) => {
                                         </div>
                                     </Link>
                                     
-                                    <p v-if="item.product.category" class="text-[10px] sm:text-xs font-bold text-blue-600 dark:text-blue-400 mb-1 uppercase tracking-wider">{{ item.product.category.name }}</p>
+                                    <p v-if="item.product.category" class="text-[10px] sm:text-xs font-bold text-primary mb-1 uppercase tracking-wider">{{ item.product.category.name }}</p>
                                     <Link :href="route('shop.show', item.product.url_key)">
-                                        <h3 class="text-base sm:text-lg font-bold text-gray-900 dark:text-white line-clamp-2 leading-tight mb-2 hover:text-blue-600 transition">{{ item.product.name }}</h3>
+                                        <h3 class="text-base sm:text-lg font-bold text-gray-900 dark:text-white line-clamp-2 leading-tight mb-2 hover:text-primary transition">{{ item.product.name }}</h3>
                                     </Link>
                                     
                                     <!-- Price -->
                                     <div class="mt-auto pt-2 pb-4">
                                         <div class="flex flex-col">
                                             <span v-if="item.product.discount_price" class="text-xs text-gray-400 line-through">₦{{ parseFloat(item.product.price).toLocaleString() }}</span>
-                                            <span class="text-xl sm:text-2xl font-black text-blue-700 dark:text-blue-400">₦{{ item.product.discount_price ? parseFloat(item.product.discount_price).toLocaleString() : parseFloat(item.product.price).toLocaleString() }}</span>
+                                            <span class="text-xl sm:text-2xl font-black text-primary">₦{{ item.product.discount_price ? parseFloat(item.product.discount_price).toLocaleString() : parseFloat(item.product.price).toLocaleString() }}</span>
                                         </div>
                                     </div>
                                     
                                     <!-- Add to Cart -->
                                     <button @click="addToCart(item.product)" :disabled="addingToCart[item.product.id] || item.product.stock < 1"
-                                        class="w-full py-2.5 rounded-lg bg-gray-900 hover:bg-black dark:bg-blue-600 dark:hover:bg-blue-700 text-white text-sm font-bold transition flex items-center justify-center gap-2 group/btn disabled:opacity-50 mt-2">
+                                        class="w-full py-2.5 rounded-lg bg-primary hover:opacity-90 text-white text-sm font-bold transition flex items-center justify-center gap-2 group/btn disabled:opacity-50 mt-2 shadow-sm">
                                         <svg v-if="!addingToCart[item.product.id]" class="w-4 h-4 group-hover/btn:-translate-y-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
                                         <svg v-else class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
                                         {{ addingToCart[item.product.id] ? 'Adding...' : (item.product.stock < 1 ? 'Out of Stock' : 'Add to Cart') }}

@@ -51,7 +51,19 @@ class PosIntegrationController extends Controller
             $query->where('mapping_status', $status);
         }
 
-        $syncedItems = $query->paginate(20)->withQueryString();
+        if ($posCategory = $request->input('pos_category')) {
+            $query->where('pos_category_name', $posCategory);
+        }
+
+        $perPageInput = $request->input('per_page', 25);
+        if ($perPageInput === 'all' || $perPageInput === 'ALL') {
+            $totalCount = (clone $query)->count();
+            $perPage = max(1, $totalCount);
+        } else {
+            $perPage = in_array((int)$perPageInput, [25, 50, 100], true) ? (int)$perPageInput : 25;
+        }
+
+        $syncedItems = $query->paginate($perPage)->withQueryString();
 
         $logs = PosSyncLog::latest()->limit(25)->get();
 
@@ -63,12 +75,27 @@ class PosIntegrationController extends Controller
             'missing_pos'     => Product::where('inventory_source', 'pos')->where('pos_sync_status', 'missing_pos_item')->count(),
         ];
 
+        $posCategories = SyncedPosItem::whereNotNull('pos_category_name')
+            ->where('pos_category_name', '!=', '')
+            ->distinct()
+            ->orderBy('pos_category_name')
+            ->pluck('pos_category_name');
+
+        $ecommerceCategories = \App\Models\Category::with('children:id,name,parent_id')
+            ->whereNull('parent_id')
+            ->orderBy('name')
+            ->get(['id', 'name', 'parent_id']);
+
         return Inertia::render('Admin/PosIntegration/Index', [
-            'connection'   => $connectionSummary,
-            'items'        => $syncedItems,
-            'logs'         => $logs,
-            'stats'        => $stats,
-            'filters'      => $request->only(['search', 'mapping_status']),
+            'connection'           => $connectionSummary,
+            'items'                => $syncedItems,
+            'logs'                 => $logs,
+            'stats'                => $stats,
+            'filters'              => array_merge($request->only(['search', 'mapping_status', 'pos_category']), [
+                'per_page' => (string) $perPageInput,
+            ]),
+            'pos_categories'       => $posCategories,
+            'ecommerce_categories' => $ecommerceCategories,
         ]);
     }
 
@@ -91,8 +118,10 @@ class PosIntegrationController extends Controller
      */
     public function syncCatalog(Request $request)
     {
+        @set_time_limit(300);
+
         $conn = PosConnection::active();
-        if (!$conn || !$conn->is_connected) {
+        if (!$conn || !$conn->is_connected || empty($conn->pos_base_url)) {
             return back()->with('error', 'Cannot synchronize catalog: store is not connected to a verified POS branch.');
         }
 
@@ -111,8 +140,10 @@ class PosIntegrationController extends Controller
      */
     public function syncAvailability()
     {
+        @set_time_limit(300);
+
         $conn = PosConnection::active();
-        if (!$conn || !$conn->is_connected) {
+        if (!$conn || !$conn->is_connected || empty($conn->pos_base_url)) {
             return back()->with('error', 'Cannot synchronize stock: store is not connected to a verified POS branch.');
         }
 
@@ -130,8 +161,10 @@ class PosIntegrationController extends Controller
      */
     public function reconcileMappings()
     {
+        @set_time_limit(300);
+
         $conn = PosConnection::active();
-        if (!$conn || !$conn->is_connected) {
+        if (!$conn || empty($conn->pos_base_url)) {
             return back()->with('error', 'Cannot reconcile mappings: store is not connected to a verified POS branch.');
         }
 
@@ -146,7 +179,7 @@ class PosIntegrationController extends Controller
     }
 
     /**
-     * Import a single POS item as draft simple product.
+     * Import a single POS item as simple product (active or draft).
      */
     public function importSimple(Request $request)
     {
@@ -157,21 +190,28 @@ class PosIntegrationController extends Controller
 
         $request->validate([
             'pos_item_id' => 'required|exists:synced_pos_items,pos_item_id',
+            'category_id' => 'nullable|exists:categories,id',
+            'status'      => 'nullable|boolean',
+            'is_active'   => 'nullable|boolean',
         ]);
 
         try {
-            $product = $this->catalogService->importAsSimpleProduct($request->pos_item_id);
-            return back()->with('success', "Imported '{$product->name}' as draft product.");
+            $customFields = $request->only(['category_id', 'status', 'is_active']);
+            $product = $this->catalogService->importAsSimpleProduct($request->pos_item_id, $customFields);
+            $statusLabel = $product->status ? 'active' : 'draft';
+            return back()->with('success', "Imported '{$product->name}' as {$statusLabel} product.");
         } catch (\Throwable $e) {
             return back()->with('error', 'Import failed: ' . $e->getMessage());
         }
     }
 
     /**
-     * Bulk import multiple POS items as draft simple products.
+     * Bulk import multiple POS items as simple products (active or draft).
      */
     public function bulkImport(Request $request)
     {
+        @set_time_limit(300);
+
         $conn = PosConnection::active();
         if (!$conn || !$conn->is_connected) {
             return back()->with('error', 'Cannot import items: store is not connected to a verified POS branch.');
@@ -180,26 +220,41 @@ class PosIntegrationController extends Controller
         $request->validate([
             'pos_item_ids'   => 'required|array',
             'pos_item_ids.*' => 'exists:synced_pos_items,pos_item_id',
+            'category_id'    => 'nullable|exists:categories,id',
+            'status'         => 'nullable|boolean',
+            'is_active'      => 'nullable|boolean',
         ]);
 
-        $result = $this->catalogService->bulkImportSimpleProducts($request->pos_item_ids);
+        $customFields = $request->only(['category_id', 'status', 'is_active']);
+        $result = $this->catalogService->bulkImportSimpleProducts($request->pos_item_ids, $customFields);
+        $statusLabel = (!empty($customFields['status']) || !empty($customFields['is_active'])) ? 'active' : 'draft';
 
-        return back()->with('success', "Imported {$result['total_imported']} products successfully.");
+        return back()->with('success', "Imported {$result['total_imported']} products successfully as {$statusLabel}.");
     }
 
     /**
-     * Import all unmapped eligible POS items.
+     * Import all unmapped eligible POS items (active or draft).
      */
-    public function importAllEligible()
+    public function importAllEligible(Request $request)
     {
+        @set_time_limit(300);
+
         $conn = PosConnection::active();
         if (!$conn || !$conn->is_connected) {
             return back()->with('error', 'Cannot import items: store is not connected to a verified POS branch.');
         }
 
-        $result = $this->catalogService->importAllEligible();
+        $request->validate([
+            'category_id' => 'nullable|exists:categories,id',
+            'status'      => 'nullable|boolean',
+            'is_active'   => 'nullable|boolean',
+        ]);
 
-        return back()->with('success', "Imported {$result['total_imported']} eligible products.");
+        $customFields = $request->only(['category_id', 'status', 'is_active']);
+        $result = $this->catalogService->importAllEligible($customFields);
+        $statusLabel = (!empty($customFields['status']) || !empty($customFields['is_active'])) ? 'active' : 'draft';
+
+        return back()->with('success', "Imported {$result['total_imported']} eligible products as {$statusLabel}.");
     }
 
     /**

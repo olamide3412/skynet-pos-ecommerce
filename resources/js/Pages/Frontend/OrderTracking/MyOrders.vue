@@ -9,7 +9,7 @@ defineProps({
 
 const statusBadge = (status) => ({
     pending:   'bg-yellow-100 text-yellow-800',
-    paid:      'bg-blue-100 text-blue-800',
+    paid:      'bg-primary/10 text-primary border border-primary/20',
     shipped:   'bg-purple-100 text-purple-800',
     completed: 'bg-green-100 text-green-800',
     cancelled: 'bg-red-100 text-red-800',
@@ -25,7 +25,7 @@ const statusBadge = (status) => ({
                     <h1 class="text-3xl font-extrabold text-gray-900 dark:text-white">My Orders</h1>
                     <p class="text-gray-500 dark:text-gray-400 mt-1">All orders placed with your account</p>
                 </div>
-                <Link :href="route('order.track')" class="text-sm text-blue-600 dark:text-blue-400 font-semibold hover:underline flex items-center gap-1">
+                <Link :href="route('order.track')" class="text-sm text-primary font-semibold hover:underline flex items-center gap-1">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                     Track by ID
                 </Link>
@@ -36,7 +36,7 @@ const statusBadge = (status) => ({
                 <svg class="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
                 <h2 class="text-xl font-bold text-gray-600 dark:text-gray-300 mb-2">No orders yet</h2>
                 <p class="text-gray-500 dark:text-gray-400 mb-6">Start shopping to place your first order!</p>
-                <Link :href="route('shop.index')" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl transition">Browse Products</Link>
+                <Link :href="route('shop.index')" class="bg-primary hover:opacity-90 text-white font-bold px-6 py-3 rounded-xl transition shadow-md">Browse Products</Link>
             </div>
 
             <!-- Orders list -->
@@ -68,10 +68,10 @@ const statusBadge = (status) => ({
 
                     <div class="flex items-center justify-between px-5 pb-5 pt-1">
                         <div>
-                            <span class="text-xl font-extrabold text-blue-600 dark:text-blue-400">₦{{ parseFloat(order.total_amount).toLocaleString() }}</span>
-                            <span class="text-sm text-gray-400 ml-2 capitalize">· {{ order.payment_method }}</span>
+                            <span class="text-xl font-extrabold text-primary">₦{{ parseFloat(order.total_amount).toLocaleString() }}</span>
+                            <span class="text-sm text-gray-400 ml-2 capitalize">· {{ ['cod', 'pod'].includes(order.payment_method) ? 'Payment on Delivery (POD)' : (order.payment_method === 'bank_transfer' ? 'Direct Bank Transfer' : order.payment_method) }}</span>
                         </div>
-                        <Link :href="route('customer.orders.show', order.id)" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-4 py-2 rounded-lg transition flex items-center gap-1">
+                        <Link :href="route('customer.orders.show', order.id)" class="bg-primary hover:opacity-90 text-white font-bold text-sm px-4 py-2 rounded-lg transition flex items-center gap-1 shadow-sm">
                             View Details
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                         </Link>

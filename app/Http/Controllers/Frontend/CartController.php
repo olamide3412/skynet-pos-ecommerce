@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\Product;
+use App\Models\StoreSetting;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Str;
@@ -17,12 +18,17 @@ class CartController extends Controller
         $cart = $this->getCart($request);
         
         return Inertia::render('Frontend/Cart/Index', [
-            'cart' => $cart ? $cart->load(['items.product.posUnits', 'items.posUnit']) : null
+            'cart'   => $cart ? $cart->load(['items.product.posUnits', 'items.posUnit']) : null,
+            'coupon' => $request->session()->get('applied_coupon'),
         ]);
     }
 
     public function store(Request $request)
     {
+        if (!StoreSetting::getBool('shop_enabled', true)) {
+            return back()->with('error', 'Online store shopping is temporarily closed. Please check back later.');
+        }
+
         $request->validate([
             'product_id'          => 'required|exists:products,id',
             'quantity'            => 'required|integer|min:1',
@@ -93,17 +99,37 @@ class CartController extends Controller
 
     public function update(Request $request, CartItem $cartItem)
     {
+        $cart = $this->getCart($request);
+        if (!$cart || $cartItem->cart_id !== $cart->id) {
+            abort(403, 'Unauthorized cart action.');
+        }
+
         $request->validate([
-            'quantity' => 'required|integer|min:1'
+            'quantity' => 'required|integer|min:0'
         ]);
+
+        if ($request->quantity < 1) {
+            $cartItem->delete();
+            return back()->with('success', 'Item removed from cart.');
+        }
+
+        $product = $cartItem->product;
+        if ($product && $product->stock < $request->quantity) {
+            return back()->with('error', "Only {$product->stock} unit(s) available in stock.");
+        }
 
         $cartItem->update(['quantity' => $request->quantity]);
 
         return back()->with('success', 'Cart updated.');
     }
 
-    public function destroy(CartItem $cartItem)
+    public function destroy(Request $request, CartItem $cartItem)
     {
+        $cart = $this->getCart($request);
+        if (!$cart || $cartItem->cart_id !== $cart->id) {
+            abort(403, 'Unauthorized cart action.');
+        }
+
         $cartItem->delete();
         return back()->with('success', 'Removed from cart.');
     }

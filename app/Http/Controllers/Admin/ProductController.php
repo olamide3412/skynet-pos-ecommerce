@@ -50,11 +50,20 @@ class ProductController extends Controller
 
         // List synced POS items for selection in the product creation modal
         $syncedItems = SyncedPosItem::where('is_active', true)
-            ->select('pos_item_id', 'pos_item_name', 'standard_price', 'effective_availability', 'base_unit_name', 'mapping_status')
+            ->select('pos_item_id', 'pos_item_name', 'pos_category_name', 'sku', 'barcode', 'item_reference', 'standard_price', 'buying_price', 'effective_availability', 'base_unit_name', 'mapping_status')
+            ->orderBy('pos_item_name')
             ->get();
 
+        $perPageInput = $request->input('per_page', 25);
+        if ($perPageInput === 'all' || $perPageInput === 'ALL') {
+            $totalCount = (clone $query)->count();
+            $perPage = max(1, $totalCount);
+        } else {
+            $perPage = in_array((int)$perPageInput, [25, 50, 100], true) ? (int)$perPageInput : 25;
+        }
+
         return Inertia::render('Admin/Products/Index', [
-            'products' => $query->paginate(15)->withQueryString(),
+            'products' => $query->paginate($perPage)->withQueryString(),
             'categories' => Category::whereNull('parent_id')
                 ->with(['children' => fn($q) => $q->orderBy('name')])
                 ->with('attributes')
@@ -62,7 +71,9 @@ class ProductController extends Controller
                 ->get(),
             'synced_pos_items' => $syncedItems,
             'store_settings' => \App\Models\StoreSetting::allAsArray(),
-            'filters' => $request->only(['search', 'category_id', 'status', 'inventory_source'])
+            'filters' => array_merge($request->only(['search', 'category_id', 'status', 'inventory_source']), [
+                'per_page' => (string) $perPageInput,
+            ]),
         ]);
     }
 
@@ -249,6 +260,11 @@ class ProductController extends Controller
             // Unmapped or converted to Ecommerce Only
             SyncedPosItem::where('pos_item_id', $oldPosItemId)->update(['mapping_status' => 'unmapped']);
             $this->apiClient->unregisterMappings([$oldPosItemId]);
+            try {
+                $this->catalogService->reconcileAllMappings();
+            } catch (\Throwable $e) {
+                // Non-blocking reconciliation
+            }
         }
 
         return back()->with('success', 'Product updated successfully.');
@@ -263,6 +279,12 @@ class ProductController extends Controller
         if ($posItemId) {
             SyncedPosItem::where('pos_item_id', $posItemId)->update(['mapping_status' => 'unmapped']);
             $this->apiClient->unregisterMappings([$posItemId]);
+        }
+
+        try {
+            $this->catalogService->reconcileAllMappings();
+        } catch (\Throwable $e) {
+            // Non-blocking reconciliation
         }
 
         return back()->with('success', 'Product deleted.');
@@ -335,6 +357,12 @@ class ProductController extends Controller
                 if (!empty($posItemIds)) {
                     SyncedPosItem::whereIn('pos_item_id', $posItemIds)->update(['mapping_status' => 'unmapped']);
                     $this->apiClient->unregisterMappings($posItemIds);
+                }
+
+                try {
+                    $this->catalogService->reconcileAllMappings();
+                } catch (\Throwable $e) {
+                    // Non-blocking reconciliation
                 }
 
                 return back()->with('success', "Successfully deleted {$count} product(s).");

@@ -11,7 +11,11 @@ class Address extends Model
     use HasFactory;
 
     protected $fillable = [
-        'customer_id', 'name', 'email', 'phone', 'address', 'city', 'state', 'country'
+        'customer_id', 'name', 'email', 'phone', 'address', 'city', 'state', 'country', 'is_default'
+    ];
+
+    protected $casts = [
+        'is_default' => 'boolean',
     ];
 
     public function customer(): BelongsTo

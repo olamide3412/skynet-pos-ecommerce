@@ -3,7 +3,6 @@
 namespace App\Providers;
 
 use App\Enums\GenderEnums;
-use App\Enums\OccupationEnums;
 use App\Enums\RoleEnums;
 use App\Enums\StatesEnums;
 use App\Enums\StatusEnums;
@@ -11,6 +10,7 @@ use App\Helpers\EnumHelper;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Pagination\Paginator;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 use Inertia\Inertia;
@@ -30,6 +30,14 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Super Admin bypasses all Spatie permission checks
+        Gate::before(function ($user, $ability) {
+            if ($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+                return true;
+            }
+            return null;
+        });
+
         Schema::defaultStringLength(191);
 
         try {
@@ -62,7 +70,6 @@ class AppServiceProvider extends ServiceProvider
                 'roles' => RoleEnums::class,
                 'genders' => GenderEnums::class,
                 'states' => StatesEnums::class,
-                'occupations' => OccupationEnums::class,
                 'statuses'  => StatusEnums::class,
                 // Add more enums here as needed
             ])

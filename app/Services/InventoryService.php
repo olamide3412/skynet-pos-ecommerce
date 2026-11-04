@@ -52,8 +52,8 @@ class InventoryService
                 }
             }
 
-            // For POS-linked items, release active reservation if not yet confirmed
-            if ($order->pos_reservation_status === 'reserved') {
+            // For POS-linked items, release POS reservation (restores physical stock on POS if confirmed, or lifts hold if reserved)
+            if (in_array($order->pos_reservation_status, ['reserved', 'confirmed'], true)) {
                 $this->posReservationService->releaseReservation($order);
             }
         });

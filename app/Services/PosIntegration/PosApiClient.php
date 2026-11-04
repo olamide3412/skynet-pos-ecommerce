@@ -15,7 +15,7 @@ class PosApiClient
     protected string $clientId;
     protected int $timeout;
 
-    public function __construct(?PosConnection $connection = null, int $timeout = 10)
+    public function __construct(?PosConnection $connection = null, int $timeout = 45)
     {
         $this->connection = $connection ?: PosConnection::active();
         $this->timeout = $timeout;
@@ -177,13 +177,38 @@ class PosApiClient
 
     /**
      * Get real-time effective stock availability for mapped POS items.
+     * Automatically chunks large ID lists into batches of 100 to prevent POS API timeouts.
      */
     public function getAvailability(array $posItemIds = []): array
     {
         $this->ensureConfigured();
 
+        $uniqueIds = array_values(array_unique($posItemIds));
+        if (empty($uniqueIds)) {
+            return ['status' => true, 'data' => []];
+        }
+
+        // If more than 100 items, process in chunks of 100 and merge results
+        if (count($uniqueIds) > 100) {
+            $mergedData = [];
+            foreach (array_chunk($uniqueIds, 100) as $chunkIds) {
+                $chunkResp = $this->getAvailability($chunkIds);
+                $chunkData = $chunkResp['data'] ?? [];
+                foreach ($chunkData as $k => $v) {
+                    if (is_array($v) && isset($v['pos_item_id'])) {
+                        $mergedData[$v['pos_item_id']] = $v;
+                    } elseif (is_array($v) && isset($v['id'])) {
+                        $mergedData[$v['id']] = $v;
+                    } else {
+                        $mergedData[$k] = $v;
+                    }
+                }
+            }
+            return ['status' => true, 'data' => $mergedData];
+        }
+
         $response = $this->sendRequest('POST', '/availability', [
-            'item_ids' => array_values(array_unique($posItemIds)),
+            'item_ids' => $uniqueIds,
         ]);
 
         if ($response->successful()) {
@@ -273,7 +298,7 @@ class PosApiClient
     }
 
     /**
-     * Authoritatively confirm an existing POS reservation after verified payment or COD acceptance.
+     * Authoritatively confirm an existing POS reservation after verified payment or POD acceptance.
      */
     public function confirmReservation(string $externalReference): array
     {
@@ -401,20 +426,29 @@ class PosApiClient
 
     /**
      * Full mapping reconciliation to repair registry drift.
+     * Chunks large mapping sets to avoid POS request timeouts.
      */
     public function reconcileMappings(array $activeMappings): array
     {
         $this->ensureConfigured();
 
         try {
+            $chunks = array_chunk($activeMappings, 200);
+            $firstChunk = $chunks[0] ?? [];
+
             $response = $this->sendRequest('POST', '/mappings/reconcile', [
-                'mappings' => $activeMappings,
+                'mappings' => $firstChunk,
             ]);
 
             if ($response->successful()) {
+                // Register any remaining chunks beyond the first 200
+                for ($i = 1; $i < count($chunks); $i++) {
+                    $this->registerMappings($chunks[$i]);
+                }
+
                 $this->recordSuccess();
                 $data = $response->json();
-                $count = $data['reconciled'] ?? count($activeMappings);
+                $count = count($activeMappings);
                 PosSyncLog::log('mapping_reconcile', 'success', "Successfully reconciled {$count} product mapping(s) with POS deletion protection.", null, $data);
                 return [
                     'status'     => true,
@@ -495,8 +529,9 @@ class PosApiClient
             return $response;
         } catch (\Throwable $e) {
             if ($this->connection) {
+                $isTimeout = str_contains($e->getMessage(), 'cURL error 28') || str_contains(strtolower($e->getMessage()), 'timed out');
                 $this->connection->update([
-                    'is_connected'       => false,
+                    'is_connected'       => $isTimeout ? $this->connection->is_connected : false,
                     'last_error_at'      => now(),
                     'last_error_message' => 'Could not reach POS API: ' . $e->getMessage(),
                 ]);
@@ -526,7 +561,10 @@ class PosApiClient
     {
         if ($this->connection) {
             $this->connection->update([
+                'is_connected'               => true,
                 'last_successful_request_at' => now(),
+                'last_error_at'              => null,
+                'last_error_message'         => null,
             ]);
         }
     }

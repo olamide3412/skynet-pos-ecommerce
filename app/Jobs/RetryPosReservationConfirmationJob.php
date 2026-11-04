@@ -25,7 +25,7 @@ class RetryPosReservationConfirmationJob implements ShouldQueue
 
     public function handle(PosReservationService $reservationService): void
     {
-        $success = $reservationService->confirmReservation($this->order);
+        $success = $reservationService->confirmReservation($this->order, true);
         if (!$success) {
             $this->release(60);
         }
