@@ -77,6 +77,15 @@ class DatabaseSeeder extends Seeder
             'hero_cta_primary' => 'Shop Now',
             'hero_cta_secondary' => 'Explore Categories',
 
+            // Homepage Promo Flyer Popup
+            'promo_popup_enabled' => '0',
+            'promo_popup_delay' => '3',
+            'promo_popup_title' => 'Special Promotional Offer!',
+            'promo_popup_subtitle' => 'Enjoy exclusive discounts on your favorite items today.',
+            'promo_popup_coupon_code' => '',
+            'promo_popup_cta_text' => 'Shop Now',
+            'promo_popup_cta_link' => '/shop',
+
             // Homepage Feature Blocks
             'feature_1_title' => 'Secure Payments',
             'feature_1_desc' => '100% secure checkout via Paystack & Flutterwave.',

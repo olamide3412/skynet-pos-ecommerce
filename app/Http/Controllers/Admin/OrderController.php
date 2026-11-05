@@ -184,17 +184,6 @@ class OrderController extends Controller
             $this->inventoryService->restoreOrderInventory($order);
         }
 
-        // Send transactional email notification to customer on status update
-        if ($oldStatus !== $newStatus && !empty($order->billing_email)) {
-            try {
-                \Illuminate\Support\Facades\Mail::to($order->billing_email)->send(
-                    new \App\Mail\OrderStatusUpdatedMail($order, $newStatus)
-                );
-            } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::warning("Order #{$order->id} status email delivery failed: " . $e->getMessage());
-            }
-        }
-
         return back()->with('success', 'Order status updated.');
     }
 

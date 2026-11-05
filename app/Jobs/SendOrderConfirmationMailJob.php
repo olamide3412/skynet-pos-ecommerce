@@ -2,7 +2,7 @@
 
 namespace App\Jobs;
 
-use App\Mail\AdminNewOrderAlertMail;
+use App\Jobs\SendAdminNewOrderAlertJob;
 use App\Mail\CustomerOrderConfirmationMail;
 use App\Models\Order;
 use App\Models\StoreSetting;
@@ -50,20 +50,9 @@ class SendOrderConfirmationMailJob implements ShouldQueue
             }
         }
 
-        // 2. Send new order alert to store admin
-        $adminEmail = StoreSetting::get('company_email')
-            ?: StoreSetting::get('admin_email')
-            ?: config('mail.from.address');
-
-        if (!empty($adminEmail)) {
-            try {
-                Mail::to($adminEmail)->send(new AdminNewOrderAlertMail($this->order));
-                Log::info("Admin new order alert email sent to {$adminEmail} for Order #{$this->order->id}.");
-            } catch (\Throwable $e) {
-                Log::warning("Failed to send admin order alert email for Order #{$this->order->id}: " . $e->getMessage());
-                // Do not re-throw if only admin email fails and customer already received theirs
-            }
-        }
+        // 2. Dispatch staff / store new order alert
+        // Delayed by 11 seconds to guarantee Mailtrap Sandbox free-tier rate limit (1 email / 10s) is never hit
+        SendAdminNewOrderAlertJob::dispatch($this->order)->delay(now()->addSeconds(11));
     }
 }
 

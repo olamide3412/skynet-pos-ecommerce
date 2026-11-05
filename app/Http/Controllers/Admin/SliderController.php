@@ -86,4 +86,38 @@ class SliderController extends Controller
 
         return back()->with('success', 'Slider deleted successfully.');
     }
+
+    public function updateSettings(Request $request)
+    {
+        $data = $request->validate([
+            'home_slider_enabled'  => 'boolean',
+            'home_marquee_enabled' => 'boolean',
+            'home_marquee_text'    => 'nullable|string|max:500',
+            'hero_enabled'         => 'boolean',
+            'hero_badge'           => 'nullable|string|max:100',
+            'hero_title'           => 'nullable|string|max:255',
+            'hero_title_highlight' => 'nullable|string|max:100',
+            'hero_subtitle'        => 'nullable|string|max:500',
+            'hero_cta_primary'     => 'nullable|string|max:50',
+            'hero_cta_secondary'   => 'nullable|string|max:50',
+            'feature_1_title'      => 'nullable|string|max:100',
+            'feature_1_desc'       => 'nullable|string|max:255',
+            'feature_2_title'      => 'nullable|string|max:100',
+            'feature_2_desc'       => 'nullable|string|max:255',
+            'feature_3_title'      => 'nullable|string|max:100',
+            'feature_3_desc'       => 'nullable|string|max:255',
+        ]);
+
+        if ($request->hasFile('hero_image')) {
+            $request->validate(['hero_image' => 'image|max:4096']);
+            $heroPath = $request->file('hero_image')->store('settings', 'public');
+            \App\Models\StoreSetting::set('hero_image', $heroPath);
+        }
+
+        foreach ($data as $key => $value) {
+            \App\Models\StoreSetting::set($key, is_bool($value) ? ($value ? '1' : '0') : ($value ?? ''));
+        }
+
+        return back()->with('success', 'Homepage content settings saved successfully.');
+    }
 }

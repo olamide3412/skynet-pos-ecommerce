@@ -18,12 +18,14 @@ class OrderStatusUpdatedMail extends Mailable implements ShouldQueue
     public Order $order;
     public string $status;
     public string $storeName;
+    public string $companyEmail;
 
     public function __construct(Order $order, string $status)
     {
         $this->order = $order->loadMissing('items.product');
         $this->status = $status;
         $this->storeName = StoreSetting::get('company_name', config('app.name', 'Skynet Store'));
+        $this->companyEmail = StoreSetting::get('company_email', config('mail.from.address', 'support@skynetdigitalltd.com.ng'));
     }
 
     public function envelope(): Envelope

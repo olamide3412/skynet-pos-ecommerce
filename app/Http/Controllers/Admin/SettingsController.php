@@ -47,6 +47,15 @@ class SettingsController extends Controller
             'promo_banner_link'             => 'nullable|string|max:500',
             'promo_banner_button_text'      => 'nullable|string|max:50',
 
+            // Homepage Promo / Coupon Flyer Popup Modal
+            'promo_popup_enabled'           => 'boolean',
+            'promo_popup_delay'             => 'nullable|integer|min:0|max:60',
+            'promo_popup_title'             => 'nullable|string|max:255',
+            'promo_popup_subtitle'          => 'nullable|string|max:500',
+            'promo_popup_coupon_code'       => 'nullable|string|max:50',
+            'promo_popup_cta_text'          => 'nullable|string|max:50',
+            'promo_popup_cta_link'          => 'nullable|string|max:500',
+
             // Homepage Feature Blocks
             'feature_1_title'               => 'nullable|string|max:100',
             'feature_1_desc'                => 'nullable|string|max:255',
@@ -56,6 +65,8 @@ class SettingsController extends Controller
             'feature_3_desc'                => 'nullable|string|max:255',
 
             // Store Features
+            'order_notifications_enabled'   => 'boolean',
+            'order_notification_emails'     => 'nullable|string|max:1000',
             'order_tracking_enabled'        => 'boolean',
             'customer_registration_enabled' => 'boolean',
             'shop_enabled'                  => 'boolean',
@@ -118,6 +129,12 @@ class SettingsController extends Controller
             $request->validate(['promo_banner_image' => 'image|max:6144']);
             $bannerPath = $request->file('promo_banner_image')->store('settings', 'public');
             StoreSetting::set('promo_banner_image', $bannerPath);
+        }
+
+        if ($request->hasFile('promo_popup_image')) {
+            $request->validate(['promo_popup_image' => 'image|max:6144']);
+            $popupPath = $request->file('promo_popup_image')->store('settings', 'public');
+            StoreSetting::set('promo_popup_image', $popupPath);
         }
 
         foreach ($data as $key => $value) {

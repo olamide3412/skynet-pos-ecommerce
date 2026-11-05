@@ -183,6 +183,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::put('/profile/password', [ProfileController::class , 'updatePassword'])->name('profile.password.update');
 
             Route::resource('categories', CategoryController::class)->except(['create', 'edit', 'show']);
+            Route::post('sliders/settings', [SliderController::class, 'updateSettings'])->name('sliders.settings.update');
             Route::resource('sliders', SliderController::class)->except(['create', 'edit', 'show']);
             Route::post('products/bulk-action', [AdminProductController::class , 'bulkAction'])->name('products.bulk-action');
             Route::resource('products', AdminProductController::class)->except(['create', 'edit', 'show']);
@@ -254,6 +255,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
             // Store & Payment Settings
             Route::get('settings', [SettingsController::class , 'index'])->name('settings.index');
             Route::put('settings', [SettingsController::class , 'update'])->name('settings.update');
+
+            // Promo Flyers & Timed Popup Modal
+            Route::get('promo-flyers', [\App\Http\Controllers\Admin\PromoFlyerController::class, 'index'])->name('promo-flyers.index');
+            Route::post('promo-flyers', [\App\Http\Controllers\Admin\PromoFlyerController::class, 'update'])->name('promo-flyers.update');
 
             // Newsletter Subscribers
             Route::get('newsletter-subscribers', [\App\Http\Controllers\Admin\NewsletterSubscriberController::class, 'index'])->name('newsletter.index');

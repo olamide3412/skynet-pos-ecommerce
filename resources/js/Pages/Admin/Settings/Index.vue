@@ -21,32 +21,9 @@ const form = useForm({
     company_phone:          props.settings.company_phone || '+2348032072831',
     company_address:        props.settings.company_address || 'Delta State, Nigeria',
     company_logo:           null,
-    // Homepage Hero & Slider
-    home_slider_enabled:    props.settings.home_slider_enabled !== '0',
-    home_marquee_enabled:   props.settings.home_marquee_enabled !== '0',
-    home_marquee_text:      props.settings.home_marquee_text || 'E.E.W TECHNOLOGY LTD SHOP NOW',
-    hero_enabled:           props.settings.hero_enabled !== '0',
-    hero_badge:             props.settings.hero_badge || 'New Collection 2026',
-    hero_title:             props.settings.hero_title || 'Discover Digital',
-    hero_title_highlight:   props.settings.hero_title_highlight || 'Excellence',
-    hero_subtitle:          props.settings.hero_subtitle || 'Shop premium products, authentic brands, and quality gear built for your lifestyle.',
-    hero_cta_primary:       props.settings.hero_cta_primary || 'Shop Now',
-    hero_cta_secondary:     props.settings.hero_cta_secondary || 'Explore Categories',
-    hero_image:             null,
-    // Promotional Flyer / Banner
-    promo_banner_enabled:     props.settings.promo_banner_enabled === '1',
-    promo_banner_title:       props.settings.promo_banner_title || '',
-    promo_banner_subtitle:    props.settings.promo_banner_subtitle || '',
-    promo_banner_link:        props.settings.promo_banner_link || '',
-    promo_banner_button_text: props.settings.promo_banner_button_text || 'Explore Offer',
-    promo_banner_image:       null,
-    // Homepage Feature Blocks
-    feature_1_title:        props.settings.feature_1_title || 'Secure Payments',
-    feature_1_desc:         props.settings.feature_1_desc || '100% secure checkout via Paystack & Flutterwave.',
-    feature_2_title:        props.settings.feature_2_title || 'Fast Checkout',
-    feature_2_desc:         props.settings.feature_2_desc || 'Seamless integration and instantaneous validation.',
-    feature_3_title:        props.settings.feature_3_title || 'Premium Support',
-    feature_3_desc:         props.settings.feature_3_desc || 'Priority technical response round the clock 24/7.',
+    // Order Notifications & Staff Alerts
+    order_notifications_enabled:   props.settings.order_notifications_enabled !== '0',
+    order_notification_emails:     props.settings.order_notification_emails || '',
     // Payments
     paystack_enabled:       props.settings.paystack_enabled === '1',
     flutterwave_enabled:    props.settings.flutterwave_enabled === '1',
@@ -93,13 +70,16 @@ const handleLogoUpload = (e) => {
     form.company_logo = e.target.files[0];
 };
 
-const handleHeroImageUpload = (e) => {
-    form.hero_image = e.target.files[0];
-};
+const parsedStaffEmails = computed(() => {
+    const raw = form.order_notification_emails || '';
+    if (!raw.trim()) return [];
+    return raw
+        .split(/[\r\n,;]+/)
+        .map(e => e.trim().toLowerCase())
+        .filter(e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+});
 
-const handlePromoBannerUpload = (e) => {
-    form.promo_banner_image = e.target.files[0];
-};
+const parsedStaffEmailsCount = computed(() => parsedStaffEmails.value.length);
 
 const save = () => {
     form.post(route('admin.settings.update'), {
@@ -108,8 +88,6 @@ const save = () => {
         onSuccess: () => {
             //toast.success('Settings saved successfully!');
             form.company_logo = null;
-            form.hero_image = null;
-            form.promo_banner_image = null;
         },
         onError: () => toast.error('Failed to save settings, please check the form.'),
     });
@@ -227,193 +205,99 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                     </div>
                 </section>
 
-                <!-- ─── Homepage Content ──────────────────────────────────── -->
+                <!-- ─── Order Notifications & Staff Alerts ───────────────────────────── -->
                 <section class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60">
-                        <h2 class="text-lg font-semibold">Homepage Content</h2>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">Edit the text and image displayed on the storefront homepage hero and feature blocks.</p>
+                    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <span class="w-9 h-9 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 text-lg">📬</span>
+                            <div>
+                                <h2 class="text-base font-semibold text-gray-900 dark:text-white">Order Email Notifications & Staff Alerts</h2>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">Specify which staff members receive an alert email whenever a customer places a new order.</p>
+                            </div>
+                        </div>
+                        <label class="inline-flex items-center cursor-pointer shrink-0">
+                            <input type="checkbox" v-model="form.order_notifications_enabled" class="sr-only peer">
+                            <div :class="toggleSwitch"></div>
+                            <span class="ml-2.5 text-xs font-bold text-gray-900 dark:text-gray-300">
+                                {{ form.order_notifications_enabled ? 'Active' : 'Disabled' }}
+                            </span>
+                        </label>
                     </div>
-                    <div class="p-6 space-y-6">
-
-                        <!-- Slider & Marquee Setting -->
-                        <div class="border border-primary-soft bg-primary-soft rounded-xl p-5 mb-6 shadow-sm">
-                            <h3 class="text-sm font-bold uppercase tracking-wider text-primary mb-4 flex items-center gap-2">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                                Dynamic Hero Slider & Marquee
-                            </h3>
-                            <div class="flex flex-col md:flex-row gap-8">
-                                <!-- Dynamic Slider Toggle -->
-                                <div class="flex-1 space-y-4">
-                                    <div class="flex items-center justify-between">
-                                        <label class="text-sm font-semibold text-gray-900 dark:text-gray-200">Enable Slider Gallery</label>
-                                        <label class="inline-flex items-center cursor-pointer">
-                                            <input type="checkbox" v-model="form.home_slider_enabled" class="sr-only peer">
-                                            <div :class="toggleSwitch"></div>
-                                        </label>
-                                    </div>
-                                    <p class="text-xs text-gray-500">Replaces the static hero section with the slides managed in the <a href="/admin/sliders" class="text-primary font-bold hover:underline" target="_blank">Sliders menu</a>.</p>
-                                </div>
-                                <!-- Marquee Setting -->
-                                <div class="flex-1 space-y-4 border-t md:border-t-0 md:border-l border-gray-200 dark:border-gray-700 pt-4 md:pt-0 md:pl-8">
-                                    <div class="flex items-center justify-between">
-                                        <label class="text-sm font-semibold text-gray-900 dark:text-gray-200">Enable Text Banner</label>
-                                        <label class="inline-flex items-center cursor-pointer">
-                                            <input type="checkbox" v-model="form.home_marquee_enabled" class="sr-only peer">
-                                            <div :class="toggleSwitch"></div>
-                                        </label>
-                                    </div>
-                                    <div v-if="form.home_marquee_enabled">
-                                        <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Banner Text</label>
-                                        <input type="text" v-model="form.home_marquee_text" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-3 py-2 text-sm" placeholder="E.E.W TECHNOLOGY LTD SHOP NOW" />
-                                    </div>
-                                    <p class="text-xs text-gray-500">Displays a full-width text bar directly below the hero area.</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Hero Badge + Title -->
+                    <div v-if="form.order_notifications_enabled" class="p-6 space-y-4">
                         <div>
-                            <div class="flex items-center justify-between mb-4">
-                                <h3 class="text-sm font-bold uppercase tracking-wider text-primary">Hero Section</h3>
-                                <label class="inline-flex items-center cursor-pointer">
-                                    <input type="checkbox" v-model="form.hero_enabled" class="sr-only peer">
-                                    <div :class="toggleSwitch"></div>
-                                    <span class="ml-3 text-sm font-medium text-gray-900 dark:text-gray-300">{{ form.hero_enabled ? 'Enabled' : 'Disabled' }}</span>
+                            <div class="flex items-center justify-between mb-1.5">
+                                <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300">
+                                    Recipient Staff Emails
                                 </label>
+                                <span class="text-[11px] font-semibold text-primary">
+                                    {{ parsedStaffEmailsCount }} recipient(s) recognized
+                                </span>
                             </div>
-                            <div v-if="form.hero_enabled" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <textarea
+                                v-model="form.order_notification_emails"
+                                rows="3"
+                                class="w-full rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3.5 py-2.5 text-sm font-mono placeholder:font-sans"
+                                placeholder="manager@skynetdigitalhub.com.ng, warehouse@skynetdigitalhub.com.ng, packaging@skynetdigitalhub.com.ng"
+                            ></textarea>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1.5 leading-relaxed">
+                                Enter all staff emails separated by commas, semicolons, or new lines. If left empty, alerts will default to your Company Email (<code>{{ form.company_email || 'support@skynetdigitalhub.com.ng' }}</code>).
+                            </p>
+                        </div>
+
+                        <div v-if="parsedStaffEmails.length" class="flex flex-wrap items-center gap-1.5 pt-1">
+                            <span class="text-xs font-semibold text-gray-500 dark:text-gray-400 mr-1">Alerts will be delivered to:</span>
+                            <span
+                                v-for="email in parsedStaffEmails"
+                                :key="email"
+                                class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60"
+                            >
+                                <span>✉️</span>
+                                <span>{{ email }}</span>
+                            </span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ─── Homepage & Dedicated Settings Quick Links ─────────────────────────────── -->
+                <section class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="p-4 rounded-xl border border-blue-200 dark:border-blue-900/60 bg-blue-50/50 dark:bg-blue-950/20 flex flex-col justify-between gap-3 shadow-xs">
+                            <div class="flex items-start gap-3">
+                                <span class="w-9 h-9 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 text-lg">🖼️</span>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Badge Text <span class="text-xs text-gray-400">(e.g. Summer Collection 2026)</span></label>
-                                    <input type="text" v-model="form.hero_badge" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm" placeholder="Summer Collection 2026" />
+                                    <h3 class="text-xs font-bold uppercase tracking-wider text-blue-900 dark:text-blue-200">
+                                        Homepage & Sliders Settings
+                                    </h3>
+                                    <p class="text-xs text-blue-700/80 dark:text-blue-300/70 mt-1">
+                                        Hero image slider gallery, marquee announcement bar, fallback hero text, and trust badges are now grouped together.
+                                    </p>
                                 </div>
+                            </div>
+                            <div class="pt-2">
+                                <Link :href="route('admin.sliders.index')" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-xs">
+                                    Open Homepage & Sliders →
+                                </Link>
+                            </div>
+                        </div>
+
+                        <div class="p-4 rounded-xl border border-purple-200 dark:border-purple-900/60 bg-purple-50/50 dark:bg-purple-950/20 flex flex-col justify-between gap-3 shadow-xs">
+                            <div class="flex items-start gap-3">
+                                <span class="w-9 h-9 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 text-lg">🎉</span>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Highlighted Word <span class="text-xs text-gray-400">(rendered in gradient)</span></label>
-                                    <input type="text" v-model="form.hero_title_highlight" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm" placeholder="Excellence" />
+                                    <h3 class="text-xs font-bold uppercase tracking-wider text-purple-900 dark:text-purple-200">
+                                        Promotional Flyers & Coupon Popups
+                                    </h3>
+                                    <p class="text-xs text-purple-700/80 dark:text-purple-300/70 mt-1">
+                                        Timed welcome coupon popups and mid-page promo banners have their own dedicated management menu.
+                                    </p>
                                 </div>
-                                <div v-if="form.hero_enabled" class="sm:col-span-2">
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Hero Heading <span class="text-xs text-gray-400">(line before the highlighted word)</span></label>
-                                    <input type="text" v-model="form.hero_title" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm" placeholder="Discover Digital" />
-                                </div>
-                                <div v-if="form.hero_enabled" class="sm:col-span-2">
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Hero Subtitle / Description</label>
-                                    <textarea v-model="form.hero_subtitle" rows="2" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm" placeholder="Shop premium products..."></textarea>
-                                </div>
-                                <div v-if="form.hero_enabled">
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Primary CTA Button Text</label>
-                                    <input type="text" v-model="form.hero_cta_primary" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm" placeholder="Shop Now" />
-                                </div>
-                                <div v-if="form.hero_enabled">
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Secondary CTA Button Text</label>
-                                    <input type="text" v-model="form.hero_cta_secondary" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm" placeholder="Explore Categories" />
-                                </div>
+                            </div>
+                            <div class="pt-2">
+                                <Link :href="route('admin.promo-flyers.index')" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition shadow-xs">
+                                    Open Promo Flyers & Popups →
+                                </Link>
                             </div>
                         </div>
-
-                        <!-- Hero Image Upload -->
-                        <div v-if="form.hero_enabled" class="border-t dark:border-gray-700 pt-5">
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Hero Image</label>
-                            <div class="flex items-start gap-6">
-                                <div class="w-48 h-32 rounded-xl overflow-hidden border dark:border-gray-600 bg-gray-100 dark:bg-gray-900 flex-shrink-0">
-                                    <img v-if="props.settings.hero_image" :src="'/storage/' + props.settings.hero_image" class="w-full h-full object-cover" alt="Current hero image" />
-                                    <div v-else class="w-full h-full flex items-center justify-center text-gray-400 text-xs">No image set</div>
-                                </div>
-                                <div class="flex-1">
-                                    <div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center bg-gray-50 dark:bg-gray-900/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition">
-                                        <svg class="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-                                        <p class="text-xs text-gray-500 mb-2">Upload a new hero image (PNG, JPG, max 4MB)</p>
-                                        <input type="file" @change="handleHeroImageUpload" accept="image/*" class="text-sm text-gray-500 file:mr-2 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-gray-100 dark:file:bg-gray-700 file:text-primary cursor-pointer" />
-                                    </div>
-                                    <p v-if="form.hero_image" class="text-xs text-green-600 mt-2 font-semibold">✓ New image selected — will be applied on save.</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Promotional Flyer / Mid-Page Banner Setting -->
-                        <div class="border border-blue-200 dark:border-blue-900/60 bg-blue-50/50 dark:bg-blue-950/20 rounded-xl p-5 mb-6 shadow-xs">
-                            <div class="flex items-center justify-between mb-4">
-                                <div class="flex items-center gap-2">
-                                    <span class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/>
-                                        </svg>
-                                    </span>
-                                    <div>
-                                        <h3 class="text-sm font-bold uppercase tracking-wider text-blue-900 dark:text-blue-200">
-                                            Promotional Flyer / Mid-Page Banner
-                                        </h3>
-                                        <p class="text-xs text-blue-700/80 dark:text-blue-300/70">
-                                            Display a full-width responsive promo flyer between Best Sellers and Most Searched Items.
-                                        </p>
-                                    </div>
-                                </div>
-                                <label class="inline-flex items-center cursor-pointer">
-                                    <input type="checkbox" v-model="form.promo_banner_enabled" class="sr-only peer">
-                                    <div :class="toggleSwitch"></div>
-                                    <span class="ml-3 text-xs sm:text-sm font-bold text-gray-900 dark:text-gray-300">
-                                        {{ form.promo_banner_enabled ? 'Active' : 'Disabled' }}
-                                    </span>
-                                </label>
-                            </div>
-
-                            <div v-if="form.promo_banner_enabled" class="space-y-4 pt-3 border-t border-blue-200/60 dark:border-blue-900/60">
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div>
-                                        <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Promo Title (Optional)</label>
-                                        <input type="text" v-model="form.promo_banner_title" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-3 py-2 text-sm" placeholder="e.g. Mega Clearance Sale — Up to 50% Off" />
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Button Text (Optional)</label>
-                                        <input type="text" v-model="form.promo_banner_button_text" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-3 py-2 text-sm" placeholder="e.g. Shop the Sale" />
-                                    </div>
-                                    <div class="sm:col-span-2">
-                                        <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Subtitle / Promo Description (Optional)</label>
-                                        <textarea v-model="form.promo_banner_subtitle" rows="2" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-3 py-2 text-sm" placeholder="Short description or terms..."></textarea>
-                                    </div>
-                                    <div class="sm:col-span-2">
-                                        <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Target Link / URL (Where clicking the flyer goes)</label>
-                                        <input type="text" v-model="form.promo_banner_link" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-3 py-2 text-sm" placeholder="e.g. /shop?collection=featured or https://..." />
-                                    </div>
-                                </div>
-
-                                <!-- Flyer Image Upload -->
-                                <div class="pt-3 border-t border-blue-200/60 dark:border-blue-900/60">
-                                    <label class="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-2">Flyer / Banner Image (Recommended ~1200x400 or ~16:9 banner)</label>
-                                    <div class="flex flex-col sm:flex-row items-start gap-4">
-                                        <div class="w-full sm:w-64 h-32 rounded-xl overflow-hidden border dark:border-gray-600 bg-gray-100 dark:bg-gray-900 flex-shrink-0">
-                                            <img v-if="props.settings.promo_banner_image" :src="'/storage/' + props.settings.promo_banner_image" class="w-full h-full object-cover" alt="Active flyer" />
-                                            <div v-else class="w-full h-full flex items-center justify-center text-gray-400 text-xs">No flyer uploaded</div>
-                                        </div>
-                                        <div class="flex-1 w-full">
-                                            <div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition">
-                                                <svg class="w-7 h-7 text-gray-400 mx-auto mb-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-                                                <p class="text-xs text-gray-500 mb-2">Upload promotional flyer (PNG, JPG, WebP up to 6MB)</p>
-                                                <input type="file" @change="handlePromoBannerUpload" accept="image/*" class="text-xs text-gray-500 file:mr-2 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary cursor-pointer" />
-                                            </div>
-                                            <p v-if="form.promo_banner_image" class="text-xs text-green-600 mt-2 font-semibold">✓ New flyer selected — click Save Settings below to apply.</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Feature Blocks -->
-                        <div class="border-t dark:border-gray-700 pt-5">
-                            <h3 class="text-sm font-bold uppercase tracking-wider text-primary mb-4">Feature Blocks (bottom of homepage)</h3>
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div v-for="n in 3" :key="n" class="bg-gray-50 dark:bg-gray-900/40 rounded-xl p-4 border dark:border-gray-700 space-y-3">
-                                    <p class="text-xs font-bold text-gray-500 uppercase tracking-wider">Feature {{ n }}</p>
-                                    <div>
-                                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Title</label>
-                                        <input type="text" v-model="form[`feature_${n}_title`]" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm" />
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
-                                        <textarea v-model="form[`feature_${n}_desc`]" rows="2" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm"></textarea>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
                     </div>
                 </section>
 

@@ -54,7 +54,7 @@
             </div>
         </div>
         <div class="footer">
-            <p style="margin: 0 0 6px 0;">Need help? Reply directly to this email or reach us at <a href="mailto:{{ StoreSetting::get('company_email', config('mail.from.address')) }}">{{ StoreSetting::get('company_email', config('mail.from.address')) }}</a></p>
+            <p style="margin: 0 0 6px 0;">Need help? Reply directly to this email or reach us at <a href="mailto:{{ $companyEmail }}">{{ $companyEmail }}</a></p>
             <p style="margin: 0; font-size: 11px;">&copy; {{ date('Y') }} {{ $storeName }}. All rights reserved.</p>
         </div>
     </div>

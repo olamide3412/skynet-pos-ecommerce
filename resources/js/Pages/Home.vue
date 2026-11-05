@@ -3,6 +3,7 @@ import { Head, Link } from '@inertiajs/vue3';
 import Layout from '@/Layouts/Layout.vue';
 import { ref, onMounted, onUnmounted } from 'vue';
 import Footer from '@/Components/Footer.vue';
+import PromoPopupModal from '@/Components/PromoPopupModal.vue';
 import { useCart } from '@/Composables/useCart';
 
 const props = defineProps({
@@ -133,6 +134,9 @@ onUnmounted(() => {
         <meta name="twitter:card" content="summary_large_image" />
     </Head>
     <Layout>
+        <!-- Promotional Flyer / Coupon Timed Popup Modal -->
+        <PromoPopupModal :settings="$page.props.store_settings" />
+
         <!-- Dynamic Hero Slider -->
         <div v-if="$page.props.store_settings.home_slider_enabled !== '0' && sliders && sliders.length > 0" class="container mx-auto px-4 sm:px-6 lg:px-8 py-4 md:py-8">
             <section class="relative bg-gray-900 border-none overflow-hidden h-[200px] md:h-[300px] lg:h-[450px] rounded-2xl md:rounded-[3rem] shadow-2xl">
