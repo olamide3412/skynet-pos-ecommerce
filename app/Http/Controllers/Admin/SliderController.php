@@ -23,7 +23,7 @@ class SliderController extends Controller
         $validated = $request->validate([
             'image'       => 'required|image|max:4096',
             'title'       => 'nullable|string|max:255',
-            'subtitle'    => 'nullable|string|max:255',
+            'subtitle'    => 'nullable|string|max:1000',
             'button_text' => 'nullable|string|max:100',
             'button_link' => 'nullable|string|max:255',
             'order'       => 'nullable|integer',
@@ -51,7 +51,7 @@ class SliderController extends Controller
         $validated = $request->validate([
             'image'       => 'nullable|image|max:4096',
             'title'       => 'nullable|string|max:255',
-            'subtitle'    => 'nullable|string|max:255',
+            'subtitle'    => 'nullable|string|max:1000',
             'button_text' => 'nullable|string|max:100',
             'button_link' => 'nullable|string|max:255',
             'order'       => 'nullable|integer',
