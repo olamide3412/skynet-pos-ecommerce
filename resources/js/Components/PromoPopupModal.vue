@@ -14,6 +14,7 @@ const toast = useToast();
 const showModal = ref(false);
 const copied = ref(false);
 let timer = null;
+let isMounted = false;
 
 const isEnabled = computed(() => props.settings?.promo_popup_enabled === '1');
 const flyerImage = computed(() => props.settings?.promo_popup_image ? `/storage/${props.settings.promo_popup_image}` : null);
@@ -146,7 +147,24 @@ const handleKeyDown = (e) => {
     }
 };
 
-onMounted(() => {
+const preloadFlyerImage = (src) => {
+    return new Promise((resolve) => {
+        if (!src || typeof window === 'undefined') {
+            resolve();
+            return;
+        }
+        const img = new Image();
+        img.onload = () => resolve();
+        img.onerror = () => resolve();
+        img.src = src;
+        if (img.complete) {
+            resolve();
+        }
+    });
+};
+
+onMounted(async () => {
+    isMounted = true;
     if (typeof window === 'undefined') return;
     window.addEventListener('keydown', handleKeyDown);
 
@@ -156,13 +174,34 @@ onMounted(() => {
     }
 
     if (isEnabled.value && hasContent.value) {
-        timer = setTimeout(() => {
+        // Start preloading the flyer image immediately on page load so it's ready in memory
+        const imageLoadPromise = flyerImage.value
+            ? preloadFlyerImage(flyerImage.value)
+            : Promise.resolve();
+
+        // Delay timer promise
+        const delayPromise = new Promise((resolve) => {
+            timer = setTimeout(resolve, delaySeconds.value * 1000);
+        });
+
+        // Wait for the configured delay
+        await delayPromise;
+
+        if (!isMounted) return;
+
+        // Ensure flyer image is fully loaded so modal and image pop up synchronously together
+        // Max 2.5s safety timeout so slow/offline connections never block the modal
+        const safetyTimeout = new Promise((resolve) => setTimeout(resolve, 2500));
+        await Promise.race([imageLoadPromise, safetyTimeout]);
+
+        if (isMounted) {
             showModal.value = true;
-        }, delaySeconds.value * 1000);
+        }
     }
 });
 
 onUnmounted(() => {
+    isMounted = false;
     if (timer) clearTimeout(timer);
     if (typeof window !== 'undefined') {
         window.removeEventListener('keydown', handleKeyDown);
@@ -209,13 +248,12 @@ onUnmounted(() => {
                     <!-- Scrollable Modal Content Container -->
                     <div class="overflow-y-auto flex-1 divide-y divide-gray-100 dark:divide-gray-700">
                         <!-- Flyer / Banner Image -->
-                        <div v-if="flyerImage" class="relative w-full bg-gray-900/5 dark:bg-gray-900/40 flex items-center justify-center">
+                        <div v-if="flyerImage" class="relative w-full bg-gray-900/5 dark:bg-gray-900/40 flex items-center justify-center min-h-[160px]">
                             <Link :href="ctaLink" @click="closeModal" class="block w-full">
                                 <img
                                     :src="flyerImage"
                                     :alt="title || 'Promotional Flyer'"
-                                    loading="lazy"
-                                    decoding="async"
+                                    loading="eager"
                                     class="w-full max-h-[380px] sm:max-h-[440px] object-contain hover:opacity-95 transition"
                                 />
                             </Link>

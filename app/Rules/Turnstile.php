@@ -18,7 +18,7 @@ class Turnstile implements ValidationRule
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
        try {
-            $response = Http::asForm()->timeout(10)->post('https://challenges.cloudflare.com/turnstile/v0/siteverify', [
+            $response = Http::asForm()->timeout(5)->post('https://challenges.cloudflare.com/turnstile/v0/siteverify', [
                 'secret' => config('services.turnstile.secret_key'),
                 'response' => $value,
                 'remoteip' => request()->ip(),

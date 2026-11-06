@@ -87,10 +87,8 @@ const handleRegister = () => {
                     <TextInput name="name" label="Full Name" v-model="form.name" type="text" placeholder="John Doe" :message="form.errors.name" autofocus :required="true"/>
                     <TextInput name="email" label="Email Address" v-model="form.email" type="email" placeholder="you@example.com" :message="form.errors.email" :required="true"/>
                     <TextInput name="phone" label="Phone Number (Optional)" v-model="form.phone" type="text" placeholder="+234 800 000 0000" :message="form.errors.phone" />
-                    <div class="grid grid-cols-2 gap-4">
-                        <TextInput name="password" label="Password" type="password" v-model="form.password" placeholder="••••••••" :message="form.errors.password" :required="true"/>
-                        <TextInput name="password_confirmation" label="Confirm Password" type="password" v-model="form.password_confirmation" placeholder="••••••••" :required="true"/>
-                    </div>
+                    <TextInput name="password" label="Password" type="password" v-model="form.password" placeholder="••••••••" :message="form.errors.password" :required="true"/>
+                    <TextInput name="password_confirmation" label="Confirm Password" type="password" v-model="form.password_confirmation" placeholder="••••••••" :required="true"/>
                     <!-- Cloudflare Turnstile Widget -->
                     <div class="flex justify-left mt-2">
                         <div id="cf-turnstile-widget" class="cf-turnstile"></div>

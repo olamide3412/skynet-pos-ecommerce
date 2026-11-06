@@ -67,12 +67,14 @@ class CustomerAuthController extends Controller
         $this->mergeGuestCart($guestSessionId, $customer);
 
         try {
-            \Illuminate\Support\Facades\Mail::to($customer->email)->send(new \App\Mail\CustomerWelcomeMail($customer));
+            \Illuminate\Support\Facades\Mail::to($customer->email)->queue(new \App\Mail\CustomerWelcomeMail($customer));
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning("Customer #{$customer->id} welcome email failed: " . $e->getMessage());
+            \Illuminate\Support\Facades\Log::warning("Customer #{$customer->id} welcome email failed to queue: " . $e->getMessage());
         }
 
-        return redirect()->route('home')->with('success', 'Registration successful! Welcome to Skynet Digital Store.');
+        $companyName = StoreSetting::get('company_name', config('app.name', 'Skynet'));
+
+        return redirect()->route('home')->with('success', "Registration successful! Welcome to {$companyName}.");
     }
 
     public function login(Request $request)

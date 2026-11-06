@@ -250,10 +250,10 @@ const openMegaMenu = (e) => {
             </Link>
           </template>
 
-          <!-- Wishlist button (visible for both customers & guests) -->
-          <Link v-if="wishlistEnabled" :href="isCustomer ? route('wishlist.index') : route('login')"
+          <!-- Wishlist button (visible for logged-in customers only) -->
+          <Link v-if="wishlistEnabled && isCustomer" :href="route('wishlist.index')"
             class="flex flex-col items-center text-gray-600 dark:text-gray-300 hover:text-red-500 dark:hover:text-red-400 transition px-1"
-            :title="isCustomer ? 'Wishlist' : 'Sign in to view Wishlist'">
+            title="Wishlist">
             <svg class="w-5 h-5 mb-0.5"
               :class="$page.component.startsWith('Frontend/Wishlist') ? 'text-red-500 fill-red-500' : 'fill-none'"
               stroke="currentColor" viewBox="0 0 24 24">
@@ -639,9 +639,9 @@ const openMegaMenu = (e) => {
             </button>
           </li>
 
-          <!-- Wishlist link (visible for both customers & guests) -->
-          <li v-if="wishlistEnabled">
-            <Link :href="isCustomer ? route('wishlist.index') : route('login')" @click="toggle"
+          <!-- Wishlist link (visible for logged-in customers only) -->
+          <li v-if="wishlistEnabled && isCustomer">
+            <Link :href="route('wishlist.index')" @click="toggle"
               class="flex items-center gap-2 px-3 py-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition font-medium">❤️ Wishlist</Link>
           </li>
 
