@@ -21,10 +21,9 @@ export default defineConfig({
                         if (id.includes('@fortawesome') || id.includes('fontawesome')) {
                             return 'fontawesome';
                         }
-                        if (id.includes('vue') || id.includes('@inertiajs')) {
+                        if (id.includes('vue') || id.includes('@inertiajs') || id.includes('pinia')) {
                             return 'vue-vendor';
                         }
-                        return 'vendor';
                     }
                 },
             },

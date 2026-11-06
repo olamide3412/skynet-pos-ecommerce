@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\StoreSetting;
+use App\Services\ActivityLogger;
 use App\Services\InventoryService;
 use App\Services\PosIntegration\PosReservationService;
 use Illuminate\Http\Request;
@@ -26,8 +27,12 @@ class OrderController extends Controller
         $currentUser = auth('web')->user();
         $query = Order::with('customer')->latest();
 
+        $canViewAll = $currentUser->isSuperAdmin()
+            || in_array($currentUser->role, ['administrator', 'super administrator'], true)
+            || $currentUser->can('orders.view_all');
+
         // If user cannot view all orders (e.g., dedicated Rider / Dispatch staff), restrict to their assigned deliveries
-        if (!$currentUser->isSuperAdmin() && !$currentUser->can('orders.view_all')) {
+        if (!$canViewAll) {
             $query->where('assigned_staff_id', $currentUser->id);
         }
 
@@ -74,13 +79,36 @@ class OrderController extends Controller
             ->where('pod_status', 'cash_collected')
             ->count();
 
+        // Status counts for Manage Orders quick tabs / circular status badges
+        $baseCountsQuery = Order::query();
+        if (!$canViewAll) {
+            $baseCountsQuery->where('assigned_staff_id', $currentUser->id);
+        }
+
+        $rawCounts = (clone $baseCountsQuery)
+            ->selectRaw('status, count(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status')
+            ->toArray();
+
+        $statusCounts = [
+            'all'        => (int) array_sum($rawCounts),
+            'pending'    => (int) ($rawCounts['pending'] ?? 0),
+            'processing' => (int) ($rawCounts['processing'] ?? 0),
+            'paid'       => (int) ($rawCounts['paid'] ?? 0),
+            'shipped'    => (int) ($rawCounts['shipped'] ?? 0),
+            'completed'  => (int) ($rawCounts['completed'] ?? 0),
+            'cancelled'  => (int) ($rawCounts['cancelled'] ?? 0),
+        ];
+
         return Inertia::render('Admin/Orders/Index', [
-            'orders'     => $query->paginate(15)->withQueryString(),
-            'podCustody' => [
+            'orders'       => $query->paginate(15)->withQueryString(),
+            'podCustody'   => [
                 'cash_in_hand' => $podCashInHand,
                 'count'        => $podCashInHandCount,
             ],
-            'filters'    => $request->only(['search', 'status', 'pos_reservation_status', 'start_date', 'end_date'])
+            'statusCounts' => $statusCounts,
+            'filters'      => $request->only(['search', 'status', 'pos_reservation_status', 'start_date', 'end_date'])
         ]);
     }
 
@@ -177,12 +205,25 @@ class OrderController extends Controller
             if ($newStatus === 'shipped' && $order->payment_method === 'pod' && $order->pod_status === 'pending_dispatch') {
                 $order->update(['pod_status' => 'awaiting_collection']);
             }
+
+            // Affiliate commission transition on order completion
+            if ($newStatus === 'completed' && $oldStatus !== 'completed') {
+                app(\App\Services\Referral\AffiliateCommissionService::class)->handleOrderCompleted($order);
+            }
         }
 
         // When cancelled, restore ecommerce inventory and release POS reservation (Section 140M)
         if ($newStatus === 'cancelled' && $oldStatus !== 'cancelled') {
             $this->inventoryService->restoreOrderInventory($order);
+            app(\App\Services\Referral\AffiliateCommissionService::class)->handleOrderCancelled($order, 'Order status updated to cancelled');
         }
+
+        ActivityLogger::order("Updated order #{$order->tracking_number} status to '{$newStatus}'", [
+            'order_id'        => $order->id,
+            'tracking_number' => $order->tracking_number,
+            'old_status'      => $oldStatus,
+            'new_status'      => $newStatus,
+        ]);
 
         return back()->with('success', 'Order status updated.');
     }
@@ -202,6 +243,12 @@ class OrderController extends Controller
             event: 'note_added',
             comment: $validated['note']
         );
+
+        ActivityLogger::order("Added timeline note on order #{$order->tracking_number}", [
+            'order_id'        => $order->id,
+            'tracking_number' => $order->tracking_number,
+            'note'            => $validated['note'],
+        ]);
 
         return back()->with('success', 'Order note recorded in history timeline.');
     }

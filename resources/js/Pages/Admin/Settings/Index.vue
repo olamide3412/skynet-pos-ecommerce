@@ -24,6 +24,15 @@ const form = useForm({
     // Order Notifications & Staff Alerts
     order_notifications_enabled:   props.settings.order_notifications_enabled !== '0',
     order_notification_emails:     props.settings.order_notification_emails || '',
+    // Referral & Affiliate Program
+    referral_enabled:              props.settings.referral_enabled !== '0',
+    referral_allow_applications:   props.settings.referral_allow_applications !== '0',
+    referral_commission_type:      props.settings.referral_commission_type || 'percentage',
+    referral_commission_rate:      props.settings.referral_commission_rate || '5',
+    referral_cookie_days:          props.settings.referral_cookie_days || '30',
+    referral_holding_days:         props.settings.referral_holding_days || '7',
+    referral_min_withdrawal:       props.settings.referral_min_withdrawal || '5000',
+    referral_min_order_amount:     props.settings.referral_min_order_amount || '0',
     // Payments
     paystack_enabled:       props.settings.paystack_enabled === '1',
     flutterwave_enabled:    props.settings.flutterwave_enabled === '1',
@@ -64,6 +73,17 @@ const form = useForm({
     facebook_auth_enabled:          props.settings.facebook_auth_enabled === '1',
     facebook_client_id:             props.settings.facebook_client_id || '',
     facebook_client_secret:         props.settings.facebook_client_secret || '',
+    // AI Assistant & Providers
+    ai_enabled:                     props.settings.ai_enabled === '1',
+    ai_active_provider:             props.settings.ai_active_provider || 'gemini',
+    ai_gemini_key:                  props.settings.ai_gemini_key || '',
+    ai_gemini_model:                props.settings.ai_gemini_model || 'gemini-2.5-flash',
+    ai_openai_key:                  props.settings.ai_openai_key || '',
+    ai_openai_model:                props.settings.ai_openai_model || 'gpt-4o-mini',
+    ai_deepseek_key:                props.settings.ai_deepseek_key || '',
+    ai_deepseek_model:              props.settings.ai_deepseek_model || 'deepseek-chat',
+    ai_claude_key:                  props.settings.ai_claude_key || '',
+    ai_claude_model:                props.settings.ai_claude_model || 'claude-3-5-haiku-20241022',
 });
 
 const handleLogoUpload = (e) => {
@@ -258,6 +278,169 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                     </div>
                 </section>
 
+                <!-- ─── Referral & Affiliate Program Settings ────────────────────────── -->
+                <section class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <span class="w-9 h-9 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 text-lg">🤝</span>
+                            <div>
+                                <h2 class="text-base font-semibold text-gray-900 dark:text-white">Referral & Affiliate Program</h2>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">Configure storewide default commission rates, holding periods, and customer application rules.</p>
+                            </div>
+                        </div>
+                        <label class="inline-flex items-center cursor-pointer shrink-0">
+                            <input type="checkbox" v-model="form.referral_enabled" class="sr-only peer">
+                            <div :class="toggleSwitch"></div>
+                            <span class="ml-2.5 text-xs font-bold text-gray-900 dark:text-gray-300">
+                                {{ form.referral_enabled ? 'Active' : 'Disabled' }}
+                            </span>
+                        </label>
+                    </div>
+
+                    <div v-if="form.referral_enabled" class="p-6 space-y-6">
+                        <!-- Quick Link to Affiliates Management -->
+                        <div class="p-4 rounded-xl border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/50 dark:bg-indigo-950/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div class="text-xs text-indigo-900 dark:text-indigo-200">
+                                <span class="font-bold">Manage Affiliates & Withdrawal Requests:</span>
+                                View registered affiliates, approve applications, customize individual partner rates, and process bank payouts.
+                            </div>
+                            <div class="flex items-center gap-2 shrink-0">
+                                <Link :href="route('admin.affiliates.index')" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition">
+                                    Affiliates List →
+                                </Link>
+                                <Link :href="route('admin.affiliates.withdrawals.index')" class="px-3 py-1.5 rounded-lg bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-200 text-xs font-bold hover:bg-gray-50 transition">
+                                    Withdrawal Queue →
+                                </Link>
+                            </div>
+                        </div>
+
+                        <!-- Customer Applications Toggle -->
+                        <div class="flex items-center justify-between py-2 border-b dark:border-gray-700">
+                            <div>
+                                <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Allow Customer Applications</h3>
+                                <p class="text-xs text-gray-500">Customers can apply to become an affiliate from their account. Applications require your manual approval.</p>
+                            </div>
+                            <label class="inline-flex items-center cursor-pointer">
+                                <input type="checkbox" v-model="form.referral_allow_applications" class="sr-only peer">
+                                <div :class="toggleSwitch"></div>
+                            </label>
+                        </div>
+
+                        <!-- Commission & Qualification Rules -->
+                        <div class="space-y-3">
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
+                                <span>💰</span> Commission & Qualification Rules
+                            </h4>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                                <div>
+                                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-1.5">
+                                        Commission Model
+                                    </label>
+                                    <select v-model="form.referral_commission_type" class="w-full rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3.5 py-2.5 text-sm">
+                                        <option value="percentage">Percentage of Sales (%)</option>
+                                        <option value="flat">Flat Fixed Fee (₦ per Order)</option>
+                                    </select>
+                                    <span class="text-[11px] text-gray-400 mt-1 block">
+                                        {{ form.referral_commission_type === 'percentage' ? 'Calculated as percentage on qualifying net subtotal.' : 'Fixed cash payout awarded per qualifying order.' }}
+                                    </span>
+                                </div>
+
+                                <div>
+                                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-1.5">
+                                        Default Rate {{ form.referral_commission_type === 'percentage' ? '(%)' : '(₦)' }}
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.1"
+                                        min="0"
+                                        v-model="form.referral_commission_rate"
+                                        class="w-full rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3.5 py-2.5 text-sm"
+                                        :placeholder="form.referral_commission_type === 'percentage' ? '5.0' : '1000'"
+                                    />
+                                    <span class="text-[11px] text-gray-400 mt-1 block">
+                                        {{ form.referral_commission_type === 'percentage' ? 'Calculated on product subtotal (after discounts).' : 'Fixed amount credited per referred order.' }}
+                                    </span>
+                                </div>
+
+                                <div>
+                                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-1.5">
+                                        Qualifying Min. Order (₦)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        v-model="form.referral_min_order_amount"
+                                        class="w-full rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3.5 py-2.5 text-sm"
+                                        placeholder="0"
+                                    />
+                                    <span class="text-[11px] text-gray-400 mt-1 block">
+                                        Min. net subtotal required to earn commission. Set to 0 for any order amount.
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Holding & Payout Controls -->
+                        <div class="space-y-3 pt-5 border-t border-gray-200 dark:border-gray-700/80">
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
+                                <span>🛡️</span> Holding & Payout Controls
+                            </h4>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                                <div>
+                                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-1.5">
+                                        Holding Window (Days)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="90"
+                                        v-model="form.referral_holding_days"
+                                        class="w-full rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3.5 py-2.5 text-sm"
+                                        placeholder="7"
+                                    />
+                                    <span class="text-[11px] text-gray-400 mt-1 block">
+                                        Days after order completion before commission becomes withdrawable (protects against returns).
+                                    </span>
+                                </div>
+
+                                <div>
+                                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-1.5">
+                                        Min. Payout Amount (₦)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        v-model="form.referral_min_withdrawal"
+                                        class="w-full rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3.5 py-2.5 text-sm"
+                                        placeholder="5000"
+                                    />
+                                    <span class="text-[11px] text-gray-400 mt-1 block">
+                                        Minimum virtual wallet balance required to submit a withdrawal request.
+                                    </span>
+                                </div>
+
+                                <div>
+                                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-1.5">
+                                        Cookie Attribution Window (Days)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="365"
+                                        v-model="form.referral_cookie_days"
+                                        class="w-full rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3.5 py-2.5 text-sm"
+                                        placeholder="30"
+                                    />
+                                    <span class="text-[11px] text-gray-400 mt-1 block">
+                                        How long a referral link click stays attached to a visitor's browser.
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
                 <!-- ─── Homepage & Dedicated Settings Quick Links ─────────────────────────────── -->
                 <section class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -362,6 +545,26 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                             </div>
                         </div>
                     </div>
+                </section>
+
+                <!-- ─── AI Assistant Sub-menu Shortcut Banner ───────────────── -->
+                <section class="bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-primary/10 dark:bg-gray-800/80 rounded-xl border border-purple-200 dark:border-purple-900/50 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div class="flex items-center gap-3">
+                        <span class="text-3xl">🤖</span>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h3 class="text-base font-bold text-gray-900 dark:text-white">AI Assistant & Provider Settings</h3>
+                                <span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300">Dedicated Sub-Menu</span>
+                            </div>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Manage Google Gemini, OpenAI ChatGPT, DeepSeek, and Claude API credentials, models, and latency connection tests.</p>
+                        </div>
+                    </div>
+                    <Link
+                        :href="route('admin.ai-settings.index')"
+                        class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg bg-purple-600 hover:bg-purple-700 text-white transition shrink-0 shadow-sm"
+                    >
+                        <span>Configure AI Settings &rarr;</span>
+                    </Link>
                 </section>
 
                 <!-- ─── Store Features ─────────────────────────────────────── -->

@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 
 class Order extends Model
@@ -15,6 +16,7 @@ class Order extends Model
     protected $fillable = [
         'customer_id', 'created_by_staff_id', 'assigned_staff_id', 'remitted_by_staff_id', 'reconciled_by_admin_id',
         'guest_email', 'subtotal', 'total_amount', 'coupon_code', 'discount_amount', 'shipping_fee', 'tax_amount', 'service_fee', 'status',
+        'affiliate_id', 'referral_code',
         'payment_method', 'payment_reference', 'tracking_number',
         'billing_name', 'billing_email', 'billing_phone', 'billing_address', 'delivery_method',
         // POS Reservation fields
@@ -77,6 +79,16 @@ class Order extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function affiliate(): BelongsTo
+    {
+        return $this->belongsTo(Affiliate::class);
+    }
+
+    public function affiliateCommission(): HasOne
+    {
+        return $this->hasOne(AffiliateCommission::class);
     }
 
     public function createdByStaff(): BelongsTo

@@ -145,6 +145,11 @@ Route::middleware('auth:customer')->group(function () {
     Route::put('/my-addresses/{address}', [\App\Http\Controllers\Frontend\CustomerProfileController::class, 'updateAddress'])->name('customer.addresses.update');
     Route::delete('/my-addresses/{address}', [\App\Http\Controllers\Frontend\CustomerProfileController::class, 'deleteAddress'])->name('customer.addresses.delete');
     Route::post('/my-addresses/{address}/default', [\App\Http\Controllers\Frontend\CustomerProfileController::class, 'setDefaultAddress'])->name('customer.addresses.default');
+
+    // Customer Referral / Affiliate Program
+    Route::get('/referral-program', [\App\Http\Controllers\Frontend\CustomerAffiliateController::class, 'index'])->name('customer.referral.index');
+    Route::post('/referral-program/apply', [\App\Http\Controllers\Frontend\CustomerAffiliateController::class, 'apply'])->name('customer.referral.apply');
+    Route::post('/referral-program/withdraw', [\App\Http\Controllers\Frontend\CustomerAffiliateController::class, 'requestWithdrawal'])->name('customer.referral.withdraw');
 });
 
 /* |-------------------------------------------------------------------------- | CUSTOMER AUTH ROUTES  (guard: customer) |-------------------------------------------------------------------------- */
@@ -189,6 +194,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::resource('products', AdminProductController::class)->except(['create', 'edit', 'show']);
             Route::get('products/search-related', [AdminProductController::class , 'searchRelated'])->name('products.search-related');
             Route::get('products/related-by-ids', [AdminProductController::class , 'relatedByIds'])->name('products.related-by-ids');
+            // AI Product Content & Assistant
+            Route::post('ai/generate-product-description', [\App\Http\Controllers\Admin\AiController::class, 'generateProductDescription'])->name('ai.generate-product-description');
+            Route::post('ai/test-connection', [\App\Http\Controllers\Admin\AiController::class, 'testConnection'])->name('ai.test-connection');
             Route::resource('attributes', \App\Http\Controllers\Admin\AttributeController::class)->except(['create', 'edit', 'show']);
             Route::patch('users/{user}/toggle-status', [\App\Http\Controllers\Admin\UserController::class, 'toggleStatus'])->name('users.toggle-status');
             Route::put('users/{user}/reset-password', [\App\Http\Controllers\Admin\UserController::class, 'resetPassword'])->name('users.reset-password');
@@ -256,6 +264,19 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('settings', [SettingsController::class , 'index'])->name('settings.index');
             Route::put('settings', [SettingsController::class , 'update'])->name('settings.update');
 
+            // AI Assistant Settings (Sub-menu under Settings)
+            Route::get('ai-settings', [\App\Http\Controllers\Admin\AiSettingsController::class, 'index'])->name('ai-settings.index');
+            Route::put('ai-settings', [\App\Http\Controllers\Admin\AiSettingsController::class, 'update'])->name('ai-settings.update');
+
+            // Referral Program & Affiliate Management
+            Route::get('affiliates', [\App\Http\Controllers\Admin\AffiliateController::class, 'index'])->name('affiliates.index');
+            Route::post('affiliates/enroll', [\App\Http\Controllers\Admin\AffiliateController::class, 'enrollCustomer'])->name('affiliates.enroll');
+            Route::get('affiliates/{affiliate}', [\App\Http\Controllers\Admin\AffiliateController::class, 'show'])->name('affiliates.show');
+            Route::put('affiliates/{affiliate}', [\App\Http\Controllers\Admin\AffiliateController::class, 'update'])->name('affiliates.update');
+            Route::get('affiliate-withdrawals', [\App\Http\Controllers\Admin\AffiliateWithdrawalController::class, 'index'])->name('affiliates.withdrawals.index');
+            Route::post('affiliate-withdrawals/{withdrawal}/mark-paid', [\App\Http\Controllers\Admin\AffiliateWithdrawalController::class, 'markPaid'])->name('affiliates.withdrawals.mark-paid');
+            Route::post('affiliate-withdrawals/{withdrawal}/reject', [\App\Http\Controllers\Admin\AffiliateWithdrawalController::class, 'reject'])->name('affiliates.withdrawals.reject');
+
             // Promo Flyers & Timed Popup Modal
             Route::get('promo-flyers', [\App\Http\Controllers\Admin\PromoFlyerController::class, 'index'])->name('promo-flyers.index');
             Route::post('promo-flyers', [\App\Http\Controllers\Admin\PromoFlyerController::class, 'update'])->name('promo-flyers.update');
@@ -272,6 +293,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('roles', [\App\Http\Controllers\Admin\RoleController::class, 'store'])->name('roles.store');
                 Route::put('roles/{role}', [\App\Http\Controllers\Admin\RoleController::class, 'update'])->name('roles.update');
                 Route::delete('roles/{role}', [\App\Http\Controllers\Admin\RoleController::class, 'destroy'])->name('roles.destroy');
+
+                // Activity Logs Audit Trail
+                Route::get('activity-logs', [\App\Http\Controllers\Admin\ActivityLogController::class, 'index'])->name('activity-logs.index');
+                Route::get('activity-logs/export', [\App\Http\Controllers\Admin\ActivityLogController::class, 'export'])->name('activity-logs.export');
             });
 
             // Theme & Dual-Color Palette Settings

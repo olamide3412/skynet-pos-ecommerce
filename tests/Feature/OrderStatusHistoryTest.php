@@ -215,5 +215,37 @@ class OrderStatusHistoryTest extends TestCase
             ->where('order.status_histories.0.event', 'order_placed')
         );
     }
+
+    public function test_manage_orders_page_provides_status_counts(): void
+    {
+        Order::create([
+            'guest_email'  => 'order1@example.com',
+            'total_amount' => 5000,
+            'status'       => 'pending',
+        ]);
+        Order::create([
+            'guest_email'  => 'order2@example.com',
+            'total_amount' => 6000,
+            'status'       => 'processing',
+        ]);
+        Order::create([
+            'guest_email'  => 'order3@example.com',
+            'total_amount' => 7000,
+            'status'       => 'completed',
+        ]);
+
+        $response = $this->actingAs($this->admin)->get(route('admin.orders.index'));
+
+        $response->assertOk();
+        $response->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+            ->component('Admin/Orders/Index')
+            ->has('statusCounts')
+            ->where('statusCounts.all', 3)
+            ->where('statusCounts.pending', 1)
+            ->where('statusCounts.processing', 1)
+            ->where('statusCounts.completed', 1)
+            ->where('statusCounts.cancelled', 0)
+        );
+    }
 }
 

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\StatusEnums;
 use App\Models\User;
 use App\Rules\Turnstile;
+use App\Services\ActivityLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
@@ -58,6 +59,10 @@ class AuthController extends Controller
             }
 
             log_new("Login successful admin: " . $user->email);
+            ActivityLogger::auth("Staff member logged in ({$user->name})", [
+                'email' => $user->email,
+                'role'  => $user->role,
+            ], $user->id);
             RateLimiter::clear($key);
             $request->session()->regenerate();
             
@@ -67,6 +72,10 @@ class AuthController extends Controller
         // Failed
         RateLimiter::hit($key, 7200);
         log_new("Failed login attempt with: $login IP: " . $request->ip());
+        ActivityLogger::auth("Failed login attempt for identifier: {$login}", [
+            'identifier' => $login,
+            'ip'         => $request->ip(),
+        ]);
 
         throw ValidationException::withMessages([
             'login' => 'Invalid Credentials',
@@ -75,6 +84,14 @@ class AuthController extends Controller
 
     public function destroy(Request $request)
     {
+        $user = Auth::guard('web')->user();
+        if ($user) {
+            ActivityLogger::auth("Staff member logged out ({$user->name})", [
+                'email' => $user->email,
+                'role'  => $user->role,
+            ], $user->id);
+        }
+
         Auth::guard('web')->logout();
 
         $request->session()->invalidate();

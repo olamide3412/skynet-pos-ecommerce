@@ -6,6 +6,7 @@ use App\Enums\RoleEnums;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\User;
+use App\Services\ActivityLogger;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -317,6 +318,12 @@ class PodCashController extends Controller
             ]
         );
 
+        ActivityLogger::order("POD cash collected: ₦" . number_format($order->pod_amount_collected, 2) . " for order #{$order->tracking_number} ({$channelLabel})", [
+            'order_id' => $order->id,
+            'amount'   => $order->pod_amount_collected,
+            'channel'  => $channel,
+        ]);
+
         return back()->with('success', "Payment of ₦" . number_format($order->pod_amount_collected, 2) . " ({$channelLabel}) recorded for Order #{$order->id}. Please remit to store.");
     }
 
@@ -362,6 +369,12 @@ class PodCashController extends Controller
             comment: $statusNote,
             metadata: ['amount' => $order->pod_amount_collected, 'reconciled_by' => $auditorName]
         );
+
+        ActivityLogger::order("POD payment remitted & reconciled: ₦" . number_format($order->pod_amount_collected, 2) . " for order #{$order->tracking_number}", [
+            'order_id' => $order->id,
+            'amount'   => $order->pod_amount_collected,
+            'admin'    => $auditorName,
+        ]);
 
         return back()->with('success', "Order #{$order->id} (₦" . number_format($order->pod_amount_collected, 2) . ") remitted & reconciled under {$auditorName}'s audit profile.");
     }
@@ -415,6 +428,12 @@ class PodCashController extends Controller
             );
         }
 
+        ActivityLogger::order("Bulk remitted & reconciled {$count} POD order(s) totaling ₦" . number_format($totalAmount, 2), [
+            'count' => $count,
+            'total' => $totalAmount,
+            'admin' => $auditorName,
+        ]);
+
         return back()->with('success', "Successfully remitted & reconciled {$count} orders totaling ₦" . number_format($totalAmount, 2) . " under {$auditorName}'s audit profile.");
     }
 
@@ -439,6 +458,11 @@ class PodCashController extends Controller
             'pod_reconciled_at'        => now(),
             'reconciled_by_admin_id'   => $currentUser->id,
             'pod_reconciliation_note'  => $request->input('reconciliation_note', 'Verified & deposited in store cash drawer.'),
+        ]);
+
+        ActivityLogger::order("Reconciled POD order #{$order->tracking_number} (₦" . number_format($order->pod_amount_collected, 2) . ") into cash till", [
+            'order_id' => $order->id,
+            'amount'   => $order->pod_amount_collected,
         ]);
 
         return back()->with('success', "Order #{$order->id} (₦" . number_format($order->pod_amount_collected, 2) . ") successfully reconciled into cash drawer.");
@@ -478,6 +502,11 @@ class PodCashController extends Controller
             'pod_reconciled_at'       => now(),
             'reconciled_by_admin_id'  => $currentUser->id,
             'pod_reconciliation_note' => $note,
+        ]);
+
+        ActivityLogger::order("Bulk reconciled {$count} POD order(s) totaling ₦" . number_format($totalAmount, 2) . " into cash till", [
+            'count' => $count,
+            'total' => $totalAmount,
         ]);
 
         return back()->with('success', "Audited and reconciled {$count} orders totaling ₦" . number_format($totalAmount, 2) . " into store cash drawer.");

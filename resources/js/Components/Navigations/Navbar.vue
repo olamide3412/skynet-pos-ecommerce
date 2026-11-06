@@ -229,6 +229,14 @@ const openMegaMenu = (e) => {
               </svg>
               <span class="text-[10px] font-medium">Orders</span>
             </Link>
+            <Link :href="route('customer.referral.index')"
+              class="hidden sm:flex flex-col items-center text-gray-600 dark:text-gray-300 hover:text-primary transition px-1"
+              title="Refer & Earn">
+              <svg class="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+              </svg>
+              <span class="text-[10px] font-medium">Refer & Earn</span>
+            </Link>
           </template>
 
           <!-- Guest: Sign in -->
@@ -649,6 +657,10 @@ const openMegaMenu = (e) => {
             <li>
               <Link :href="route('customer.orders')" @click="toggle"
                 class="flex items-center gap-2 px-3 py-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition font-medium">📦 My Orders</Link>
+            </li>
+            <li>
+              <Link :href="route('customer.referral.index')" @click="toggle"
+                class="flex items-center gap-2 px-3 py-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition font-medium">🤝 Referral & Earn</Link>
             </li>
             <li>
               <Link :href="route('order.track')" @click="toggle"

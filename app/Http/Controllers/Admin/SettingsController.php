@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\StoreSetting;
+use App\Services\ActivityLogger;
 use App\Services\PosIntegration\PosConnectionService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -111,6 +112,28 @@ class SettingsController extends Controller
             'pickup_address'                => 'nullable|string|max:500',
             'free_shipping_threshold'       => 'nullable|numeric|min:0',
             'default_delivery_address_hint' => 'nullable|string|max:500',
+
+            // Referral / Affiliate Program
+            'referral_enabled'              => 'boolean',
+            'referral_allow_applications'   => 'boolean',
+            'referral_commission_type'      => 'nullable|string|in:percentage,flat',
+            'referral_commission_rate'      => 'nullable|numeric|min:0',
+            'referral_cookie_days'          => 'nullable|integer|min:1|max:365',
+            'referral_holding_days'         => 'nullable|integer|min:0|max:90',
+            'referral_min_withdrawal'       => 'nullable|numeric|min:0',
+            'referral_min_order_amount'     => 'nullable|numeric|min:0',
+
+            // AI Assistant & Providers
+            'ai_enabled'                    => 'boolean',
+            'ai_active_provider'            => 'nullable|string|in:gemini,openai,deepseek,claude',
+            'ai_gemini_key'                 => 'nullable|string|max:500',
+            'ai_gemini_model'               => 'nullable|string|max:100',
+            'ai_openai_key'                 => 'nullable|string|max:500',
+            'ai_openai_model'               => 'nullable|string|max:100',
+            'ai_deepseek_key'               => 'nullable|string|max:500',
+            'ai_deepseek_model'             => 'nullable|string|max:100',
+            'ai_claude_key'                 => 'nullable|string|max:500',
+            'ai_claude_model'               => 'nullable|string|max:100',
         ]);
 
         if ($request->hasFile('company_logo')) {
@@ -140,6 +163,10 @@ class SettingsController extends Controller
         foreach ($data as $key => $value) {
             StoreSetting::set($key, is_bool($value) ? ($value ? '1' : '0') : ($value ?? ''));
         }
+
+        ActivityLogger::setting("Updated store configurations", [
+            'updated_fields' => array_keys($data),
+        ]);
 
         return back()->with('success', 'Settings saved successfully.');
     }

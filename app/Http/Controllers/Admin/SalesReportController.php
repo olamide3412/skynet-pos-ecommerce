@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\User;
+use App\Services\ActivityLogger;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -310,6 +311,12 @@ class SalesReportController extends Controller
             comment: "Order assigned to courier / staff: {$assignedName}.",
             metadata: ['assigned_staff_id' => $validated['assigned_staff_id']]
         );
+
+        ActivityLogger::order("Assigned order #{$order->tracking_number} to staff member {$assignedName}", [
+            'order_id'          => $order->id,
+            'assigned_staff_id' => $validated['assigned_staff_id'],
+            'staff_name'        => $assignedName,
+        ]);
 
         return back()->with('success', "Order #{$order->id} successfully assigned to staff.");
     }

@@ -1,5 +1,5 @@
 <script setup>
-import { Head, Link, useForm, router } from '@inertiajs/vue3';
+import { Head, Link, useForm, router, usePage } from '@inertiajs/vue3';
 import AdminLayout from '@/Layouts/AdminLayout.vue';
 import Pagination from '@/Components/Pagination.vue';
 import { ref, watch, computed, nextTick, onMounted, onUnmounted } from 'vue';
@@ -9,6 +9,7 @@ import { QuillEditor } from '@vueup/vue-quill';
 import '@vueup/vue-quill/dist/vue-quill.snow.css';
 
 const toast = useToast();
+const page = usePage();
 const props = defineProps({
     products:         Object,
     categories:       Array,
@@ -337,6 +338,58 @@ const resetFormState = () => {
     selectedRelatedProducts.value = [];
     relatedResults.value = [];
     relatedSearch.value = '';
+    aiKeywords.value = '';
+};
+
+// ── AI Product Description Generator ─────────────────────
+const isAiEnabled = computed(() => {
+    return (props.store_settings?.ai_enabled ?? page.props.store_settings?.ai_enabled) === '1';
+});
+
+const aiKeywords = ref('');
+const aiGenerating = ref({
+    short: false,
+    full: false,
+});
+
+const getSelectedCategoryName = () => {
+    if (!form.category_id || !props.categories) return '';
+    const cat = props.categories.find(c => c.id == form.category_id);
+    return cat ? cat.name : '';
+};
+
+const generateAiDescription = async (type = 'short') => {
+    if (!form.name || !form.name.trim()) {
+        toast.warning('Please enter the Product Name first before generating descriptions.');
+        return;
+    }
+
+    aiGenerating.value[type] = true;
+    try {
+        const res = await window.axios.post(route('admin.ai.generate-product-description'), {
+            type,
+            product_name: form.name.trim(),
+            category_name: getSelectedCategoryName(),
+            price: form.price ? Number(form.price) : null,
+            keywords: aiKeywords.value ? aiKeywords.value.trim() : undefined,
+        });
+
+        if (res.data.success && res.data.content) {
+            if (type === 'short') {
+                form.short_description = res.data.content;
+            } else {
+                form.description = res.data.content;
+            }
+            toast.success(`Generated ${type === 'short' ? 'short description' : 'rich full description'} successfully!`);
+        } else {
+            toast.error(res.data.message || 'Failed to generate description.');
+        }
+    } catch (e) {
+        const msg = e.response?.data?.message || 'Failed to generate AI description. Please verify your AI settings.';
+        toast.error(msg);
+    } finally {
+        aiGenerating.value[type] = false;
+    }
 };
 
 const deleteProduct = (id) => {
@@ -794,14 +847,62 @@ const submitBulkDelete = () => {
                                 </div>
                             </div>
 
+                            <!-- Optional AI Prompt Keywords / Highlights (only visible when AI Assistant is enabled) -->
+                            <div v-if="isAiEnabled" class="rounded-xl border border-purple-200 dark:border-purple-900/60 bg-purple-50/40 dark:bg-purple-950/20 p-3.5 space-y-1.5">
+                                <div class="flex items-center justify-between">
+                                    <label class="block text-xs font-bold text-purple-900 dark:text-purple-300 flex items-center gap-1.5">
+                                        <span>✨ AI Keywords / Key Selling Points</span>
+                                        <span class="font-normal text-gray-500 dark:text-gray-400 text-[11px]">(Optional)</span>
+                                    </label>
+                                    <span class="text-[11px] text-purple-600 dark:text-purple-400 font-medium">Used by AI Generate buttons below</span>
+                                </div>
+                                <input
+                                    v-model="aiKeywords"
+                                    type="text"
+                                    placeholder="e.g. 100% full cream, 28 servings, fortified with vitamin A & D, resealable lid"
+                                    class="w-full rounded-lg border-purple-200 dark:border-purple-800 dark:bg-gray-800 focus:ring-purple-500 focus:border-purple-500 shadow-sm text-sm placeholder:text-gray-400"
+                                />
+                                <p class="text-[11px] text-gray-500 dark:text-gray-400">
+                                    Enter specific features, specs, ingredients, or angles you want the AI to include. Leave blank to let AI auto-generate.
+                                </p>
+                            </div>
+
                             <div>
-                                <label class="block text-sm font-semibold mb-1">Short Description <span class="font-normal text-gray-400">(optional)</span></label>
+                                <div class="flex items-center justify-between mb-1">
+                                    <label class="block text-sm font-semibold">Short Description <span class="font-normal text-gray-400">(optional)</span></label>
+                                    <button
+                                        v-if="isAiEnabled"
+                                        type="button"
+                                        @click="generateAiDescription('short')"
+                                        :disabled="aiGenerating.short"
+                                        class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800 transition disabled:opacity-50"
+                                        title="Generate punchy 1-2 sentence plain text short description using AI"
+                                    >
+                                        <svg v-if="aiGenerating.short" class="animate-spin h-3.5 w-3.5 text-purple-600" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+                                        <span v-else>✨</span>
+                                        <span>{{ aiGenerating.short ? 'Generating...' : 'AI Generate' }}</span>
+                                    </button>
+                                </div>
                                 <textarea v-model="form.short_description" rows="2" placeholder="Brief summary of the product..."
                                     class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-primary shadow-sm resize-none"></textarea>
                             </div>
 
                             <div>
-                                <label class="block text-sm font-semibold mb-1">Full Description</label>
+                                <div class="flex items-center justify-between mb-1">
+                                    <label class="block text-sm font-semibold">Full Description</label>
+                                    <button
+                                        v-if="isAiEnabled"
+                                        type="button"
+                                        @click="generateAiDescription('full')"
+                                        :disabled="aiGenerating.full"
+                                        class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800 transition disabled:opacity-50"
+                                        title="Generate rich HTML formatted overview, key features and specs using AI"
+                                    >
+                                        <svg v-if="aiGenerating.full" class="animate-spin h-3.5 w-3.5 text-purple-600" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+                                        <span v-else>✨</span>
+                                        <span>{{ aiGenerating.full ? 'Generating HTML...' : 'AI Generate Rich HTML' }}</span>
+                                    </button>
+                                </div>
                                 <div class="bg-white dark:bg-gray-700 rounded-lg overflow-hidden border border-gray-300 dark:border-gray-600">
                                     <QuillEditor v-model:content="form.description" contentType="html" theme="snow" class="min-h-[200px]" />
                                 </div>
@@ -1008,11 +1109,11 @@ const submitBulkDelete = () => {
                             </div>
                         </div>
 
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4.5 mb-5">
                             <div>
-                                <label class="block text-sm font-semibold mb-1">
-                                    Base Price (₦) *
-                                    <span v-if="form.inventory_source === 'pos'" class="text-[10px] text-primary font-bold ml-1">(POS)</span>
+                                <label class="block text-sm font-semibold mb-1 flex items-center justify-between">
+                                    <span>Base Price (₦) *</span>
+                                    <span v-if="form.inventory_source === 'pos'" class="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded">Synced from POS</span>
                                 </label>
                                 <input
                                     v-model="form.price"
@@ -1028,19 +1129,27 @@ const submitBulkDelete = () => {
                                 <p v-if="form.errors.price" class="text-red-500 text-xs mt-1">{{ form.errors.price }}</p>
                             </div>
                             <div>
-                                <label class="block text-sm font-semibold mb-1">Cost Price (₦)</label>
-                                <input v-model="form.cost_price" type="number" step="0.01" min="0" placeholder="Internal cost"
+                                <label class="block text-sm font-semibold mb-1">
+                                    Discount Price (₦)
+                                    <span class="text-xs font-normal text-gray-400 ml-1">(Optional)</span>
+                                </label>
+                                <input v-model="form.discount_price" type="number" step="0.01" min="0" placeholder="Optional sale price"
                                     class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-primary shadow-sm"/>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-semibold mb-1">Discount Price (₦)</label>
-                                <input v-model="form.discount_price" type="number" step="0.01" min="0" placeholder="Optional"
-                                    class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-primary shadow-sm"/>
+                                <p v-if="form.errors.discount_price" class="text-red-500 text-xs mt-1">{{ form.errors.discount_price }}</p>
                             </div>
                             <div>
                                 <label class="block text-sm font-semibold mb-1">
-                                    Stock Qty *
-                                    <span v-if="form.inventory_source === 'pos'" class="text-[10px] text-primary font-bold ml-1">(POS)</span>
+                                    Cost Price (₦)
+                                    <span class="text-xs font-normal text-gray-400 ml-1">(Internal COGS)</span>
+                                </label>
+                                <input v-model="form.cost_price" type="number" step="0.01" min="0" placeholder="e.g. 5000"
+                                    class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-primary shadow-sm"/>
+                                <p v-if="form.errors.cost_price" class="text-red-500 text-xs mt-1">{{ form.errors.cost_price }}</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold mb-1 flex items-center justify-between">
+                                    <span>Stock Qty *</span>
+                                    <span v-if="form.inventory_source === 'pos'" class="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded">Synced from POS</span>
                                 </label>
                                 <input
                                     v-model="form.stock"
@@ -1454,3 +1563,63 @@ const submitBulkDelete = () => {
         </div>
     </AdminLayout>
 </template>
+
+<style scoped>
+:deep(.ql-editor) {
+    min-height: 220px;
+    font-size: 0.95rem;
+    line-height: 1.65;
+    color: inherit;
+}
+:deep(.ql-editor h2) {
+    font-size: 1.35rem;
+    font-weight: 700;
+    margin-top: 1.25rem;
+    margin-bottom: 0.5rem;
+    color: inherit;
+}
+:deep(.ql-editor h3) {
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin-top: 1rem;
+    margin-bottom: 0.4rem;
+    color: inherit;
+}
+:deep(.ql-editor p) {
+    margin-bottom: 0.75rem;
+}
+:deep(.ql-editor ul) {
+    list-style-type: disc !important;
+    padding-left: 1.5rem !important;
+    margin-bottom: 0.75rem;
+}
+:deep(.ql-editor ol) {
+    list-style-type: decimal !important;
+    padding-left: 1.5rem !important;
+    margin-bottom: 0.75rem;
+}
+:deep(.ql-editor li) {
+    margin-bottom: 0.35rem;
+}
+:deep(.ql-editor strong) {
+    font-weight: 700;
+}
+:deep(.dark .ql-toolbar.ql-snow) {
+    background-color: #1f2937;
+    border-color: #374151;
+}
+:deep(.dark .ql-toolbar.ql-snow .ql-stroke) {
+    stroke: #e5e7eb;
+}
+:deep(.dark .ql-toolbar.ql-snow .ql-fill) {
+    fill: #e5e7eb;
+}
+:deep(.dark .ql-toolbar.ql-snow .ql-picker) {
+    color: #e5e7eb;
+}
+:deep(.dark .ql-container.ql-snow) {
+    border-color: #374151;
+    background-color: #374151;
+    color: #f3f4f6;
+}
+</style>

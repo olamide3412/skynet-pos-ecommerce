@@ -231,6 +231,12 @@ class CheckoutController extends Controller
         // Deduct local stock for ecommerce-only items (Section 140L)
         $this->inventoryService->deductOrderInventory($order);
 
+        // ─── Referral Attribution & Pending Commission ─────────────────
+        $refCode = $request->cookie(\App\Services\Referral\ReferralTrackingService::COOKIE_NAME);
+        if ($refCode) {
+            app(\App\Services\Referral\AffiliateCommissionService::class)->createPending($order, $refCode);
+        }
+
         // ─── Payment Gateway Routing ──────────────────────────────────
         if ($request->gateway === 'cod' || $request->gateway === 'pod') {
             // For POD orders, clear cart immediately upon placement

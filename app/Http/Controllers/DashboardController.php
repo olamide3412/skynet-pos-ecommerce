@@ -90,30 +90,41 @@ class DashboardController extends Controller
         // POS Connection status
         $posConnection = PosConnection::select('is_connected', 'connected_at', 'pos_branch_id', 'pos_branch_name')->first();
 
-        // Recent orders (latest 7)
+        // Order transformer for dashboard views
+        $mapOrder = function ($order) use ($isAdmin, $isRider) {
+            $hasPosItems = $order->items ? $order->items->contains(function ($item) {
+                return $item->inventory_source === 'pos' || !empty($item->pos_item_id);
+            }) : false;
+
+            return [
+                'id'                    => $order->id,
+                'customer_name'         => $order->customer ? $order->customer->name : ($order->guest_email ? 'Guest (' . $order->guest_email . ')' : 'Walk-in / Unspecified'),
+                'total_amount'          => ($isAdmin || $isRider) ? (float) $order->total_amount : null,
+                'pod_status'            => $order->pod_status,
+                'pod_amount_collected'  => (float) ($order->pod_amount_collected ?: $order->total_amount),
+                'items_count'           => $order->items ? $order->items->sum('quantity') : 1,
+                'status'                => $order->status,
+                'payment_method'        => $order->payment_method,
+                'is_pos_sale'           => $hasPosItems,
+                'created_at'            => $order->created_at ? $order->created_at->diffForHumans() : 'Recently',
+                'created_date'          => $order->created_at ? $order->created_at->format('M d, H:i') : '',
+            ];
+        };
+
+        // Recent orders (latest 10)
         $recentOrders = (clone $ordersBase)->with(['customer', 'items'])
             ->latest()
-            ->limit(7)
+            ->limit(10)
             ->get()
-            ->map(function ($order) use ($isAdmin, $isRider) {
-                $hasPosItems = $order->items ? $order->items->contains(function ($item) {
-                    return $item->inventory_source === 'pos' || !empty($item->pos_item_id);
-                }) : false;
+            ->map($mapOrder);
 
-                return [
-                    'id'                    => $order->id,
-                    'customer_name'         => $order->customer ? $order->customer->name : ($order->guest_email ? 'Guest (' . $order->guest_email . ')' : 'Walk-in / Unspecified'),
-                    'total_amount'          => ($isAdmin || $isRider) ? (float) $order->total_amount : null,
-                    'pod_status'            => $order->pod_status,
-                    'pod_amount_collected'  => (float) ($order->pod_amount_collected ?: $order->total_amount),
-                    'items_count'           => $order->items ? $order->items->sum('quantity') : 1,
-                    'status'                => $order->status,
-                    'payment_method'        => $order->payment_method,
-                    'is_pos_sale'           => $hasPosItems,
-                    'created_at'            => $order->created_at ? $order->created_at->diffForHumans() : 'Recently',
-                    'created_date'          => $order->created_at ? $order->created_at->format('M d, H:i') : '',
-                ];
-            });
+        // Today's orders alone
+        $todayOrders = (clone $ordersBase)->with(['customer', 'items'])
+            ->whereDate('created_at', $today)
+            ->latest()
+            ->limit(50)
+            ->get()
+            ->map($mapOrder);
 
         // ── Financial & Executive Metrics (STRICTLY Admin & Super Admin) ──
         $financialStats = null;
@@ -225,6 +236,7 @@ class DashboardController extends Controller
             'paymentMethodsSplit'   => $paymentMethodsSplit, // empty for staff
             'lowStockProducts'      => $lowStockProducts,
             'recentOrders'          => $recentOrders,
+            'todayOrders'           => $todayOrders,
             'posStatus'             => [
                 'is_connected'      => $posConnection?->is_connected ?? false,
                 'last_connected_at' => $posConnection?->connected_at ? Carbon::parse($posConnection->connected_at)->diffForHumans() : null,

@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Order;
 use App\Models\Payment;
+use App\Services\ActivityLogger;
 use App\Services\InventoryService;
 use App\Services\PosIntegration\PosReservationService;
 use Illuminate\Console\Command;
@@ -67,9 +68,16 @@ class ExpireAbandonedOrdersCommand extends Command
                 'pos_reservation_status' => 'expired',
             ]);
 
+            // 5. Reverse any pending affiliate commission
+            app(\App\Services\Referral\AffiliateCommissionService::class)->handleOrderCancelled($order, 'Order checkout abandoned / expired');
+
             Log::info("Expired abandoned checkout for Order #{$order->id} (Ref: {$order->payment_reference}). Inventory restored.");
             $count++;
         }
+
+        ActivityLogger::system("Abandoned orders sweeper expired {$count} unpaid order(s) and restored stock", [
+            'expired_count' => $count,
+        ]);
 
         $this->info("Successfully expired {$count} abandoned order(s) and restored stock.");
         return Command::SUCCESS;

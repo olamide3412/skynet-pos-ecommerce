@@ -64,6 +64,11 @@ class PermissionCatalog
             'settings.themes' => 'Change storefront color palettes and theme styling',
             'settings.sliders' => 'Manage homepage promotional banners and sliders',
         ],
+        'Referral Program' => [
+            'affiliates.view' => 'View affiliates and referral statistics',
+            'affiliates.manage' => 'Approve, reject, suspend affiliates and edit commission overrides',
+            'affiliates.withdrawals' => 'Process and pay affiliate withdrawal requests',
+        ],
         'User Management' => [
             'users.view' => 'View back-office staff and user accounts',
             'users.create' => 'Create new staff user profiles',
@@ -93,6 +98,7 @@ class PermissionCatalog
                 'discounts.manage', 'coupons.manage',
                 'reports.sales.view_own', 'reports.sales.view_all', 'reports.sales.export', 'reports.end_of_day', 'reports.revenue_profit',
                 'pos.view', 'pos.sync', 'pos.import', 'pos.manage_connection',
+                'affiliates.view', 'affiliates.manage', 'affiliates.withdrawals',
                 'settings.store', 'settings.shipping_zones', 'settings.themes', 'settings.sliders',
                 'users.view', 'users.create', 'users.edit', 'users.disable', 'users.reset_password',
             ],

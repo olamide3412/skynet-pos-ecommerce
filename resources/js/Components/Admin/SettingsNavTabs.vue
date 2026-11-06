@@ -13,6 +13,12 @@ const tabs = [
         match: 'Admin/Settings',
     },
     {
+        label: 'AI Assistant',
+        icon: '🤖',
+        route: 'admin.ai-settings.index',
+        match: 'Admin/AiSettings',
+    },
+    {
         label: 'POS Connection & Pairing',
         icon: '🔗',
         route: 'admin.pos-connection.index',

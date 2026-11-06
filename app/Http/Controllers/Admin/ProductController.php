@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\Product;
 use App\Models\ProductPosUnit;
 use App\Models\SyncedPosItem;
+use App\Services\ActivityLogger;
 use App\Services\PosIntegration\PosApiClient;
 use App\Services\PosIntegration\PosCatalogService;
 use Illuminate\Http\Request;
@@ -224,6 +225,13 @@ class ProductController extends Controller
             }
         }
 
+        ActivityLogger::product("Created product '{$product->name}' (ID: #{$product->id})", [
+            'product_id'       => $product->id,
+            'price'            => $product->price,
+            'stock'            => $product->stock,
+            'inventory_source' => $product->inventory_source,
+        ]);
+
         return back()->with('success', 'Product created successfully.');
     }
 
@@ -267,12 +275,20 @@ class ProductController extends Controller
             }
         }
 
+        ActivityLogger::product("Updated product '{$product->name}' (ID: #{$product->id})", [
+            'product_id' => $product->id,
+            'price'      => $product->price,
+            'stock'      => $product->stock,
+        ]);
+
         return back()->with('success', 'Product updated successfully.');
     }
 
     public function destroy(Product $product)
     {
         $posItemId = $product->pos_item_id;
+        $name = $product->name;
+        $id = $product->id;
 
         $product->delete();
 
@@ -286,6 +302,10 @@ class ProductController extends Controller
         } catch (\Throwable $e) {
             // Non-blocking reconciliation
         }
+
+        ActivityLogger::product("Deleted product '{$name}' (ID: #{$id})", [
+            'product_id' => $id,
+        ]);
 
         return back()->with('success', 'Product deleted.');
     }
@@ -312,24 +332,28 @@ class ProductController extends Controller
             case 'update_category':
                 Product::whereIn('id', $ids)->update(['category_id' => $validated['category_id']]);
                 $category = Category::find($validated['category_id']);
+                ActivityLogger::product("Bulk moved {$count} product(s) to category '{$category?->name}'", ['ids' => $ids]);
                 return back()->with('success', "Moved {$count} product(s) to {$category->name}.");
 
             case 'update_status':
                 $status = filter_var($request->input('status', true), FILTER_VALIDATE_BOOLEAN);
                 Product::whereIn('id', $ids)->update(['status' => $status]);
                 $label = $status ? 'Active' : 'Inactive';
+                ActivityLogger::product("Bulk changed status of {$count} product(s) to {$label}", ['ids' => $ids, 'status' => $status]);
                 return back()->with('success', "Marked {$count} product(s) as {$label}.");
 
             case 'update_featured':
                 $featured = filter_var($request->input('is_featured', true), FILTER_VALIDATE_BOOLEAN);
                 Product::whereIn('id', $ids)->update(['is_featured' => $featured]);
                 $label = $featured ? 'Featured' : 'Standard';
+                ActivityLogger::product("Bulk updated featured flag of {$count} product(s) to {$label}", ['ids' => $ids]);
                 return back()->with('success', "Updated featured status for {$count} product(s).");
 
             case 'update_new':
                 $isNew = filter_var($request->input('is_new', true), FILTER_VALIDATE_BOOLEAN);
                 Product::whereIn('id', $ids)->update(['is_new' => $isNew]);
                 $label = $isNew ? 'New' : 'Standard';
+                ActivityLogger::product("Bulk updated New badge of {$count} product(s) to {$label}", ['ids' => $ids]);
                 return back()->with('success', "Updated New badge for {$count} product(s).");
 
             case 'update_prices':
@@ -344,6 +368,7 @@ class ProductController extends Controller
                         $newPrice = $op === 'increase' ? ($current + $delta) : max(0, $current - $delta);
                         $p->update(['price' => round($newPrice, 2)]);
                     }
+                    ActivityLogger::product("Bulk updated prices for {$count} product(s) ({$op} {$amt}" . ($type === 'percentage' ? '%' : '₦') . ")", ['ids' => $ids]);
                     return back()->with('success', "Updated prices for {$count} product(s).");
                 }
                 break;
@@ -365,6 +390,7 @@ class ProductController extends Controller
                     // Non-blocking reconciliation
                 }
 
+                ActivityLogger::product("Bulk deleted {$count} product(s)", ['ids' => $ids]);
                 return back()->with('success', "Successfully deleted {$count} product(s).");
         }
 

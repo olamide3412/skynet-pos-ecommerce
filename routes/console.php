@@ -23,6 +23,9 @@ Schedule::command('orders:expire-abandoned')->everyFiveMinutes();
 // Periodic sweep to retry unconfirmed POS reservations every 15 minutes
 Schedule::command('orders:retry-pos-confirmations')->everyFifteenMinutes();
 
+// Periodic sweep to release mature affiliate commissions into wallets
+Schedule::command('affiliates:release-commissions')->hourly();
+
 // Automatically process queued background jobs (order emails, alerts) every minute
 Schedule::command('queue:work --stop-when-empty --tries=3')
     ->everyMinute()

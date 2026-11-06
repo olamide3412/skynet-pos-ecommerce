@@ -1,7 +1,7 @@
 <script setup>
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import AdminLayout from '@/Layouts/AdminLayout.vue';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 
 const props = defineProps({
     userRole:            String,
@@ -15,11 +15,29 @@ const props = defineProps({
     paymentMethodsSplit: Array,  // empty for staff
     lowStockProducts:    Array,
     recentOrders:        Array,
+    todayOrders:         {
+        type: Array,
+        default: () => [],
+    },
     posStatus:           Object,
 });
 
 const page = usePage();
 const authUser = computed(() => page.props.auth?.user || {});
+
+const orderListTab = ref('today');
+
+const displayedOrders = computed(() => {
+    return orderListTab.value === 'today' ? (props.todayOrders || []) : (props.recentOrders || []);
+});
+
+const todayDateString = computed(() => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+});
 
 const formatPrice = (val) => {
     if (val === null || val === undefined || isNaN(val)) return '—';
@@ -418,27 +436,55 @@ const maxChartRevenue = computed(() => {
             <!-- ── Grid: Low Stock Alert Watchlist & Recent Orders ── -->
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
                 
-                <!-- Recent Orders Register (2 cols) -->
+                <!-- Recent / Today's Orders Register (2 cols) -->
                 <div class="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-xs overflow-hidden flex flex-col justify-between">
                     <div>
-                        <div class="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                        <div class="p-4 sm:p-5 border-b border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                             <div>
-                                <h2 class="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                    <span>🛒</span> Recent Orders Register
-                                </h2>
-                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                                    Latest customer transactions across all channels.
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <h2 class="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                        <span>🛒</span>
+                                        <span>{{ orderListTab === 'today' ? "Today's Orders Alone" : 'Recent Orders Register' }}</span>
+                                    </h2>
+                                    <div class="inline-flex items-center gap-1 p-0.5 bg-gray-100 dark:bg-gray-700/60 rounded-xl text-xs">
+                                        <button
+                                            @click="orderListTab = 'today'"
+                                            type="button"
+                                            class="px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1"
+                                            :class="orderListTab === 'today' ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-2xs' : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'"
+                                        >
+                                            <span>⚡ Today Alone</span>
+                                            <span class="px-1.5 py-0.2 rounded-full text-[10px] font-extrabold" :class="orderListTab === 'today' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300'">
+                                                {{ todayOrders?.length ?? 0 }}
+                                            </span>
+                                        </button>
+                                        <button
+                                            @click="orderListTab = 'recent'"
+                                            type="button"
+                                            class="px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1"
+                                            :class="orderListTab === 'recent' ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-2xs' : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'"
+                                        >
+                                            <span>🕒 All Recent</span>
+                                            <span class="px-1.5 py-0.2 rounded-full text-[10px] font-extrabold" :class="orderListTab === 'recent' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300'">
+                                                {{ recentOrders?.length ?? 0 }}
+                                            </span>
+                                        </button>
+                                    </div>
+                                </div>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    {{ orderListTab === 'today' ? "Customer transactions placed today alone." : "Latest customer transactions across all channels." }}
                                 </p>
                             </div>
                             <Link
-                                :href="route('admin.orders.index')"
-                                class="px-3.5 py-1.5 rounded-xl bg-gray-100 dark:bg-gray-700 hover:bg-primary hover:text-white text-xs font-bold transition cursor-pointer"
+                                :href="orderListTab === 'today' ? route('admin.orders.index', { start_date: todayDateString, end_date: todayDateString }) : route('admin.orders.index')"
+                                class="px-3.5 py-1.5 rounded-xl bg-gray-100 dark:bg-gray-700 hover:bg-primary hover:text-white text-xs font-bold transition cursor-pointer self-start sm:self-auto shrink-0"
                             >
-                                View All Orders →
+                                {{ orderListTab === 'today' ? "Manage Today's Orders →" : "View All Orders →" }}
                             </Link>
                         </div>
 
-                        <div class="overflow-x-auto">
+                        <!-- Desktop Table View (Hidden on mobile) -->
+                        <div class="hidden sm:block overflow-x-auto">
                             <table class="w-full text-left text-xs text-gray-600 dark:text-gray-300">
                                 <thead class="bg-gray-50 dark:bg-gray-700/50 uppercase font-bold text-[10px] text-gray-500 tracking-wider border-b border-gray-200 dark:border-gray-700">
                                     <tr>
@@ -452,7 +498,7 @@ const maxChartRevenue = computed(() => {
                                 </thead>
                                 <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
                                     <tr
-                                        v-for="order in recentOrders"
+                                        v-for="order in displayedOrders"
                                         :key="order.id"
                                         class="hover:bg-gray-50 dark:hover:bg-gray-700/40 transition"
                                     >
@@ -522,13 +568,71 @@ const maxChartRevenue = computed(() => {
                                         </td>
                                     </tr>
 
-                                    <tr v-if="!recentOrders || recentOrders.length === 0">
+                                    <tr v-if="!displayedOrders || displayedOrders.length === 0">
                                         <td :colspan="isAdmin ? 6 : 5" class="py-8 text-center text-gray-400">
-                                            No recent orders recorded yet.
+                                            {{ orderListTab === 'today' ? "No orders placed today yet." : "No recent orders recorded yet." }}
                                         </td>
                                     </tr>
                                 </tbody>
                             </table>
+                        </div>
+
+                        <!-- Mobile Card List View (Phones) -->
+                        <div class="block sm:hidden divide-y divide-gray-100 dark:divide-gray-700">
+                            <div
+                                v-for="order in displayedOrders"
+                                :key="order.id"
+                                class="p-3.5 space-y-2 hover:bg-gray-50/60 dark:hover:bg-gray-700/30 transition"
+                            >
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-1.5 font-mono font-bold text-xs text-gray-900 dark:text-white">
+                                        <span>#{{ order.id }}</span>
+                                        <span
+                                            v-if="order.is_pos_sale"
+                                            class="text-[9px] px-1 py-0.2 rounded font-sans font-bold bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300"
+                                        >
+                                            POS
+                                        </span>
+                                    </div>
+                                    <span
+                                        class="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider"
+                                        :class="{
+                                            'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300': order.status === 'pending',
+                                            'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300': order.status === 'processing',
+                                            'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300': order.status === 'completed',
+                                            'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300': order.status === 'cancelled',
+                                        }"
+                                    >
+                                        {{ order.status }}
+                                    </span>
+                                </div>
+
+                                <div class="flex items-center justify-between text-xs">
+                                    <span class="font-semibold text-gray-800 dark:text-gray-200 truncate max-w-[200px]">
+                                        {{ order.customer_name }}
+                                    </span>
+                                    <span class="text-[11px] text-gray-400">{{ order.created_at }}</span>
+                                </div>
+
+                                <div class="flex items-center justify-between pt-1 border-t border-gray-100 dark:border-gray-700/60 text-xs">
+                                    <div>
+                                        <div v-if="isAdmin || isRider" class="font-black text-gray-900 dark:text-white">
+                                            {{ formatPrice(order.total_amount) }}
+                                        </div>
+                                        <span class="text-[10px] text-gray-400">{{ order.items_count }} item(s)</span>
+                                    </div>
+                                    <Link
+                                        :href="route('admin.orders.show', order.id)"
+                                        class="px-3 py-1 rounded-lg bg-primary/10 text-primary hover:bg-primary hover:text-white font-bold text-xs transition"
+                                    >
+                                        View Details →
+                                    </Link>
+                                </div>
+                            </div>
+
+                            <div v-if="!displayedOrders || displayedOrders.length === 0" class="py-8 text-center text-xs text-gray-400">
+                                {{ orderListTab === 'today' ? "No orders placed today yet." : "No recent orders recorded yet." }}
+                            </div>
                         </div>
                     </div>
                 </div>
