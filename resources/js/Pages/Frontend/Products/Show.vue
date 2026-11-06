@@ -270,6 +270,7 @@ const structuredData = computed(() => JSON.stringify({
     <Head>
         <title>{{ seoTitle }}</title>
         <meta name="description" :content="seoDescription" />
+        <meta v-if="product.meta_keywords" name="keywords" :content="product.meta_keywords" />
         <link rel="canonical" :href="pageUrl" />
 
         <!-- Open Graph / Social Media -->

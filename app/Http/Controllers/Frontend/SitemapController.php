@@ -14,6 +14,14 @@ class SitemapController extends Controller
      */
     public function index(): Response
     {
+        if (config('app.debug', false)) {
+            return response("Sitemap is disabled in debug/demo mode.\n", 403, [
+                'Content-Type'  => 'text/plain; charset=utf-8',
+                'X-Robots-Tag'  => 'noindex, nofollow, noarchive',
+                'Cache-Control' => 'no-cache, no-store, must-revalidate',
+            ]);
+        }
+
         $baseUrl = url('/');
         $today = now()->format('Y-m-d');
 
@@ -95,6 +103,16 @@ class SitemapController extends Controller
      */
     public function robots(): Response
     {
+        if (config('app.debug', false)) {
+            $content = "User-agent: *\nDisallow: /\n";
+
+            return response($content, 200, [
+                'Content-Type'  => 'text/plain; charset=utf-8',
+                'X-Robots-Tag'  => 'noindex, nofollow, noarchive',
+                'Cache-Control' => 'no-cache, no-store, must-revalidate',
+            ]);
+        }
+
         $sitemapUrl = url('/sitemap.xml');
 
         $content = "User-agent: *\n";

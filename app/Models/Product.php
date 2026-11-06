@@ -18,7 +18,7 @@ class Product extends Model
         'special_price', 'special_price_from', 'special_price_to',
         'stock', 'image', 'images', 'variants', 'attributes', 'related_products', 'status',
         'is_new', 'is_featured', 'visible_individually', 'show_stock_level',
-        'short_description',
+        'short_description', 'meta_title', 'meta_description', 'meta_keywords',
         // POS Integration fields
         'inventory_source', 'pos_item_id', 'pos_item_name_snapshot',
         'pos_base_unit_name', 'pos_sync_status', 'pos_item_updated_at', 'last_pos_sync_at',

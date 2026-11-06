@@ -67,6 +67,10 @@ const form = useForm({
     sku:               '',
     short_description: '',
     description:       '',
+    // SEO
+    meta_title:        '',
+    meta_description:  '',
+    meta_keywords:     '',
     // Pricing
     price:             '',
     cost_price:        '',
@@ -87,6 +91,7 @@ const form = useForm({
     // Media & Variants
     image:   null,
     images:  [],
+    compress_images: true,
     variants: [],
     attributes: {},
 });
@@ -265,6 +270,7 @@ const save = () => {
 
     form.transform(data => ({
         ...data,
+        compress_images: data.compress_images ? 1 : 0,
         variants: JSON.stringify(data.variants),
         attributes: JSON.stringify(data.attributes),
         related_products: JSON.stringify(data.related_products),
@@ -284,6 +290,7 @@ const openCreateForm = () => {
     form._method = 'POST';
     isEditing.value = false;
     form.show_stock_level = props.store_settings?.show_stock_level_default === '1';
+    form.compress_images = true;
     isFormVisible.value = true;
     initRelatedSearch();
 };
@@ -302,6 +309,9 @@ const openEditForm = (p) => {
     form.sku               = p.sku || '';
     form.short_description = p.short_description || '';
     form.description       = p.description || '';
+    form.meta_title        = p.meta_title || '';
+    form.meta_description  = p.meta_description || '';
+    form.meta_keywords     = p.meta_keywords || '';
     form.price             = p.price;
     form.cost_price        = p.cost_price || '';
     form.discount_price    = p.discount_price || '';
@@ -314,6 +324,7 @@ const openEditForm = (p) => {
     form.is_featured       = p.is_featured;
     form.visible_individually = p.visible_individually;
     form.show_stock_level  = p.show_stock_level;
+    form.compress_images   = true;
     form.related_products  = p.related_products || [];
     form.variants          = p.variants || [];
     form.attributes        = p.attributes || {};
@@ -333,23 +344,33 @@ const resetFormState = () => {
     posSearchQuery.value = '';
     editId.value = null; imagePreview.value = null; galleryPreviews.value = [];
     form.status = true; form.visible_individually = true; form.show_stock_level = true;
+    form.compress_images = true;
+    form.meta_title = '';
+    form.meta_description = '';
+    form.meta_keywords = '';
     form.related_products = [];
     form.attributes = {};
     selectedRelatedProducts.value = [];
     relatedResults.value = [];
     relatedSearch.value = '';
     aiKeywords.value = '';
+    aiSuggestingRelated.value = false;
 };
 
-// ── AI Product Description Generator ─────────────────────
+// ── AI Product Description & SEO Generator ───────────────
 const isAiEnabled = computed(() => {
     return (props.store_settings?.ai_enabled ?? page.props.store_settings?.ai_enabled) === '1';
+});
+
+const storeUrlDomain = computed(() => {
+    return typeof window !== 'undefined' ? (window.location.host || 'yourstore.com') : 'yourstore.com';
 });
 
 const aiKeywords = ref('');
 const aiGenerating = ref({
     short: false,
     full: false,
+    seo: false,
 });
 
 const getSelectedCategoryName = () => {
@@ -371,24 +392,82 @@ const generateAiDescription = async (type = 'short') => {
             product_name: form.name.trim(),
             category_name: getSelectedCategoryName(),
             price: form.price ? Number(form.price) : null,
-            keywords: aiKeywords.value ? aiKeywords.value.trim() : undefined,
+            keywords: (type === 'seo' && form.meta_keywords) ? form.meta_keywords : (aiKeywords.value ? aiKeywords.value.trim() : undefined),
         });
 
-        if (res.data.success && res.data.content) {
+        if (res.data.success) {
             if (type === 'short') {
                 form.short_description = res.data.content;
-            } else {
+                toast.success('Generated short description successfully!');
+            } else if (type === 'full') {
                 form.description = res.data.content;
+                toast.success('Generated rich full description successfully!');
+            } else if (type === 'seo') {
+                if (res.data.seo) {
+                    form.meta_title = res.data.seo.meta_title || '';
+                    form.meta_description = res.data.seo.meta_description || '';
+                    form.meta_keywords = res.data.seo.meta_keywords || '';
+                }
+                toast.success('Generated SEO metadata (Title, Description, Keywords) successfully!');
             }
-            toast.success(`Generated ${type === 'short' ? 'short description' : 'rich full description'} successfully!`);
         } else {
-            toast.error(res.data.message || 'Failed to generate description.');
+            toast.error(res.data.message || 'Failed to generate AI content.');
         }
     } catch (e) {
-        const msg = e.response?.data?.message || 'Failed to generate AI description. Please verify your AI settings.';
+        const msg = e.response?.data?.message || 'Failed to generate AI content. Please verify your AI settings.';
         toast.error(msg);
     } finally {
         aiGenerating.value[type] = false;
+    }
+};
+
+const aiSuggestingRelated = ref(false);
+
+const suggestAiRelatedProducts = async () => {
+    if (!form.name || !form.name.trim()) {
+        toast.warning('Please enter the Product Name first so AI can identify relevant matches.');
+        return;
+    }
+
+    aiSuggestingRelated.value = true;
+    try {
+        const res = await window.axios.post(route('admin.ai.suggest-related-products'), {
+            product_name: form.name.trim(),
+            category_id: form.category_id ? Number(form.category_id) : undefined,
+            category_name: getSelectedCategoryName(),
+            current_product_id: editId.value || undefined,
+            description: form.short_description || undefined,
+            limit: 5,
+        });
+
+        if (res.data.success && res.data.products && res.data.products.length > 0) {
+            let addedCount = 0;
+            res.data.products.forEach(p => {
+                if (!form.related_products.includes(p.id)) {
+                    form.related_products.push(p.id);
+                    addedCount++;
+                }
+                const existingIdx = selectedRelatedProducts.value.findIndex(existing => existing.id === p.id);
+                if (existingIdx === -1) {
+                    selectedRelatedProducts.value.push(p);
+                } else if (p.ai_reason) {
+                    selectedRelatedProducts.value[existingIdx].ai_reason = p.ai_reason;
+                }
+            });
+
+            if (addedCount > 0) {
+                toast.success(`✨ AI selected ${addedCount} related products!`);
+            } else {
+                toast.info('AI analyzed catalog; suggested products were already selected.');
+            }
+        } else {
+            toast.warning(res.data.message || 'No related products found in the catalog.');
+        }
+    } catch (e) {
+        const msg = e.response?.data?.message || 'Failed to suggest related products with AI.';
+        toast.error(msg);
+    } finally {
+        aiSuggestingRelated.value = false;
     }
 };
 
@@ -1230,20 +1309,38 @@ const submitBulkDelete = () => {
 
                     <!-- Related Products Picker -->
                     <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border dark:border-gray-700">
-                        <h3 class="text-base font-bold mb-1 flex items-center gap-2">
-                            <span class="w-6 h-6 bg-primary-soft text-primary rounded flex items-center justify-center text-sm">🔗</span>
-                            Related Products
-                        </h3>
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
-                            Hand-pick products for the "You may also like" section. If none selected, same-category products are shown automatically.
-                        </p>
+                        <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
+                            <div>
+                                <h3 class="text-base font-bold flex items-center gap-2">
+                                    <span class="w-6 h-6 bg-primary-soft text-primary rounded flex items-center justify-center text-sm">🔗</span>
+                                    Related Products
+                                </h3>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                    Hand-pick products for the "You may also like" section. If none selected, same-category products are shown automatically.
+                                </p>
+                            </div>
+                            <button
+                                v-if="isAiEnabled"
+                                type="button"
+                                @click="suggestAiRelatedProducts"
+                                :disabled="aiSuggestingRelated"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800 transition disabled:opacity-50 shadow-xs"
+                                title="AI scans your catalog to pick complementary accessories and cross-sells"
+                            >
+                                <svg v-if="aiSuggestingRelated" class="animate-spin h-3.5 w-3.5 text-purple-600" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+                                <span v-else>✨</span>
+                                <span>{{ aiSuggestingRelated ? 'Matching...' : 'AI Suggest Related' }}</span>
+                            </button>
+                        </div>
 
                         <!-- Selected chips -->
                         <div v-if="selectedRelatedProducts.length" class="flex flex-wrap gap-2 mb-4">
                             <div v-for="rp in selectedRelatedProducts" :key="rp.id"
-                                class="flex items-center gap-1.5 bg-primary-soft text-primary text-xs font-medium px-2 py-1 rounded-full border border-primary-soft">
+                                class="flex items-center gap-1.5 bg-primary-soft text-primary text-xs font-medium px-2.5 py-1 rounded-full border border-primary-soft"
+                                :title="rp.ai_reason ? `AI Reason: ${rp.ai_reason}` : rp.name">
                                 <img v-if="rp.image" :src="'/storage/' + rp.image" class="w-4 h-4 rounded-full object-cover"/>
-                                {{ rp.name.length > 25 ? rp.name.substring(0,25) + '…' : rp.name }}
+                                <span>{{ rp.name.length > 25 ? rp.name.substring(0,25) + '…' : rp.name }}</span>
+                                <span v-if="rp.ai_reason" class="text-[11px] font-bold text-purple-600 dark:text-purple-400" :title="rp.ai_reason">✨</span>
                                 <button @click.prevent="removeRelated(rp.id)" class="text-primary hover:text-red-500 ml-1 font-bold leading-none">&times;</button>
                             </div>
                         </div>
@@ -1279,6 +1376,118 @@ const submitBulkDelete = () => {
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
                                 </svg>
                             </button>
+                        </div>
+                    </div>
+
+                    <!-- Search Engine Optimization (SEO) -->
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border dark:border-gray-700">
+                        <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+                            <div>
+                                <h3 class="text-base font-bold flex items-center gap-2">
+                                    <span class="w-6 h-6 bg-blue-100 dark:bg-blue-900/40 text-blue-600 rounded flex items-center justify-center text-sm">🔍</span>
+                                    Search Engine Optimization (SEO)
+                                </h3>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    Control how this product appears on Google, search engines, and social media shares.
+                                </p>
+                            </div>
+                            <button
+                                v-if="isAiEnabled"
+                                type="button"
+                                @click="generateAiDescription('seo')"
+                                :disabled="aiGenerating.seo"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800 transition disabled:opacity-50 shadow-xs"
+                                title="Generate high-ranking Meta Title, Meta Description & Keywords using AI"
+                            >
+                                <svg v-if="aiGenerating.seo" class="animate-spin h-3.5 w-3.5 text-purple-600" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+                                <span v-else>✨</span>
+                                <span>{{ aiGenerating.seo ? 'Generating SEO...' : 'AI Generate SEO' }}</span>
+                            </button>
+                        </div>
+
+                        <!-- Google Search Live Preview -->
+                        <div class="mb-5 p-4 rounded-lg bg-gray-50 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700">
+                            <div class="flex items-center gap-2 mb-2 text-xs text-gray-400 font-medium">
+                                <svg class="w-3.5 h-3.5 text-gray-400" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+                                <span>Google Search Result Preview</span>
+                            </div>
+                            <div class="space-y-1">
+                                <div class="text-xs text-gray-600 dark:text-gray-400 truncate">
+                                    https://{{ storeUrlDomain }}/product/{{ form.url_key || 'product-slug' }}
+                                </div>
+                                <div class="text-base font-medium text-blue-600 dark:text-blue-400 hover:underline line-clamp-1 cursor-pointer">
+                                    {{ form.meta_title || form.name || 'Your Product Title Will Appear Here' }}
+                                </div>
+                                <p class="text-xs text-gray-600 dark:text-gray-300 line-clamp-2">
+                                    {{ form.meta_description || form.short_description || 'Write a meta description or click "AI Generate SEO" to automatically produce an optimized snippet for search engines.' }}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="space-y-4">
+                            <!-- Meta Title -->
+                            <div>
+                                <div class="flex items-center justify-between mb-1">
+                                    <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                        SEO Meta Title
+                                    </label>
+                                    <span class="text-xs" :class="(form.meta_title?.length || 0) > 60 ? 'text-amber-500 font-semibold' : 'text-gray-400'">
+                                        {{ form.meta_title?.length || 0 }} / 60 chars (recommended: 50-60)
+                                    </span>
+                                </div>
+                                <input
+                                    v-model="form.meta_title"
+                                    type="text"
+                                    maxlength="70"
+                                    placeholder="e.g. Wireless Noise Cancelling Headphones - Premium Audio"
+                                    class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-primary shadow-sm text-sm"
+                                />
+                                <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                                    Leave blank to automatically use the product name.
+                                </p>
+                                <p v-if="form.errors.meta_title" class="text-red-500 text-xs mt-1">{{ form.errors.meta_title }}</p>
+                            </div>
+
+                            <!-- Meta Description -->
+                            <div>
+                                <div class="flex items-center justify-between mb-1">
+                                    <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                        SEO Meta Description
+                                    </label>
+                                    <span class="text-xs" :class="(form.meta_description?.length || 0) > 160 ? 'text-amber-500 font-semibold' : 'text-gray-400'">
+                                        {{ form.meta_description?.length || 0 }} / 160 chars (recommended: 120-160)
+                                    </span>
+                                </div>
+                                <textarea
+                                    v-model="form.meta_description"
+                                    rows="3"
+                                    maxlength="255"
+                                    placeholder="Brief summary displayed under the link in search results (approx 150-160 characters)..."
+                                    class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-primary shadow-sm text-sm resize-none"
+                                ></textarea>
+                                <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                                    Leave blank to automatically use the product's short description.
+                                </p>
+                                <p v-if="form.errors.meta_description" class="text-red-500 text-xs mt-1">{{ form.errors.meta_description }}</p>
+                            </div>
+
+                            <!-- Meta Keywords -->
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                                    SEO Meta Keywords <span class="font-normal text-gray-400">(comma-separated)</span>
+                                </label>
+                                <input
+                                    v-model="form.meta_keywords"
+                                    type="text"
+                                    maxlength="255"
+                                    placeholder="e.g. bluetooth headphones, wireless audio, noise cancelling, skynet"
+                                    class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-primary shadow-sm text-sm"
+                                />
+                                <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                                    Target search keywords separated by commas.
+                                </p>
+                                <p v-if="form.errors.meta_keywords" class="text-red-500 text-xs mt-1">{{ form.errors.meta_keywords }}</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1381,10 +1590,36 @@ const submitBulkDelete = () => {
 
                     <!-- Media Panel -->
                     <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border dark:border-gray-700">
-                        <h3 class="text-base font-bold mb-4 flex items-center gap-2">
-                            <span class="w-6 h-6 bg-primary-soft text-primary rounded flex items-center justify-center text-sm">🖼️</span>
-                            Product Media
-                        </h3>
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-base font-bold flex items-center gap-2">
+                                <span class="w-6 h-6 bg-primary-soft text-primary rounded flex items-center justify-center text-sm">🖼️</span>
+                                Product Media
+                            </h3>
+                        </div>
+
+                        <!-- Image Compression Toggle (On by Default) -->
+                        <div class="mb-5 p-3 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-800/40">
+                            <div class="flex items-center justify-between gap-3">
+                                <div class="flex items-start gap-2">
+                                    <span class="text-emerald-600 dark:text-emerald-400 text-sm mt-0.5">⚡</span>
+                                    <div>
+                                        <p class="text-xs font-bold text-gray-800 dark:text-gray-200">
+                                            Compress Images
+                                        </p>
+                                        <p class="text-[11px] text-gray-500 dark:text-gray-400 leading-tight mt-0.5">
+                                            Auto-optimize thumbnail & gallery to modern WebP for faster page load.
+                                        </p>
+                                    </div>
+                                </div>
+                                <button type="button" @click="form.compress_images = !form.compress_images"
+                                    class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition"
+                                    :class="form.compress_images ? 'bg-emerald-600' : 'bg-gray-200 dark:bg-gray-600'"
+                                    :title="form.compress_images ? 'Image compression enabled' : 'Image compression disabled'">
+                                    <span class="inline-block h-3.5 w-3.5 transform rounded-full bg-white transition shadow"
+                                        :class="form.compress_images ? 'translate-x-4' : 'translate-x-0.5'"/>
+                                </button>
+                            </div>
+                        </div>
 
                         <!-- Thumbnail -->
                         <div class="mb-5">

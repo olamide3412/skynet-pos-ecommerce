@@ -332,5 +332,173 @@ class AdminAiProductDescriptionTest extends TestCase
         $this->assertEquals('sk-deepseek-live-key', StoreSetting::get('ai_deepseek_key'));
         $this->assertEquals('deepseek-chat', StoreSetting::get('ai_deepseek_model'));
     }
+
+    public function test_it_generates_seo_metadata_with_ai_provider(): void
+    {
+        StoreSetting::set('ai_enabled', '1');
+        StoreSetting::set('ai_active_provider', 'gemini');
+        StoreSetting::set('ai_gemini_key', 'test-gemini-key');
+        StoreSetting::set('ai_gemini_model', 'gemini-2.5-flash');
+
+        $seoJson = json_encode([
+            'meta_title' => 'iPhone 15 Pro Max 256GB - Buy in Nigeria | Skynet Store',
+            'meta_description' => 'Buy the authentic iPhone 15 Pro Max with titanium finish and A17 Pro chip. Enjoy same-day delivery and warranty.',
+            'meta_keywords' => 'iphone 15 pro max, titanium iphone, buy iphone lagos, apple smartphone nigeria',
+        ]);
+
+        Http::fake([
+            'https://generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [
+                    [
+                        'content' => [
+                            'parts' => [
+                                ['text' => "```json\n" . $seoJson . "\n```"]
+                            ]
+                        ]
+                    ]
+                ]
+            ], 200),
+        ]);
+
+        $response = $this->actingAs($this->admin, 'web')
+            ->postJson(route('admin.ai.generate-product-description'), [
+                'type' => 'seo',
+                'product_name' => 'iPhone 15 Pro Max',
+                'category_name' => 'Smartphones',
+                'price' => 1200000,
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'type' => 'seo',
+                'seo' => [
+                    'meta_title' => 'iPhone 15 Pro Max 256GB - Buy in Nigeria | Skynet Store',
+                    'meta_description' => 'Buy the authentic iPhone 15 Pro Max with titanium finish and A17 Pro chip. Enjoy same-day delivery and warranty.',
+                    'meta_keywords' => 'iphone 15 pro max, titanium iphone, buy iphone lagos, apple smartphone nigeria',
+                ],
+            ]);
+    }
+
+    public function test_product_can_be_stored_and_updated_with_seo_metadata(): void
+    {
+        $category = \App\Models\Category::create([
+            'name' => 'Audio & Sound',
+            'slug' => 'audio-sound',
+        ]);
+
+        $createPayload = [
+            'name' => 'Sony WH-1000XM5 Wireless Headphones',
+            'inventory_source' => 'ecommerce',
+            'url_key' => 'sony-wh-1000xm5',
+            'category_id' => $category->id,
+            'price' => 450000,
+            'stock' => 15,
+            'status' => true,
+            'visible_individually' => true,
+            'meta_title' => 'Sony WH-1000XM5 Noise Cancelling Headphones',
+            'meta_description' => 'Best industry-leading wireless noise cancelling headphones by Sony with 30-hour battery life.',
+            'meta_keywords' => 'sony headphones, wh-1000xm5, noise cancelling, bluetooth audio',
+        ];
+
+        $storeResponse = $this->actingAs($this->admin, 'web')
+            ->post(route('admin.products.store'), $createPayload);
+
+        $storeResponse->assertRedirect();
+        $this->assertDatabaseHas('products', [
+            'name' => 'Sony WH-1000XM5 Wireless Headphones',
+            'meta_title' => 'Sony WH-1000XM5 Noise Cancelling Headphones',
+            'meta_description' => 'Best industry-leading wireless noise cancelling headphones by Sony with 30-hour battery life.',
+            'meta_keywords' => 'sony headphones, wh-1000xm5, noise cancelling, bluetooth audio',
+        ]);
+
+        $product = \App\Models\Product::where('name', 'Sony WH-1000XM5 Wireless Headphones')->firstOrFail();
+
+        $updatePayload = array_merge($product->toArray(), [
+            'meta_title' => 'Updated Sony WH-1000XM5 SEO Title',
+            'meta_description' => 'Updated SEO meta description for Sony WH-1000XM5.',
+            'meta_keywords' => 'updated, sony, headphones',
+        ]);
+
+        $updateResponse = $this->actingAs($this->admin, 'web')
+            ->put(route('admin.products.update', $product->id), $updatePayload);
+
+        $updateResponse->assertRedirect();
+        $this->assertDatabaseHas('products', [
+            'id' => $product->id,
+            'meta_title' => 'Updated Sony WH-1000XM5 SEO Title',
+            'meta_description' => 'Updated SEO meta description for Sony WH-1000XM5.',
+            'meta_keywords' => 'updated, sony, headphones',
+        ]);
+    }
+
+    public function test_it_suggests_related_products_using_ai(): void
+    {
+        StoreSetting::set('ai_enabled', '1');
+        StoreSetting::set('ai_active_provider', 'gemini');
+        StoreSetting::set('ai_gemini_key', 'test-gemini-key');
+        StoreSetting::set('ai_gemini_model', 'gemini-2.5-flash');
+
+        $category = \App\Models\Category::create(['name' => 'Phones & Accessories', 'slug' => 'phones-accessories']);
+
+        $case = \App\Models\Product::create([
+            'name' => 'Silicone Case for iPhone 15',
+            'inventory_source' => 'ecommerce',
+            'url_key' => 'silicone-case-iphone-15',
+            'category_id' => $category->id,
+            'price' => 15000,
+            'stock' => 50,
+            'status' => true,
+            'slug' => 'silicone-case-iphone-15',
+            'pos_sync_status' => 'synced',
+        ]);
+
+        $charger = \App\Models\Product::create([
+            'name' => '20W USB-C Fast Charger',
+            'inventory_source' => 'ecommerce',
+            'url_key' => '20w-fast-charger',
+            'category_id' => $category->id,
+            'price' => 20000,
+            'stock' => 30,
+            'status' => true,
+            'slug' => '20w-fast-charger',
+            'pos_sync_status' => 'synced',
+        ]);
+
+        $mockJson = json_encode([
+            ['id' => $case->id, 'reason' => 'Protective case specifically for this phone model'],
+            ['id' => $charger->id, 'reason' => 'Fast charger essential for optimal battery charging'],
+        ]);
+
+        Http::fake([
+            'https://generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [
+                    [
+                        'content' => [
+                            'parts' => [
+                                ['text' => "```json\n" . $mockJson . "\n```"]
+                            ]
+                        ]
+                    ]
+                ]
+            ], 200),
+        ]);
+
+        $response = $this->actingAs($this->admin, 'web')
+            ->postJson(route('admin.ai.suggest-related-products'), [
+                'product_name' => 'iPhone 15 Pro 256GB',
+                'category_id' => $category->id,
+                'category_name' => 'Smartphones',
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'ids' => [$case->id, $charger->id],
+            ]);
+
+        $this->assertCount(2, $response->json('products'));
+        $this->assertEquals('Protective case specifically for this phone model', $response->json('products.0.ai_reason'));
+    }
 }
 

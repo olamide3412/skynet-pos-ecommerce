@@ -22,12 +22,14 @@ class SettingsController extends Controller
     public function update(Request $request)
     {
         $data = $request->validate([
-            // Company Branding
+            // Company Branding & SEO
             'company_name'                  => 'nullable|string|max:255',
             'company_email'                 => 'nullable|email|max:255',
             'company_phone'                 => 'nullable|string|max:50',
             'company_address'               => 'nullable|string|max:500',
             'company_tagline'               => 'nullable|string|max:500',
+            'meta_description'              => 'nullable|string|max:500',
+            'meta_keywords'                 => 'nullable|string|max:500',
 
             // Homepage Hero Content
             'home_slider_enabled'           => 'boolean',

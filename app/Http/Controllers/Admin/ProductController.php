@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\ProductPosUnit;
 use App\Models\SyncedPosItem;
 use App\Services\ActivityLogger;
+use App\Services\ImageOptimizer;
 use App\Services\PosIntegration\PosApiClient;
 use App\Services\PosIntegration\PosCatalogService;
 use Illuminate\Http\Request;
@@ -18,11 +19,16 @@ class ProductController extends Controller
 {
     protected PosCatalogService $catalogService;
     protected PosApiClient $apiClient;
+    protected ImageOptimizer $imageOptimizer;
 
-    public function __construct(PosCatalogService $catalogService, PosApiClient $apiClient)
-    {
+    public function __construct(
+        PosCatalogService $catalogService,
+        PosApiClient $apiClient,
+        ImageOptimizer $imageOptimizer
+    ) {
         $this->catalogService = $catalogService;
         $this->apiClient = $apiClient;
+        $this->imageOptimizer = $imageOptimizer;
     }
 
     public function index(Request $request)
@@ -112,6 +118,9 @@ class ProductController extends Controller
             'category_id'          => 'required|exists:categories,id',
             'short_description'    => 'nullable|string',
             'description'          => 'nullable|string',
+            'meta_title'           => 'nullable|string|max:255',
+            'meta_description'     => 'nullable|string|max:1000',
+            'meta_keywords'        => 'nullable|string|max:1000',
             'url_key'              => "required|string|max:255|unique:products,url_key{$uniqueSuffix}",
             'product_number'       => "nullable|string|max:100|unique:products,product_number{$uniqueSuffix}",
             'sku'                  => "nullable|string|max:100|unique:products,sku{$uniqueSuffix}",
@@ -131,9 +140,10 @@ class ProductController extends Controller
             'related_products.*'   => 'exists:products,id',
             'variants'             => 'nullable|string',
             'attributes'           => 'nullable|string',
-            'image'                => 'nullable|image|max:3072',
+            'image'                => 'nullable|image|max:10240',
             'images'               => 'nullable|array|max:10',
-            'images.*'             => 'image|max:3072',
+            'images.*'             => 'image|max:10240',
+            'compress_images'      => 'nullable',
         ];
     }
 
@@ -160,7 +170,7 @@ class ProductController extends Controller
         } else {
             $validated['inventory_source'] = 'ecommerce';
             $validated['pos_item_id'] = null;
-            $validated['pos_sync_status'] = null;
+            $validated['pos_sync_status'] = 'synced';
         }
 
         // related_products comes as a JSON string from FormData
@@ -176,16 +186,34 @@ class ProductController extends Controller
             $validated['attributes'] = json_decode($request->input('attributes'), true);
         }
 
+        $shouldCompress = filter_var($request->input('compress_images', true), FILTER_VALIDATE_BOOLEAN);
+        unset($validated['compress_images']);
+
+        $baseSlug = !empty($validated['url_key'])
+            ? Str::slug($validated['url_key'])
+            : Str::slug($validated['name'] ?? 'product');
+
         if ($request->hasFile('image')) {
-            $validated['image'] = $request->file('image')->store('products', 'public');
+            $validated['image'] = $this->imageOptimizer->store(
+                file: $request->file('image'),
+                directory: 'products',
+                compress: $shouldCompress,
+                slug: $baseSlug
+            );
         } else {
             unset($validated['image']);
         }
 
         if ($request->hasFile('images')) {
             $paths = [];
-            foreach ($request->file('images') as $file) {
-                $paths[] = $file->store('products', 'public');
+            foreach ($request->file('images') as $index => $file) {
+                $gallerySlug = "{$baseSlug}-gallery-" . ($index + 1);
+                $paths[] = $this->imageOptimizer->store(
+                    file: $file,
+                    directory: 'products',
+                    compress: $shouldCompress,
+                    slug: $gallerySlug
+                );
             }
             $validated['images'] = $paths;
         } else {

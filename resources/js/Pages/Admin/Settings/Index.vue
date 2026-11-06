@@ -20,6 +20,8 @@ const form = useForm({
     company_email:          props.settings.company_email || 'support@skynetdigitalhub.com.ng',
     company_phone:          props.settings.company_phone || '+2348032072831',
     company_address:        props.settings.company_address || 'Delta State, Nigeria',
+    meta_description:       props.settings.meta_description || '',
+    meta_keywords:          props.settings.meta_keywords || '',
     company_logo:           null,
     // Order Notifications & Staff Alerts
     order_notifications_enabled:   props.settings.order_notifications_enabled !== '0',
@@ -203,6 +205,16 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Office Address</label>
                                 <textarea v-model="form.company_address" rows="2" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2"></textarea>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">SEO Meta Description</label>
+                                <textarea v-model="form.meta_description" rows="2" placeholder="Brief summary of your store for Google search results..." class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm"></textarea>
+                                <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Recommended: 150-160 characters describing your store.</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">SEO Meta Keywords</label>
+                                <input type="text" v-model="form.meta_keywords" placeholder="e.g. online store, electronics, gadgets, buy online" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm" />
+                                <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Comma-separated search keywords.</p>
                             </div>
                         </div>
                         

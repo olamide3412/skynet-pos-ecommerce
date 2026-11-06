@@ -40,6 +40,13 @@ createInertiaApp({
         if (props.initialPage?.props?.store_settings) {
             const s = props.initialPage.props.store_settings;
             themeStore.applyBrandColors(s.theme_primary_color, s.theme_secondary_color, s.theme_dark_mode_text_color);
+            if (s.company_logo) {
+                const logoPath = '/storage/' + s.company_logo;
+                const iconLink = document.querySelector("link[rel*='icon']");
+                if (iconLink) {
+                    iconLink.href = logoPath;
+                }
+            }
         }
 
         app.config.globalProperties.$formatDate = formatDate;

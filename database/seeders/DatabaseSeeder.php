@@ -67,6 +67,8 @@ class DatabaseSeeder extends Seeder
             'company_email' => 'support@skynetdigitalhub.com.ng',
             'company_phone' => '+2348032072831',
             'company_address' => 'Delta State, Nigeria',
+            'meta_description' => 'Your one-stop destination for premium tech, gadgets, and quality digital accessories with fast delivery.',
+            'meta_keywords' => 'Skynet Digital Store, online shopping Nigeria, buy electronics online, computers, gaming accessories',
 
             // Homepage Hero
             'hero_enabled' => '1',

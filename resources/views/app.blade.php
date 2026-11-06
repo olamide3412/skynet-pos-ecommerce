@@ -4,17 +4,33 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
-        <title inertia>{{ config('app.name', 'Skynet Digital Limited') }}</title>
+        @php
+            $companyName = \App\Models\StoreSetting::get('company_name', config('app.name', 'Skynet Digital Limited'));
+            $companyTagline = \App\Models\StoreSetting::get('company_tagline', 'Professional Technology Solutions & E-Commerce');
+            $metaDescription = \App\Models\StoreSetting::get('meta_description') ?: ($companyName . ' - ' . $companyTagline . '. Discover premium products, authentic brands, and quality gear.');
+            $metaKeywords = \App\Models\StoreSetting::get('meta_keywords') ?: ($companyName . ', Online Shopping, E-Commerce, Quality Products, Buy Online Nigeria');
+            $companyLogo = \App\Models\StoreSetting::get('company_logo');
+            $logoUrl = $companyLogo ? asset('storage/' . $companyLogo) : Vite::asset('resources/images/logo.png');
+            $themePrimary = \App\Models\StoreSetting::get('theme_primary_color', '#7B00FF');
+            $themeSecondary = \App\Models\StoreSetting::get('theme_secondary_color', '#FBA43D');
+            $themeDarkModeText = \App\Models\StoreSetting::get('theme_dark_mode_text_color', '#FFFFFF');
+        @endphp
 
-        <meta name="description" content="Skynet Digital Limited offers professional technology solutions, networking, product development, IT training, and maintenance services. Trusted expertise for your digital growth.">
-        <meta name="keywords" content="Skynet Digital, Skynet Digital Limited, Tech Company Nigeria, Networking Services, Product Development, IT Training Nigeria, AI, Tech Solutions Delta State">
+        <title inertia>{{ $companyName }}</title>
+
+        <meta name="description" content="{{ $meta['description'] ?? $metaDescription }}">
+        <meta name="keywords" content="{{ $meta['keywords'] ?? $metaKeywords }}">
         <link rel="canonical" href="{{ url()->current() }}">
-        <meta name="robots" content="index, follow">
+        @if (config('app.debug', false))
+            <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+        @else
+            <meta name="robots" content="index, follow">
+        @endif
 
         @isset($meta)
             <meta property="og:title" content="{{ $meta['title'] }}">
-            <meta property="og:description" content="{{ $meta['description'] }}">
-            <meta property="og:image" content="{{ $meta['image'] }}">
+            <meta property="og:description" content="{{ $meta['description'] ?? $metaDescription }}">
+            <meta property="og:image" content="{{ $meta['image'] ?? $logoUrl }}">
             <meta property="og:type" content="{{ $meta['type'] ?? 'website' }}">
             <meta property="og:url" content="{{ url()->current() }}">
             <meta property="fb:app_id" content="1440937930739472">
@@ -23,22 +39,22 @@
 
             <meta name="twitter:card" content="summary_large_image">
             <meta name="twitter:title" content="{{ $meta['title'] }}">
-            <meta name="twitter:description" content="{{ $meta['description'] }}">
-            <meta name="twitter:image" content="{{ $meta['image'] }}">
+            <meta name="twitter:description" content="{{ $meta['description'] ?? $metaDescription }}">
+            <meta name="twitter:image" content="{{ $meta['image'] ?? $logoUrl }}">
         @else
-            <meta property="og:title" content="Skynet Digital Limited">
-            <meta property="og:description" content="Skynet Digital Limited provides professional technology solutions, including networking, product development, and IT training.">
+            <meta property="og:title" content="{{ $companyName }}">
+            <meta property="og:description" content="{{ $metaDescription }}">
             <meta property="og:type" content="website">
             <meta property="fb:app_id" content="1440937930739472">
-            <meta property="og:image" content="{{ asset('images/logo.png') }}">
+            <meta property="og:image" content="{{ $logoUrl }}">
             <meta property="og:image:width" content="1200">
             <meta property="og:image:height" content="630">
             <meta property="og:url" content="{{ url()->current() }}">
 
             <meta name="twitter:card" content="summary_large_image">
-            <meta name="twitter:title" content="Skynet Digital Limited">
-            <meta name="twitter:description" content="Professional technology solutions, networking, product development, and IT training.">
-            <meta name="twitter:image" content="{{ asset('images/logo.png') }}">
+            <meta name="twitter:title" content="{{ $companyName }}">
+            <meta name="twitter:description" content="{{ $metaDescription }}">
+            <meta name="twitter:image" content="{{ $logoUrl }}">
         @endisset
 
 
@@ -46,10 +62,10 @@
             {
                 "@@context": "https://schema.org",
                 "@type": "Organization",
-                "name": "Skynet Digital Limited",
-                "description": "Skynet Digital Limited provides professional technology solutions, including networking, product development, and IT training.",
-                "url": "https://skynetdigitalhub.com.ng",
-                "logo": "{{ Vite::asset('resources/images/logo.png') }}",
+                "name": "{{ $companyName }}",
+                "description": "{{ $metaDescription }}",
+                "url": "{{ url('/') }}",
+                "logo": "{{ $logoUrl }}",
                 "sameAs": [
                     "https://wa.me/2348032072831"
                 ],
@@ -72,7 +88,9 @@
         </script>
 
 
-        <link rel="icon" type="image/png" href="{{ Vite::asset('resources/images/logo.png') }}">
+        <link rel="icon" href="{{ $logoUrl }}">
+        <link rel="shortcut icon" href="{{ $logoUrl }}">
+        <link rel="apple-touch-icon" href="{{ $logoUrl }}">
 
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net">
@@ -108,16 +126,6 @@
             </style>
             @endverbatim
         @endif
-
-
-        @php
-            $themePrimary = \App\Models\StoreSetting::get('theme_primary_color', '#7B00FF');
-            $themeSecondary = \App\Models\StoreSetting::get('theme_secondary_color', '#FBA43D');
-            $themeDarkModeText = \App\Models\StoreSetting::get('theme_dark_mode_text_color', '#FFFFFF');
-            $companyLogo = \App\Models\StoreSetting::get('company_logo');
-            $logoUrl = $companyLogo ? asset('storage/' . $companyLogo) : Vite::asset('resources/images/logo.png');
-            $companyName = \App\Models\StoreSetting::get('company_name', 'EasyPick.NG');
-        @endphp
         <style id="skynet-theme-variables">
             :root {
                 --color-primary: {{ $themePrimary }};

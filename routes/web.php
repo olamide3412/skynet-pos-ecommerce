@@ -21,6 +21,7 @@ use Inertia\Inertia;
 
 /* |-------------------------------------------------------------------------- | PUBLIC STOREFRONT ROUTES |-------------------------------------------------------------------------- */
 Route::get('/sitemap.xml', [\App\Http\Controllers\Frontend\SitemapController::class, 'index'])->name('sitemap');
+Route::get('/site.xml', [\App\Http\Controllers\Frontend\SitemapController::class, 'index'])->name('sitemap.alias');
 Route::get('/robots.txt', [\App\Http\Controllers\Frontend\SitemapController::class, 'robots'])->name('robots');
 
 Route::get('/', [HomeController::class , 'index'])->name('home');
@@ -196,6 +197,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('products/related-by-ids', [AdminProductController::class , 'relatedByIds'])->name('products.related-by-ids');
             // AI Product Content & Assistant
             Route::post('ai/generate-product-description', [\App\Http\Controllers\Admin\AiController::class, 'generateProductDescription'])->name('ai.generate-product-description');
+            Route::post('ai/suggest-related-products', [\App\Http\Controllers\Admin\AiController::class, 'suggestRelatedProducts'])->name('ai.suggest-related-products');
             Route::post('ai/test-connection', [\App\Http\Controllers\Admin\AiController::class, 'testConnection'])->name('ai.test-connection');
             Route::resource('attributes', \App\Http\Controllers\Admin\AttributeController::class)->except(['create', 'edit', 'show']);
             Route::patch('users/{user}/toggle-status', [\App\Http\Controllers\Admin\UserController::class, 'toggleStatus'])->name('users.toggle-status');

@@ -13,6 +13,8 @@ class P3SeoAndPerformanceTest extends TestCase
 
     public function test_sitemap_xml_returns_valid_structure_with_active_products_and_categories(): void
     {
+        config(['app.debug' => false]);
+
         $category = Category::create([
             'name' => 'Laptops & Computers',
             'slug' => 'laptops-computers',
@@ -65,12 +67,34 @@ class P3SeoAndPerformanceTest extends TestCase
 
     public function test_robots_txt_contains_sitemap_and_disallowed_paths(): void
     {
+        config(['app.debug' => false]);
         $response = $this->get('/robots.txt');
 
         $response->assertStatus(200);
         $response->assertSee('Disallow: /admin/');
         $response->assertSee('Disallow: /checkout/');
         $response->assertSee('Sitemap:');
+    }
+
+    public function test_debug_mode_blocks_crawlers_and_rejects_sitemap(): void
+    {
+        config(['app.debug' => true]);
+
+        // Sitemap must reject with 403 Forbidden
+        $sitemapResponse = $this->get('/sitemap.xml');
+        $sitemapResponse->assertStatus(403);
+        $sitemapResponse->assertHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+
+        // site.xml alias must also reject with 403 Forbidden
+        $siteAliasResponse = $this->get('/site.xml');
+        $siteAliasResponse->assertStatus(403);
+
+        // robots.txt must disallow all crawlers entirely
+        $robotsResponse = $this->get('/robots.txt');
+        $robotsResponse->assertStatus(200);
+        $robotsResponse->assertSee("User-agent: *\nDisallow: /", false);
+        $robotsResponse->assertDontSee('Sitemap:');
+        $robotsResponse->assertHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
     }
 }
 
