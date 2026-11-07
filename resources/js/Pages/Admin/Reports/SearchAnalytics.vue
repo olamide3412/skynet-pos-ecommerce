@@ -195,7 +195,7 @@ const activeTab = ref('top');
                                 </td>
                                 <td class="px-5 py-3.5 text-right">
                                     <Link
-                                        :href="route('products.index')"
+                                        :href="route('admin.products.index', { search: item.normalized_query })"
                                         class="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline"
                                     >
                                         + Add to catalog

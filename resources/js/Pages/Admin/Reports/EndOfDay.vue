@@ -1,7 +1,7 @@
 <script setup>
 import { Head, Link, router } from '@inertiajs/vue3';
 import AdminLayout from '@/Layouts/AdminLayout.vue';
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 
 const props = defineProps({
     date: String,
@@ -65,6 +65,12 @@ const perPage = 25;
 
 watch(orderSearch, () => {
     ordersPage.value = 1;
+});
+
+watch(() => props.date, (newDate) => {
+    if (newDate) {
+        selectedDate.value = newDate;
+    }
 });
 
 const totalProductsPages = computed(() => Math.ceil((props.products_sold?.length || 0) / perPage));
