@@ -16,7 +16,8 @@ class ActivityLogger
         string $description,
         ?array $details = null,
         ?int $userId = null,
-        ?string $actorType = null
+        ?string $actorType = null,
+        ?string $actorName = null
     ): ?ActivityLog {
         try {
             $user = auth('web')->user();
@@ -25,16 +26,16 @@ class ActivityLogger
             if ($resolvedUserId && !$actorType) {
                 if ($user && $user->id === $resolvedUserId) {
                     $actorType = in_array($user->role, ['super administrator', 'administrator'], true) ? 'admin' : 'staff';
-                    $actorName = $user->name;
+                    $actorName = $actorName ?? $user->name;
                 } else {
                     $actorType = 'admin';
-                    $actorName = 'User #' . $resolvedUserId;
+                    $actorName = $actorName ?? ('User #' . $resolvedUserId);
                 }
             } elseif (!$resolvedUserId) {
-                $actorType = 'system';
-                $actorName = 'System Bot';
+                $actorType = $actorType ?? 'system';
+                $actorName = $actorName ?? 'System Bot';
             } else {
-                $actorName = $user?->name ?? ('User #' . $resolvedUserId);
+                $actorName = $actorName ?? ($user?->name ?? ('User #' . $resolvedUserId));
             }
 
             $req = request();
@@ -105,6 +106,11 @@ class ActivityLogger
     public static function system(string $message, ?array $details = null): ?ActivityLog
     {
         return self::log('system', $message, $details, null, 'system');
+    }
+
+    public static function webhook(string $message, ?array $details = null, string $provider = 'Payment Webhook'): ?ActivityLog
+    {
+        return self::log('webhook', $message, $details, null, 'system', $provider);
     }
 }
 

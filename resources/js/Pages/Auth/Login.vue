@@ -168,7 +168,7 @@ const handleLogin = () => {
                     </div>
                 </template>
                 <div class=" hidden text-center">
-                    <a href="#" class="text-sm text-indigo-600 hover:text-indigo-500" @click.prevent="reloadTurnstile">
+                    <a href="#" class="text-sm text-primary hover:opacity-80" @click.prevent="reloadTurnstile">
                         Reload CAPTCHA
                     </a>
                 </div>

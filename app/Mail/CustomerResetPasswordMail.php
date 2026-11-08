@@ -25,10 +25,11 @@ class CustomerResetPasswordMail extends Mailable
     {
         $this->customer = $customer;
         $this->token = $token;
-        $this->resetUrl = route('password.reset', [
+        $relativeReset = route('password.reset', [
             'token' => $token,
             'email' => $customer->email,
-        ]);
+        ], false);
+        $this->resetUrl = StoreSetting::getBaseUrl(ltrim($relativeReset, '/'));
         $this->storeName = StoreSetting::get('company_name', config('app.name', 'Skynet Store'));
         $this->themeColor = StoreSetting::get('theme_primary_color', '#FF4B00');
         $this->companyLogo = StoreSetting::get('company_logo', null);

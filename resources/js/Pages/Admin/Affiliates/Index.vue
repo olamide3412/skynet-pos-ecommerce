@@ -81,7 +81,7 @@ const quickUpdateStatus = (affiliate, newStatus) => {
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <h1 class="text-2xl font-black text-gray-900 dark:text-white tracking-tight flex items-center gap-2.5">
-                        <span class="w-9 h-9 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-lg">🤝</span>
+                        <span class="w-9 h-9 rounded-xl bg-primary-soft text-primary flex items-center justify-center text-lg">🤝</span>
                         Affiliates & Referral Program
                     </h1>
                     <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">
@@ -101,7 +101,7 @@ const quickUpdateStatus = (affiliate, newStatus) => {
                     </Link>
                     <button
                         @click="showEnrollModal = true"
-                        class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-2 shadow-xs cursor-pointer"
+                        class="bg-primary hover:bg-primary-dark text-white text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-2 shadow-xs cursor-pointer"
                     >
                         <span>+ Enroll Customer</span>
                     </button>
@@ -113,7 +113,7 @@ const quickUpdateStatus = (affiliate, newStatus) => {
                 <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-xs">
                     <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Total Affiliates</p>
                     <p class="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white mt-1">{{ metrics.total_affiliates }}</p>
-                    <span class="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 mt-0.5 block">{{ metrics.approved_affiliates }} approved & active</span>
+                    <span class="text-[11px] font-medium text-primary mt-0.5 block">{{ metrics.approved_affiliates }} approved & active</span>
                 </div>
 
                 <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-xs">
@@ -140,7 +140,7 @@ const quickUpdateStatus = (affiliate, newStatus) => {
                 <div class="flex flex-wrap items-center gap-1.5 w-full md:w-auto">
                     <button
                         @click="filterStatus('')"
-                        :class="!filters.status ? 'bg-indigo-600 text-white font-bold' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'"
+                        :class="!filters.status ? 'bg-primary text-white font-bold shadow-xs' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'"
                         class="px-3.5 py-1.5 rounded-xl text-xs transition cursor-pointer"
                     >
                         All ({{ metrics.total_affiliates }})
@@ -198,14 +198,14 @@ const quickUpdateStatus = (affiliate, newStatus) => {
                             <tr v-for="item in affiliates.data" :key="item.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/40 transition">
                                 <td class="px-5 py-4">
                                     <div class="flex items-center gap-3">
-                                        <div class="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold flex items-center justify-center text-xs shrink-0">
+                                        <div class="w-9 h-9 rounded-xl bg-primary-soft text-primary font-bold flex items-center justify-center text-xs shrink-0">
                                             {{ item.customer?.name ? item.customer.name.substring(0, 2).toUpperCase() : 'AF' }}
                                         </div>
                                         <div>
                                             <p class="font-bold text-gray-900 dark:text-white">{{ item.customer?.name || 'Unknown Customer' }}</p>
                                             <p class="text-xs text-gray-400">{{ item.customer?.email }}</p>
                                             <div class="flex items-center gap-1.5 mt-1">
-                                                <code class="px-1.5 py-0.5 rounded text-[11px] font-mono font-bold bg-gray-100 dark:bg-gray-700 text-indigo-600 dark:text-indigo-300">
+                                                <code class="px-1.5 py-0.5 rounded text-[11px] font-mono font-bold bg-primary-soft text-primary border border-primary-soft">
                                                     {{ item.referral_code }}
                                                 </code>
                                                 <span class="text-[11px] text-gray-400">{{ item.visits_count || 0 }} clicks</span>
@@ -234,7 +234,7 @@ const quickUpdateStatus = (affiliate, newStatus) => {
 
                                 <td class="px-5 py-4 text-center">
                                     <div v-if="item.commission_rate !== null">
-                                        <span class="px-2 py-0.5 rounded-lg text-xs font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                                        <span class="px-2 py-0.5 rounded-lg text-xs font-bold bg-primary-soft text-primary border border-primary-soft">
                                             {{ item.commission_type === 'flat' ? `₦${Number(item.commission_rate).toLocaleString()}` : `${item.commission_rate}%` }}
                                         </span>
                                         <span class="text-[10px] text-gray-400 block mt-0.5">Custom Override</span>
@@ -247,7 +247,7 @@ const quickUpdateStatus = (affiliate, newStatus) => {
                                     </div>
 
                                     <div class="mt-1 text-[10px]">
-                                        <span v-if="item.min_order_amount !== null" class="text-indigo-600 dark:text-indigo-400 font-semibold">
+                                        <span v-if="item.min_order_amount !== null" class="text-primary font-semibold">
                                             Min: {{ Number(item.min_order_amount) > 0 ? `₦${Number(item.min_order_amount).toLocaleString()}` : 'None (₦0)' }}
                                         </span>
                                         <span v-else-if="Number(store_defaults.min_order_amount) > 0" class="text-gray-400">
@@ -380,7 +380,7 @@ const quickUpdateStatus = (affiliate, newStatus) => {
                         <button type="button" @click="showEnrollModal = false" class="px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-600 text-xs font-bold">
                             Cancel
                         </button>
-                        <button type="submit" :disabled="enrollForm.processing" class="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition disabled:opacity-60">
+                        <button type="submit" :disabled="enrollForm.processing" class="px-5 py-2 rounded-xl bg-primary hover:bg-primary-dark text-white text-xs font-bold transition disabled:opacity-60 shadow-xs">
                             {{ enrollForm.processing ? 'Enrolling...' : 'Enroll & Generate Code' }}
                         </button>
                     </div>

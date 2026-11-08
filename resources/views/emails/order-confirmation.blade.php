@@ -1,19 +1,17 @@
 @php
     $themeColor = $themeColor ?? \App\Models\StoreSetting::get('theme_primary_color', '#FF4B00');
-    $rawLogo = $companyLogo ?? \App\Models\StoreSetting::get('company_logo', null);
-    $logoUrl = null;
-    if ($rawLogo) {
-        if (\Illuminate\Support\Str::startsWith($rawLogo, ['http://', 'https://'])) {
-            $logoUrl = $rawLogo;
-        } elseif (\Illuminate\Support\Str::startsWith($rawLogo, '/storage/')) {
-            $logoUrl = url($rawLogo);
-        } elseif (\Illuminate\Support\Str::startsWith($rawLogo, 'storage/')) {
-            $logoUrl = url($rawLogo);
-        } else {
-            $logoUrl = url('storage/' . $rawLogo);
+    $storeUrl   = \App\Models\StoreSetting::getBaseUrl();
+    $logoPath   = \App\Models\StoreSetting::getLogoPath();
+    $logoUrl    = null;
+
+    if (isset($message) && is_object($message) && method_exists($message, 'embed') && $logoPath && file_exists($logoPath)) {
+        try {
+            $logoUrl = $message->embed($logoPath);
+        } catch (\Throwable $e) {
+            $logoUrl = \App\Models\StoreSetting::getLogoUrl();
         }
-    } elseif (file_exists(public_path('images/logo.png'))) {
-        $logoUrl = url('images/logo.png');
+    } else {
+        $logoUrl = \App\Models\StoreSetting::getLogoUrl();
     }
 @endphp
 <!DOCTYPE html>
@@ -216,7 +214,7 @@
                     <tr>
                         <td class="header">
                             @if(!empty($logoUrl))
-                                <a href="{{ url('/') }}" target="_blank" style="text-decoration: none; display: inline-block;">
+                                <a href="{{ $storeUrl }}" target="_blank" style="text-decoration: none; display: inline-block;">
                                     <img src="{{ $logoUrl }}" alt="{{ $storeName }}" height="42" style="max-height: 42px; max-width: 200px; width: auto; border: 0; display: block; margin: 0 auto 8px auto;" />
                                 </a>
                             @else
@@ -348,7 +346,7 @@
                             <table role="presentation" style="margin: 28px 0 10px 0; width: 100%;">
                                 <tr>
                                     <td align="center">
-                                        <a href="{{ url('/track/' . $order->tracking_number) }}" class="btn-primary" target="_blank">
+                                        <a href="{{ \App\Models\StoreSetting::getBaseUrl('track/' . $order->tracking_number) }}" class="btn-primary" target="_blank">
                                             Track Order Status Online &rarr;
                                         </a>
                                     </td>

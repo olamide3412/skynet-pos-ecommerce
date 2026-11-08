@@ -67,7 +67,7 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
             <div class="flex items-center justify-between mb-8">
                 <div>
                     <h1 class="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2.5">
-                        <span class="p-2 rounded-xl bg-purple-500/10 text-purple-600">🎉</span>
+                        <span class="p-2 rounded-xl bg-primary-soft text-primary">🎉</span>
                         Promo Flyers & Popups
                     </h1>
                     <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
@@ -173,7 +173,7 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                 <section class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-xs overflow-hidden">
                     <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/60 flex items-center justify-between">
                         <div class="flex items-center gap-3">
-                            <span class="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                            <span class="w-10 h-10 rounded-xl bg-primary-soft text-primary flex items-center justify-center shrink-0">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/>
                                 </svg>
@@ -252,12 +252,12 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                                     <div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-4 text-center bg-gray-50 dark:bg-gray-900/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition">
                                         <svg class="w-7 h-7 text-gray-400 mx-auto mb-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
                                         <p class="text-xs text-gray-500 mb-2">Upload popup flyer image (PNG, JPG, WebP up to 12MB)</p>
-                                        <input type="file" @change="handlePromoPopupImageUpload" accept="image/*" class="text-xs text-gray-500 file:mr-2 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-purple-100 text-purple-700 cursor-pointer" />
+                                        <input type="file" @change="handlePromoPopupImageUpload" accept="image/*" class="text-xs text-gray-500 file:mr-2 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary-soft file:text-primary cursor-pointer" />
                                     </div>
                                     <p v-if="form.promo_popup_image" class="text-xs text-green-600 mt-2 font-semibold">✓ New flyer selected — click Save All Settings below to apply.</p>
 
                                     <!-- Auto-Optimize Popup Flyer Toggle -->
-                                    <div class="mt-3 flex items-center justify-between p-3 rounded-xl bg-purple-50/60 dark:bg-purple-950/20 border border-purple-200/60 dark:border-purple-900/40">
+                                    <div class="mt-3 flex items-center justify-between p-3 rounded-xl bg-primary-soft/30 border border-primary-soft">
                                         <div class="flex items-center gap-2.5">
                                             <span class="text-base">⚡</span>
                                             <div>

@@ -11,6 +11,7 @@ use App\Models\ShippingZone;
 use App\Models\StoreSetting;
 use App\Mail\AdminNewOrderAlertMail;
 use App\Mail\CustomerOrderConfirmationMail;
+use App\Services\ActivityLogger;
 use App\Services\FlutterwaveService;
 use App\Services\InventoryService;
 use App\Services\PaystackService;
@@ -595,6 +596,12 @@ class CheckoutController extends Controller
         
         if ($request->header('x-paystack-signature') !== hash_hmac('sha512', $request->getContent(), $secretKey)) {
             Log::warning('Invalid Paystack Webhook Signature', $request->all());
+            ActivityLogger::webhook("Rejected Paystack webhook: Invalid signature", [
+                'headers' => [
+                    'x-paystack-signature' => $request->header('x-paystack-signature'),
+                ],
+                'payload' => $request->all(),
+            ], 'Paystack Webhook');
             return response()->json(['status' => 'error', 'message' => 'Invalid signature'], 401);
         }
 
@@ -637,9 +644,49 @@ class CheckoutController extends Controller
                         }
 
                         Log::info("Paystack webhook: payment successful and POS reservation confirmed for Order #{$order->id}");
+
+                        ActivityLogger::webhook("Paystack webhook: Verified payment of ₦" . number_format($order->total_amount, 2) . " for Order #{$order->tracking_number} (Ref: {$reference})", [
+                            'event'           => $event,
+                            'reference'       => $reference,
+                            'order_id'        => $order->id,
+                            'tracking_number' => $order->tracking_number,
+                            'amount_paid'     => ($data['amount'] ?? 0) / 100,
+                            'order_total'     => (float) $order->total_amount,
+                            'channel'         => $data['channel'] ?? null,
+                            'customer_email'  => $data['customer']['email'] ?? $order->customer_email,
+                            'customer_name'   => $order->customer_name,
+                        ], 'Paystack Webhook');
+                    } else {
+                        ActivityLogger::webhook("Paystack webhook: Payment amount mismatch for Order #{$order->tracking_number} (Paid: ₦" . number_format(($data['amount'] ?? 0) / 100, 2) . ", Expected: ₦" . number_format($order->total_amount, 2) . ")", [
+                            'event'           => $event,
+                            'reference'       => $reference,
+                            'order_id'        => $order->id,
+                            'tracking_number' => $order->tracking_number,
+                            'amount_paid'     => ($data['amount'] ?? 0) / 100,
+                            'order_total'     => (float) $order->total_amount,
+                        ], 'Paystack Webhook');
                     }
+                } elseif ($order) {
+                    ActivityLogger::webhook("Paystack webhook: Received 'charge.success' for Order #{$order->tracking_number} (Ref: {$reference}), but order status is already '{$order->status}'", [
+                        'event'           => $event,
+                        'reference'       => $reference,
+                        'order_id'        => $order->id,
+                        'tracking_number' => $order->tracking_number,
+                        'order_status'    => $order->status,
+                    ], 'Paystack Webhook');
+                } else {
+                    ActivityLogger::webhook("Paystack webhook: Received 'charge.success' (Ref: {$reference}), but no matching order was found", [
+                        'event'     => $event,
+                        'reference' => $reference,
+                        'amount'    => ($data['amount'] ?? 0) / 100,
+                    ], 'Paystack Webhook');
                 }
             }
+        } else {
+            ActivityLogger::webhook("Paystack webhook received event '{$event}'", [
+                'event'   => $event,
+                'payload' => $data,
+            ], 'Paystack Webhook');
         }
 
         return response()->json(['status' => 'success']);
@@ -652,6 +699,10 @@ class CheckoutController extends Controller
 
         if (!$signature || $signature !== $secretHash) {
             Log::warning('Invalid Flutterwave Webhook Signature');
+            ActivityLogger::webhook("Rejected Flutterwave webhook: Invalid signature", [
+                'received_hash' => $signature,
+                'payload'       => $request->all(),
+            ], 'Flutterwave Webhook');
             return response()->json(['status' => 'error', 'message' => 'Invalid signature'], 401);
         }
 
@@ -694,9 +745,49 @@ class CheckoutController extends Controller
                         }
 
                         Log::info("Flutterwave webhook: payment successful and POS reservation confirmed for Order #{$order->id}");
+
+                        ActivityLogger::webhook("Flutterwave webhook: Verified payment of ₦" . number_format($order->total_amount, 2) . " for Order #{$order->tracking_number} (tx_ref: {$txRef})", [
+                            'event'           => $event,
+                            'tx_ref'          => $txRef,
+                            'flw_ref'         => $data['flw_ref'] ?? null,
+                            'order_id'        => $order->id,
+                            'tracking_number' => $order->tracking_number,
+                            'amount_paid'     => $data['amount'] ?? 0,
+                            'order_total'     => (float) $order->total_amount,
+                            'customer_email'  => $data['customer']['email'] ?? $order->customer_email,
+                            'customer_name'   => $order->customer_name,
+                        ], 'Flutterwave Webhook');
+                    } else {
+                        ActivityLogger::webhook("Flutterwave webhook: Payment amount mismatch for Order #{$order->tracking_number} (Paid: ₦" . number_format($data['amount'] ?? 0, 2) . ", Expected: ₦" . number_format($order->total_amount, 2) . ")", [
+                            'event'           => $event,
+                            'tx_ref'          => $txRef,
+                            'order_id'        => $order->id,
+                            'tracking_number' => $order->tracking_number,
+                            'amount_paid'     => $data['amount'] ?? 0,
+                            'order_total'     => (float) $order->total_amount,
+                        ], 'Flutterwave Webhook');
                     }
+                } elseif ($order) {
+                    ActivityLogger::webhook("Flutterwave webhook: Received 'charge.completed' for Order #{$order->tracking_number} (tx_ref: {$txRef}), but order status is already '{$order->status}'", [
+                        'event'           => $event,
+                        'tx_ref'          => $txRef,
+                        'order_id'        => $order->id,
+                        'tracking_number' => $order->tracking_number,
+                        'order_status'    => $order->status,
+                    ], 'Flutterwave Webhook');
+                } else {
+                    ActivityLogger::webhook("Flutterwave webhook: Received 'charge.completed' (tx_ref: {$txRef}), but no matching order was found", [
+                        'event'   => $event,
+                        'tx_ref'  => $txRef,
+                        'amount'  => $data['amount'] ?? 0,
+                    ], 'Flutterwave Webhook');
                 }
             }
+        } else {
+            ActivityLogger::webhook("Flutterwave webhook received event '{$event}'", [
+                'event'   => $event,
+                'payload' => $data,
+            ], 'Flutterwave Webhook');
         }
 
         return response()->json(['status' => 'success']);

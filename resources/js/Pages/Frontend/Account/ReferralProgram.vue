@@ -94,7 +94,7 @@ const submitWithdrawal = () => {
             <div class="mb-8 flex flex-wrap items-center justify-between gap-4 border-b border-gray-200 dark:border-gray-800 pb-4">
                 <div>
                     <h1 class="text-3xl font-extrabold text-gray-900 dark:text-white flex items-center gap-2.5">
-                        <span class="w-10 h-10 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xl">🤝</span>
+                        <span class="w-10 h-10 rounded-2xl bg-primary-soft text-primary flex items-center justify-center text-xl">🤝</span>
                         Referral Program
                     </h1>
                     <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Recommend products, earn commission on purchases, and withdraw cash to your bank account.</p>
@@ -120,7 +120,7 @@ const submitWithdrawal = () => {
                     </Link>
                     <Link
                         :href="route('customer.referral.index')"
-                        class="px-4 py-2 rounded-lg text-sm font-bold bg-indigo-600 text-white shadow-xs"
+                        class="px-4 py-2 rounded-lg text-sm font-bold bg-primary hover:bg-primary-dark text-white shadow-xs transition"
                     >
                         Referral Program
                     </Link>
@@ -130,16 +130,16 @@ const submitWithdrawal = () => {
             <!-- STATE 1: NOT APPLIED YET -->
             <div v-if="!has_applied" class="space-y-8">
                 <!-- Promo Hero Banner -->
-                <div class="bg-gradient-to-br from-indigo-900 via-indigo-800 to-primary text-white rounded-3xl p-8 sm:p-10 shadow-xl relative overflow-hidden">
+                <div class="bg-gradient-to-br from-gray-900 via-gray-800 to-primary text-white rounded-3xl p-8 sm:p-10 shadow-xl relative overflow-hidden">
                     <div class="max-w-2xl space-y-4 relative z-10">
-                        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wider bg-white/10 backdrop-blur-md border border-white/20 text-indigo-100">
+                        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wider bg-white/10 backdrop-blur-md border border-white/20 text-white">
                             Partner with {{ companyName }}
                         </span>
                         <h2 class="text-3xl sm:text-4xl font-black tracking-tight leading-tight">
                             Share Products. <br />
                             <span class="text-amber-300">Earn Cash Commissions.</span>
                         </h2>
-                        <p class="text-sm sm:text-base text-indigo-100/90 leading-relaxed">
+                        <p class="text-sm sm:text-base text-gray-200 leading-relaxed">
                             Join our selective affiliate program. When friends, clients, or followers purchase through your unique referral link, you receive
                             <strong>{{ default_commission.type === 'flat' ? `₦${Number(default_commission.rate).toLocaleString()} per order` : `${default_commission.rate}% on every item` }}</strong> credited straight to your virtual wallet<span v-if="Number(default_commission.min_order_amount) > 0"> (on orders of <strong>₦{{ Number(default_commission.min_order_amount).toLocaleString() }}</strong> or more)</span>.
                         </p>
@@ -150,17 +150,17 @@ const submitWithdrawal = () => {
                         <div class="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/10">
                             <span class="text-2xl font-black text-amber-300">1</span>
                             <h3 class="font-bold text-sm mt-1">Apply & Get Approved</h3>
-                            <p class="text-xs text-indigo-100/80 mt-1">Submit your payout bank details. Our management team reviews and activates your account.</p>
+                            <p class="text-xs text-gray-200/90 mt-1">Submit your payout bank details. Our management team reviews and activates your account.</p>
                         </div>
                         <div class="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/10">
                             <span class="text-2xl font-black text-amber-300">2</span>
                             <h3 class="font-bold text-sm mt-1">Share Your Link</h3>
-                            <p class="text-xs text-indigo-100/80 mt-1">Share your link via WhatsApp, social media, or directly with buyers. Clicks stay tracked for 30 days.</p>
+                            <p class="text-xs text-gray-200/90 mt-1">Share your link via WhatsApp, social media, or directly with buyers. Clicks stay tracked for 30 days.</p>
                         </div>
                         <div class="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/10">
                             <span class="text-2xl font-black text-amber-300">3</span>
                             <h3 class="font-bold text-sm mt-1">Withdraw Cash</h3>
-                            <p class="text-xs text-indigo-100/80 mt-1">Once orders are fulfilled, withdraw your available earnings directly to your Nigerian bank.</p>
+                            <p class="text-xs text-gray-200/90 mt-1">Once orders are fulfilled, withdraw your available earnings directly to your Nigerian bank.</p>
                         </div>
                     </div>
                 </div>
@@ -232,7 +232,7 @@ const submitWithdrawal = () => {
                         <button
                             type="submit"
                             :disabled="applyForm.processing"
-                            class="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition shadow-sm disabled:opacity-60 cursor-pointer"
+                            class="w-full py-3 rounded-xl bg-primary hover:bg-primary-dark text-white font-bold text-sm transition shadow-sm disabled:opacity-60 cursor-pointer"
                         >
                             {{ applyForm.processing ? 'Submitting Application...' : 'Submit Affiliate Application' }}
                         </button>
@@ -278,12 +278,12 @@ const submitWithdrawal = () => {
                 <div class="bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 p-6 sm:p-7 shadow-xs space-y-5">
                     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b dark:border-gray-700">
                         <div>
-                            <span class="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Your Affiliate Link</span>
+                            <span class="text-xs font-bold uppercase tracking-wider text-primary">Your Affiliate Link</span>
                             <h2 class="text-lg font-black text-gray-900 dark:text-white mt-0.5">Share and Earn</h2>
                         </div>
                         <div class="flex items-center gap-2">
                             <span class="text-xs font-semibold text-gray-400">Your Partner Code:</span>
-                            <code class="px-2.5 py-1 rounded-lg font-mono font-black text-sm bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                            <code class="px-2.5 py-1 rounded-lg font-mono font-black text-sm bg-primary-soft text-primary border border-primary-soft">
                                 {{ referral_code }}
                             </code>
                         </div>
@@ -299,7 +299,7 @@ const submitWithdrawal = () => {
                         />
                         <button
                             @click="copyReferralLink"
-                            class="px-6 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs sm:text-sm transition flex items-center justify-center gap-2 shadow-xs cursor-pointer shrink-0"
+                            class="px-6 py-3 rounded-2xl bg-primary hover:bg-primary-dark text-white font-bold text-xs sm:text-sm transition flex items-center justify-center gap-2 shadow-xs cursor-pointer shrink-0"
                         >
                             <span>{{ copied ? '✓ Copied!' : '📋 Copy Link' }}</span>
                         </button>
@@ -384,10 +384,10 @@ const submitWithdrawal = () => {
                 </div>
 
                 <!-- Rate & Performance Bar -->
-                <div class="bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 text-xs">
+                <div class="bg-primary-soft border border-primary-soft rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 text-xs">
                     <div class="flex items-center gap-2 flex-wrap">
-                        <span class="font-bold text-indigo-900 dark:text-indigo-200">Your Commission Rate:</span>
-                        <span class="px-2.5 py-1 rounded-lg bg-indigo-600 text-white font-black">
+                        <span class="font-bold text-primary">Your Commission Rate:</span>
+                        <span class="px-2.5 py-1 rounded-lg bg-primary text-white font-black">
                             {{ commission_display.type === 'flat' ? `₦${Number(commission_display.rate).toLocaleString()} per Order` : `${commission_display.rate}% of Sales` }}
                         </span>
                         <span
@@ -403,7 +403,7 @@ const submitWithdrawal = () => {
                             (All orders qualify)
                         </span>
                     </div>
-                    <div class="flex items-center gap-4 text-indigo-700 dark:text-indigo-300">
+                    <div class="flex items-center gap-4 text-primary font-semibold">
                         <span><strong>{{ stats.visits_count }}</strong> Link Clicks</span>
                         <span>•</span>
                         <span><strong>{{ stats.referred_orders }}</strong> Referred Orders</span>
@@ -416,21 +416,21 @@ const submitWithdrawal = () => {
                 <div class="flex items-center gap-2 border-b border-gray-200 dark:border-gray-700 pb-2">
                     <button
                         @click="activeTab = 'commissions'"
-                        :class="activeTab === 'commissions' ? 'bg-indigo-600 text-white font-bold' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'"
+                        :class="activeTab === 'commissions' ? 'bg-primary text-white font-bold shadow-xs' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'"
                         class="px-4 py-2 rounded-xl text-xs sm:text-sm transition cursor-pointer"
                     >
                         💰 Commissions ({{ commissions.total || 0 }})
                     </button>
                     <button
                         @click="activeTab = 'ledger'"
-                        :class="activeTab === 'ledger' ? 'bg-indigo-600 text-white font-bold' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'"
+                        :class="activeTab === 'ledger' ? 'bg-primary text-white font-bold shadow-xs' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'"
                         class="px-4 py-2 rounded-xl text-xs sm:text-sm transition cursor-pointer"
                     >
                         📒 Wallet Ledger
                     </button>
                     <button
                         @click="activeTab = 'withdrawals'"
-                        :class="activeTab === 'withdrawals' ? 'bg-indigo-600 text-white font-bold' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'"
+                        :class="activeTab === 'withdrawals' ? 'bg-primary text-white font-bold shadow-xs' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'"
                         class="px-4 py-2 rounded-xl text-xs sm:text-sm transition cursor-pointer"
                     >
                         💳 Payouts ({{ withdrawals.total || 0 }})
@@ -595,9 +595,9 @@ const submitWithdrawal = () => {
                     <button @click="showWithdrawModal = false" class="text-gray-400 hover:text-gray-600">✕</button>
                 </div>
 
-                <div class="bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60 rounded-2xl p-4 text-xs text-indigo-900 dark:text-indigo-200">
+                <div class="bg-primary-soft border border-primary-soft rounded-2xl p-4 text-xs text-primary">
                     <p class="font-bold">Available Balance: ₦{{ Number(stats.wallet_balance).toLocaleString('en-NG', { minimumFractionDigits: 2 }) }}</p>
-                    <p class="mt-0.5 text-[11px] text-indigo-700 dark:text-indigo-300">Minimum withdrawal amount is ₦{{ Number(min_withdrawal).toLocaleString() }}.</p>
+                    <p class="mt-0.5 text-[11px] opacity-90">Minimum withdrawal amount is ₦{{ Number(min_withdrawal).toLocaleString() }}.</p>
                 </div>
 
                 <form @submit.prevent="submitWithdrawal" class="space-y-4">

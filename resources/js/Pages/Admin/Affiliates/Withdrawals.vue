@@ -135,7 +135,7 @@ const submitReject = () => {
                 <div class="flex flex-wrap items-center gap-1.5 w-full md:w-auto">
                     <button
                         @click="filterStatus('')"
-                        :class="!filters.status ? 'bg-indigo-600 text-white font-bold' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'"
+                        :class="!filters.status ? 'bg-primary text-white font-bold shadow-xs' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'"
                         class="px-3.5 py-1.5 rounded-xl text-xs transition cursor-pointer"
                     >
                         All
@@ -198,7 +198,7 @@ const submitReject = () => {
                                         <div>
                                             <p class="font-bold text-gray-900 dark:text-white">{{ item.affiliate?.customer?.name }}</p>
                                             <p class="text-xs text-gray-400">{{ item.affiliate?.customer?.email }}</p>
-                                            <code class="text-[11px] font-mono text-indigo-600 dark:text-indigo-300 font-semibold">
+                                            <code class="text-[11px] font-mono text-primary font-semibold">
                                                 {{ item.affiliate?.referral_code }}
                                             </code>
                                         </div>
@@ -214,7 +214,7 @@ const submitReject = () => {
                                 <td class="px-5 py-4">
                                     <div class="bg-gray-50 dark:bg-gray-900/50 p-2.5 rounded-xl border border-gray-100 dark:border-gray-800 text-xs">
                                         <p class="font-bold text-gray-900 dark:text-white">{{ item.bank_name }}</p>
-                                        <p class="font-mono text-indigo-600 dark:text-indigo-400 font-bold select-all">{{ item.account_number }}</p>
+                                        <p class="font-mono text-primary font-bold select-all">{{ item.account_number }}</p>
                                         <p class="text-gray-500 text-[11px]">{{ item.account_name }}</p>
                                     </div>
                                 </td>
@@ -261,7 +261,7 @@ const submitReject = () => {
                                         </button>
                                     </div>
                                     <div v-else>
-                                        <Link :href="route('admin.affiliates.show', item.affiliate_id)" class="text-xs font-bold text-gray-400 hover:text-indigo-600">
+                                        <Link :href="route('admin.affiliates.show', item.affiliate_id)" class="text-xs font-bold text-gray-400 hover:text-primary">
                                             Partner →
                                         </Link>
                                     </div>

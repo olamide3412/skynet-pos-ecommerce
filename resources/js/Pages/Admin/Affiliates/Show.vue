@@ -67,7 +67,7 @@ const saveAffiliate = () => {
             <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-6 shadow-xs">
                 <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                     <div class="flex items-center gap-4">
-                        <div class="w-14 h-14 rounded-2xl bg-indigo-600 text-white font-black text-xl flex items-center justify-center shrink-0 shadow-sm">
+                        <div class="w-14 h-14 rounded-2xl bg-primary text-white font-black text-xl flex items-center justify-center shrink-0 shadow-sm">
                             {{ affiliate.customer?.name ? affiliate.customer.name.substring(0, 2).toUpperCase() : 'AF' }}
                         </div>
                         <div>
@@ -75,13 +75,13 @@ const saveAffiliate = () => {
                             <p class="text-xs text-gray-500">{{ affiliate.customer?.email }} • {{ affiliate.customer?.phone || 'No phone' }}</p>
                             <div class="flex items-center gap-2 mt-2">
                                 <span class="text-xs font-semibold text-gray-400">Referral Code:</span>
-                                <code class="px-2 py-0.5 rounded font-mono font-bold text-xs bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                                <code class="px-2 py-0.5 rounded font-mono font-bold text-xs bg-primary-soft text-primary border border-primary-soft">
                                     {{ affiliate.referral_code }}
                                 </code>
                                 <a
                                     :href="affiliate.referral_url"
                                     target="_blank"
-                                    class="text-xs font-bold text-indigo-600 hover:underline"
+                                    class="text-xs font-bold text-primary hover:underline"
                                 >
                                     Open Link ↗
                                 </a>
@@ -186,7 +186,7 @@ const saveAffiliate = () => {
                     </div>
 
                     <div class="flex justify-end">
-                        <button type="submit" :disabled="form.processing" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-xs">
+                        <button type="submit" :disabled="form.processing" class="px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-dark text-white text-xs font-bold transition shadow-xs">
                             {{ form.processing ? 'Saving...' : 'Save Partner Settings' }}
                         </button>
                     </div>
@@ -197,21 +197,21 @@ const saveAffiliate = () => {
             <div class="flex items-center gap-2 border-b border-gray-200 dark:border-gray-700 pb-2">
                 <button
                     @click="activeTab = 'commissions'"
-                    :class="activeTab === 'commissions' ? 'bg-indigo-600 text-white font-bold' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'"
+                    :class="activeTab === 'commissions' ? 'bg-primary text-white font-bold shadow-xs' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'"
                     class="px-4 py-2 rounded-xl text-xs sm:text-sm transition cursor-pointer"
                 >
                     💰 Commissions & Sales ({{ stats.commissions_count }})
                 </button>
                 <button
                     @click="activeTab = 'wallet'"
-                    :class="activeTab === 'wallet' ? 'bg-indigo-600 text-white font-bold' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'"
+                    :class="activeTab === 'wallet' ? 'bg-primary text-white font-bold shadow-xs' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'"
                     class="px-4 py-2 rounded-xl text-xs sm:text-sm transition cursor-pointer"
                 >
                     📒 Wallet Transactions Ledger
                 </button>
                 <button
                     @click="activeTab = 'withdrawals'"
-                    :class="activeTab === 'withdrawals' ? 'bg-indigo-600 text-white font-bold' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'"
+                    :class="activeTab === 'withdrawals' ? 'bg-primary text-white font-bold shadow-xs' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'"
                     class="px-4 py-2 rounded-xl text-xs sm:text-sm transition cursor-pointer"
                 >
                     💳 Withdrawal History
@@ -235,7 +235,7 @@ const saveAffiliate = () => {
                         <tbody class="divide-y divide-gray-100 dark:divide-gray-700/60">
                             <tr v-for="c in commissions.data" :key="c.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/40">
                                 <td class="px-5 py-3.5 font-bold text-gray-900 dark:text-white">
-                                    <Link :href="route('admin.orders.show', c.order_id)" class="text-indigo-600 hover:underline">
+                                    <Link :href="route('admin.orders.show', c.order_id)" class="text-primary hover:underline">
                                         {{ c.order?.tracking_number || `#${c.order_id}` }}
                                     </Link>
                                 </td>

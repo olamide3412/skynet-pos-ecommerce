@@ -115,7 +115,7 @@ const save = () => {
             <!-- Master Toggle & Status Hero Card -->
             <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
                 <div class="flex items-start gap-4">
-                    <div class="w-12 h-12 rounded-xl flex items-center justify-center text-2xl shrink-0" :class="form.ai_enabled ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'">
+                    <div class="w-12 h-12 rounded-xl flex items-center justify-center text-2xl shrink-0" :class="form.ai_enabled ? 'bg-primary-soft text-primary' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'">
                         ✨
                     </div>
                     <div>
@@ -137,7 +137,7 @@ const save = () => {
                 <div class="flex items-center gap-3 shrink-0">
                     <label class="relative inline-flex items-center cursor-pointer">
                         <input type="checkbox" v-model="form.ai_enabled" class="sr-only peer" />
-                        <div class="w-14 h-7 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:start-[3px] after:bg-white after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-purple-600"></div>
+                        <div class="w-14 h-7 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:start-[3px] after:bg-white after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary"></div>
                     </label>
                 </div>
             </div>

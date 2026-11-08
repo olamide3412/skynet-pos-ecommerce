@@ -28,6 +28,7 @@ class SettingsController extends Controller
             'company_phone'                 => 'nullable|string|max:50',
             'company_address'               => 'nullable|string|max:500',
             'company_tagline'               => 'nullable|string|max:500',
+            'site_url'                      => 'nullable|url|max:255',
             'meta_description'              => 'nullable|string|max:500',
             'meta_keywords'                 => 'nullable|string|max:500',
 

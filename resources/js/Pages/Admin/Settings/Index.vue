@@ -17,6 +17,7 @@ const form = useForm({
     // Company Branding
     company_name:           props.settings.company_name || 'Skynet',
     company_tagline:        props.settings.company_tagline || '',
+    site_url:               props.settings.site_url || '',
     company_email:          props.settings.company_email || 'support@skynetdigitalhub.com.ng',
     company_phone:          props.settings.company_phone || '+2348032072831',
     company_address:        props.settings.company_address || 'Delta State, Nigeria',
@@ -194,6 +195,11 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tagline / Slogan</label>
                                 <input type="text" v-model="form.company_tagline" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2" />
                             </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Store Website / Live URL</label>
+                                <input type="url" v-model="form.site_url" placeholder="https://easypick.ng" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm" />
+                                <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Used for logo links, tracking links, and customer action buttons in all outgoing emails so they never default to localhost.</p>
+                            </div>
                             <div class="grid grid-cols-2 gap-4">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Support Email</label>
@@ -296,7 +302,7 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                 <section class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
                     <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 flex items-center justify-between">
                         <div class="flex items-center gap-3">
-                            <span class="w-9 h-9 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 text-lg">🤝</span>
+                            <span class="w-9 h-9 rounded-lg bg-primary-soft text-primary flex items-center justify-center shrink-0 text-lg">🤝</span>
                             <div>
                                 <h2 class="text-base font-semibold text-gray-900 dark:text-white">Referral & Affiliate Program</h2>
                                 <p class="text-xs text-gray-500 dark:text-gray-400">Configure storewide default commission rates, holding periods, and customer application rules.</p>
@@ -313,13 +319,13 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
 
                     <div v-if="form.referral_enabled" class="p-6 space-y-6">
                         <!-- Quick Link to Affiliates Management -->
-                        <div class="p-4 rounded-xl border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/50 dark:bg-indigo-950/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                            <div class="text-xs text-indigo-900 dark:text-indigo-200">
-                                <span class="font-bold">Manage Affiliates & Withdrawal Requests:</span>
+                        <div class="p-4 rounded-xl border border-primary-soft bg-primary-soft/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div class="text-xs text-slate-800 dark:text-slate-200">
+                                <span class="font-bold text-primary">Manage Affiliates & Withdrawal Requests:</span>
                                 View registered affiliates, approve applications, customize individual partner rates, and process bank payouts.
                             </div>
                             <div class="flex items-center gap-2 shrink-0">
-                                <Link :href="route('admin.affiliates.index')" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition">
+                                <Link :href="route('admin.affiliates.index')" class="px-3 py-1.5 rounded-lg bg-primary hover:bg-primary-dark text-white text-xs font-bold transition shadow-xs">
                                     Affiliates List →
                                 </Link>
                                 <Link :href="route('admin.affiliates.withdrawals.index')" class="px-3 py-1.5 rounded-lg bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-200 text-xs font-bold hover:bg-gray-50 transition">
@@ -477,20 +483,20 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                             </div>
                         </div>
 
-                        <div class="p-4 rounded-xl border border-purple-200 dark:border-purple-900/60 bg-purple-50/50 dark:bg-purple-950/20 flex flex-col justify-between gap-3 shadow-xs">
+                        <div class="p-4 rounded-xl border border-primary-soft bg-primary-soft/30 flex flex-col justify-between gap-3 shadow-xs">
                             <div class="flex items-start gap-3">
-                                <span class="w-9 h-9 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 text-lg">🎉</span>
+                                <span class="w-9 h-9 rounded-lg bg-primary-soft text-primary flex items-center justify-center shrink-0 text-lg">🎉</span>
                                 <div>
-                                    <h3 class="text-xs font-bold uppercase tracking-wider text-purple-900 dark:text-purple-200">
+                                    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100">
                                         Promotional Flyers & Coupon Popups
                                     </h3>
-                                    <p class="text-xs text-purple-700/80 dark:text-purple-300/70 mt-1">
+                                    <p class="text-xs text-slate-600 dark:text-slate-400 mt-1">
                                         Timed welcome coupon popups and mid-page promo banners have their own dedicated management menu.
                                     </p>
                                 </div>
                             </div>
                             <div class="pt-2">
-                                <Link :href="route('admin.promo-flyers.index')" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition shadow-xs">
+                                <Link :href="route('admin.promo-flyers.index')" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary hover:bg-primary-dark text-white text-xs font-bold transition shadow-xs">
                                     Open Promo Flyers & Popups →
                                 </Link>
                             </div>
@@ -562,20 +568,20 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                 </section>
 
                 <!-- ─── AI Assistant Sub-menu Shortcut Banner ───────────────── -->
-                <section class="bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-primary/10 dark:bg-gray-800/80 rounded-xl border border-purple-200 dark:border-purple-900/50 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <section class="bg-primary-soft/30 rounded-xl border border-primary-soft p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div class="flex items-center gap-3">
                         <span class="text-3xl">🤖</span>
                         <div>
                             <div class="flex items-center gap-2">
                                 <h3 class="text-base font-bold text-gray-900 dark:text-white">AI Assistant & Provider Settings</h3>
-                                <span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300">Dedicated Sub-Menu</span>
+                                <span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-primary-soft text-primary border border-primary-soft">Dedicated Sub-Menu</span>
                             </div>
                             <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Manage Google Gemini, OpenAI ChatGPT, DeepSeek, and Claude API credentials, models, and latency connection tests.</p>
                         </div>
                     </div>
                     <Link
                         :href="route('admin.ai-settings.index')"
-                        class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg bg-purple-600 hover:bg-purple-700 text-white transition shrink-0 shadow-sm"
+                        class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg bg-primary hover:bg-primary-dark text-white transition shrink-0 shadow-sm"
                     >
                         <span>Configure AI Settings &rarr;</span>
                     </Link>

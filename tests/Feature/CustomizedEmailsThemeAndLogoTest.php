@@ -140,4 +140,44 @@ class CustomizedEmailsThemeAndLogoTest extends TestCase
         $this->assertStringContainsString('settings/custom_test_logo.png', $html);
         $this->assertStringContainsString('EP-445566', $html);
     }
+
+    public function test_email_logo_link_and_action_urls_use_dynamic_store_url_not_static_localhost(): void
+    {
+        StoreSetting::set('site_url', 'https://easypick.ng');
+
+        $customer = Customer::factory()->create([
+            'name'  => 'Dynamic User',
+            'email' => 'dynamic@example.com',
+        ]);
+
+        $mailable = new CustomerWelcomeMail($customer);
+        $html = $mailable->render();
+
+        // Must link the logo directly to dynamic live store domain
+        $this->assertStringContainsString('href="https://easypick.ng"', $html);
+        $this->assertStringContainsString('https://easypick.ng/shop', $html);
+        $this->assertStringContainsString('https://easypick.ng/storage/settings/custom_test_logo.png', $html);
+
+        // Logo link must not be hardcoded to localhost
+        $this->assertStringNotContainsString('href="http://localhost"', $html);
+    }
+
+    public function test_email_embeds_logo_when_file_exists_on_disk(): void
+    {
+        StoreSetting::set('site_url', 'https://easypick.ng');
+        // Clear company_logo so it falls back to public/images/logo.png which exists on disk
+        StoreSetting::set('company_logo', null);
+
+        $customer = Customer::factory()->create([
+            'name'  => 'Embedded Logo User',
+            'email' => 'embed@example.com',
+        ]);
+
+        $mailable = new CustomerWelcomeMail($customer);
+        $html = $mailable->render();
+
+        // In render mode, Laravel embed() converts the local file to an inline data URI
+        $this->assertStringContainsString('src="data:image/png;base64,', $html);
+        $this->assertStringContainsString('href="https://easypick.ng"', $html);
+    }
 }

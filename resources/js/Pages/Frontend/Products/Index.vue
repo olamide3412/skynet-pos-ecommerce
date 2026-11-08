@@ -479,9 +479,9 @@ const seoDescription = computed(() => {
                             Search: "{{ search }}"
                             <button @click="search = ''" class="hover:opacity-75 font-bold">×</button>
                         </span>
-                        <span v-if="category" class="inline-flex items-center gap-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-3 py-1 rounded-full text-sm font-medium">
+                        <span v-if="category" class="inline-flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 px-3 py-1 rounded-full text-sm font-medium">
                             Category: {{ categories.find(c => c.slug === category)?.name }}
-                            <button @click="category = ''" class="hover:text-purple-900 dark:hover:text-purple-100 font-bold">×</button>
+                            <button @click="category = ''" class="hover:opacity-75 font-bold">×</button>
                         </span>
                         
                         <!-- Attribute Pills -->

@@ -29,6 +29,7 @@ const actionCategories = [
     { key: 'customer', label: 'Customer Management', color: 'cyan' },
     { key: 'product', label: 'Products & Catalog', color: 'emerald' },
     { key: 'order', label: 'Orders & POD Cash', color: 'amber' },
+    { key: 'webhook', label: 'Payment Webhooks', color: 'cyan' },
     { key: 'setting', label: 'Store Config', color: 'sky' },
     { key: 'affiliate', label: 'Affiliates & Payouts', color: 'purple' },
     { key: 'pos_sync', label: 'POS Integration', color: 'teal' },
@@ -111,11 +112,13 @@ const getCategoryBadgeClass = (type) => {
         case 'auth':
             return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800';
         case 'customer':
-            return 'bg-cyan-100 text-cyan-800 border-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-300 dark:border-cyan-800';
+            return 'bg-primary-soft text-primary border border-primary-soft font-bold';
         case 'product':
             return 'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800';
         case 'order':
             return 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800';
+        case 'webhook':
+            return 'bg-cyan-100 text-cyan-800 border-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-300 dark:border-cyan-800';
         case 'setting':
             return 'bg-sky-100 text-sky-800 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800';
         case 'affiliate':
@@ -164,13 +167,13 @@ const formatDate = (dateString) => {
             <!-- Header Section -->
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xs">
                 <div class="flex items-start gap-4">
-                    <div class="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-2xl shrink-0 shadow-xs">
+                    <div class="w-12 h-12 rounded-2xl bg-primary-soft border border-primary-soft text-primary flex items-center justify-center text-2xl shrink-0 shadow-xs">
                         🛡️
                     </div>
                     <div>
                         <div class="flex items-center gap-2.5">
                             <h1 class="text-xl font-bold text-slate-900 dark:text-white">Activity Logs Audit Trail</h1>
-                            <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                            <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-primary-soft text-primary border border-primary-soft">
                                 Superadmin Only
                             </span>
                         </div>
@@ -195,7 +198,7 @@ const formatDate = (dateString) => {
 
                     <a
                         :href="exportCsvUrl"
-                        class="px-4 py-2 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition flex items-center gap-2 cursor-pointer"
+                        class="px-4 py-2 text-xs font-bold rounded-xl bg-primary hover:bg-primary-dark text-white shadow-xs transition flex items-center gap-2 cursor-pointer"
                     >
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -210,9 +213,9 @@ const formatDate = (dateString) => {
                 <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-xs">
                     <div class="flex items-center justify-between">
                         <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Total Events</span>
-                        <span class="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center text-sm font-bold">📋</span>
+                        <span class="w-8 h-8 rounded-xl bg-primary-soft text-primary flex items-center justify-center text-sm font-bold">📋</span>
                     </div>
-                    <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white">
+                    <div class="mt-2 text-2xl font-black text-primary">
                         {{ metrics?.total_events?.toLocaleString() || 0 }}
                     </div>
                     <p class="text-[11px] text-slate-400 mt-1">All recorded audit entries</p>
@@ -243,9 +246,9 @@ const formatDate = (dateString) => {
                 <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-xs">
                     <div class="flex items-center justify-between">
                         <span class="text-xs font-bold uppercase tracking-wider text-slate-500">System Bot Tasks</span>
-                        <span class="w-8 h-8 rounded-xl bg-purple-100 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 flex items-center justify-center text-sm font-bold">🤖</span>
+                        <span class="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center text-sm font-bold">🤖</span>
                     </div>
-                    <div class="mt-2 text-2xl font-black text-purple-600 dark:text-purple-400">
+                    <div class="mt-2 text-2xl font-black text-slate-700 dark:text-slate-200">
                         {{ metrics?.system_events?.toLocaleString() || 0 }}
                     </div>
                     <p class="text-[11px] text-slate-400 mt-1">Cron & background sweeps</p>
@@ -261,7 +264,7 @@ const formatDate = (dateString) => {
                         <select
                             v-model="selectedActor"
                             @change="applyFilters"
-                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500 transition cursor-pointer"
+                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-100 outline-none focus:border-primary transition cursor-pointer"
                         >
                             <option value="">👥 All Actors (Users & System)</option>
                             <option value="system">🤖 System Bot (Crons / Webhooks)</option>
@@ -279,7 +282,7 @@ const formatDate = (dateString) => {
                         <select
                             v-model="selectedActionType"
                             @change="applyFilters"
-                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500 transition cursor-pointer"
+                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-100 outline-none focus:border-primary transition cursor-pointer"
                         >
                             <option v-for="cat in actionCategories" :key="cat.key" :value="cat.key">
                                 {{ cat.label }}
@@ -297,7 +300,7 @@ const formatDate = (dateString) => {
                                     @keyup.enter="applyFilters"
                                     type="text"
                                     placeholder="Search by description, IP address, user name, or email..."
-                                    class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 pr-8 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 outline-none focus:border-indigo-500 transition"
+                                    class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 pr-8 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 outline-none focus:border-primary transition"
                                 />
                                 <button
                                     v-if="search"
@@ -311,7 +314,7 @@ const formatDate = (dateString) => {
                             <button
                                 @click="applyFilters"
                                 type="button"
-                                class="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition border border-slate-200 dark:border-slate-700 shrink-0 cursor-pointer"
+                                class="px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-xl text-xs font-bold transition shadow-xs shrink-0 cursor-pointer"
                             >
                                 Filter
                             </button>
@@ -335,7 +338,7 @@ const formatDate = (dateString) => {
                             @click="setPreset(p.key)"
                             type="button"
                             :class="activePreset === p.key
-                                ? 'bg-indigo-600 text-white font-bold'
+                                ? 'bg-primary text-white font-bold shadow-xs'
                                 : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'"
                             class="px-2.5 py-1 rounded-lg text-[11px] transition cursor-pointer"
                         >
@@ -350,7 +353,7 @@ const formatDate = (dateString) => {
                                 v-model="startDate"
                                 @change="activePreset = 'custom'; applyFilters()"
                                 type="date"
-                                class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-[11px] text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500"
+                                class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-[11px] text-slate-900 dark:text-slate-100 outline-none focus:border-primary"
                             />
                         </div>
                         <div class="flex items-center gap-1">
@@ -359,7 +362,7 @@ const formatDate = (dateString) => {
                                 v-model="endDate"
                                 @change="activePreset = 'custom'; applyFilters()"
                                 type="date"
-                                class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-[11px] text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500"
+                                class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-[11px] text-slate-900 dark:text-slate-100 outline-none focus:border-primary"
                             />
                         </div>
 
@@ -404,14 +407,14 @@ const formatDate = (dateString) => {
                                 <!-- Actor -->
                                 <td class="px-5 py-3 whitespace-nowrap">
                                     <div v-if="log.user_id && log.user" class="flex items-center gap-2.5">
-                                        <div class="w-7 h-7 rounded-full bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-bold flex items-center justify-center text-[11px] shrink-0 border border-indigo-200 dark:border-indigo-800">
+                                        <div class="w-7 h-7 rounded-full bg-primary-soft text-primary font-bold flex items-center justify-center text-[11px] shrink-0 border border-primary-soft">
                                             {{ log.user.name.charAt(0).toUpperCase() }}
                                         </div>
                                         <div>
                                             <div class="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
                                                 <span>{{ log.user.name }}</span>
                                                 <span class="text-[10px] font-bold px-1.5 py-0.2 rounded uppercase"
-                                                    :class="log.user.role === 'super administrator' ? 'bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'"
+                                                    :class="log.user.role === 'super administrator' ? 'bg-primary-soft text-primary border border-primary-soft' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'"
                                                 >
                                                     {{ log.user.role === 'super administrator' ? 'Superadmin' : log.user.role }}
                                                 </span>
@@ -461,7 +464,7 @@ const formatDate = (dateString) => {
                                         v-if="log.details && Object.keys(log.details).length > 0"
                                         @click="selectedLogModal = log; copied = false"
                                         type="button"
-                                        class="px-2.5 py-1 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 rounded-lg transition cursor-pointer border border-indigo-200 dark:border-indigo-800"
+                                        class="px-2.5 py-1 text-[11px] font-semibold text-primary bg-primary-soft hover:opacity-90 rounded-lg transition cursor-pointer border border-primary-soft"
                                     >
                                         Inspect
                                     </button>
@@ -474,7 +477,7 @@ const formatDate = (dateString) => {
 
                 <!-- Empty State -->
                 <div v-else class="py-16 text-center space-y-3">
-                    <div class="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto text-xl">
+                    <div class="w-12 h-12 rounded-2xl bg-primary-soft text-primary flex items-center justify-center mx-auto text-xl">
                         📜
                     </div>
                     <h3 class="text-base font-bold text-slate-900 dark:text-white">No Activity Logs Found</h3>
@@ -484,7 +487,7 @@ const formatDate = (dateString) => {
                     <button
                         @click="resetFilters"
                         type="button"
-                        class="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold transition hover:bg-indigo-500 cursor-pointer"
+                        class="px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
                     >
                         Clear Filters
                     </button>
@@ -506,7 +509,7 @@ const formatDate = (dateString) => {
             <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
                 <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
                     <div class="flex items-center gap-2.5">
-                        <span class="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-sm font-bold">
+                        <span class="w-8 h-8 rounded-xl bg-primary-soft text-primary flex items-center justify-center text-sm font-bold">
                             🔍
                         </span>
                         <div>
@@ -556,7 +559,7 @@ const formatDate = (dateString) => {
                             <button
                                 @click="copyPayload"
                                 type="button"
-                                class="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer"
+                                class="text-[11px] font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
                             >
                                 <span>{{ copied ? '✓ Copied!' : '📋 Copy JSON' }}</span>
                             </button>
