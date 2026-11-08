@@ -48,6 +48,12 @@ const tabs = [
         route: 'admin.promo-flyers.index',
         match: 'Admin/PromoFlyers',
     },
+    {
+        label: 'Database Backups',
+        icon: '💾',
+        route: 'admin.backups.index',
+        match: 'Admin/Backups',
+    },
 ];
 
 const canScrollLeft = ref(false);

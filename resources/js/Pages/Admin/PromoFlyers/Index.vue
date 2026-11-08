@@ -104,7 +104,7 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                                 </p>
                             </div>
                         </div>
-                        <label class="inline-flex items-center cursor-pointer">
+                        <label class="relative inline-flex items-center cursor-pointer">
                             <input type="checkbox" v-model="form.promo_banner_enabled" class="sr-only peer">
                             <div :class="toggleSwitch"></div>
                             <span class="ml-3 text-xs sm:text-sm font-bold text-gray-900 dark:text-gray-300">
@@ -158,7 +158,7 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                                                 <span class="text-[11px] text-gray-500 dark:text-gray-400 block">Converts large uploads to high-speed WebP (~150KB). Turn off to keep raw file.</span>
                                             </div>
                                         </div>
-                                        <label class="inline-flex items-center cursor-pointer shrink-0 ml-3">
+                                        <label class="relative inline-flex items-center cursor-pointer shrink-0 ml-3">
                                             <input type="checkbox" v-model="form.promo_banner_auto_optimize" class="sr-only peer">
                                             <div :class="toggleSwitch"></div>
                                         </label>
@@ -187,7 +187,7 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                                 </p>
                             </div>
                         </div>
-                        <label class="inline-flex items-center cursor-pointer">
+                        <label class="relative inline-flex items-center cursor-pointer">
                             <input type="checkbox" v-model="form.promo_popup_enabled" class="sr-only peer">
                             <div :class="toggleSwitch"></div>
                             <span class="ml-3 text-xs sm:text-sm font-bold text-gray-900 dark:text-gray-300">
@@ -265,7 +265,7 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                                                 <span class="text-[11px] text-gray-500 dark:text-gray-400 block">Converts large flyers (up to 12MB) to ultra-fast, high-quality WebP (~150KB) so the modal opens instantly. Turn off to keep the exact original raw file.</span>
                                             </div>
                                         </div>
-                                        <label class="inline-flex items-center cursor-pointer shrink-0 ml-3">
+                                        <label class="relative inline-flex items-center cursor-pointer shrink-0 ml-3">
                                             <input type="checkbox" v-model="form.promo_popup_auto_optimize" class="sr-only peer">
                                             <div :class="toggleSwitch"></div>
                                         </label>

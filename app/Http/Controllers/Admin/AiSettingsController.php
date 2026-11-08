@@ -11,11 +11,20 @@ use Inertia\Response;
 
 class AiSettingsController extends Controller
 {
+    protected function authorizeSuperAdmin(): void
+    {
+        $user = auth('web')->user();
+        if (!$user || !$user->isSuperAdmin()) {
+            abort(403, 'Unauthorized. Only the Super Administrator can access or configure AI settings.');
+        }
+    }
+
     /**
      * Display the dedicated AI Assistant configuration page.
      */
     public function index(): Response
     {
+        $this->authorizeSuperAdmin();
         return Inertia::render('Admin/AiSettings/Index', [
             'ai_settings' => [
                 'ai_enabled'         => StoreSetting::get('ai_enabled', '0') === '1',
@@ -37,6 +46,8 @@ class AiSettingsController extends Controller
      */
     public function update(Request $request)
     {
+        $this->authorizeSuperAdmin();
+
         $validated = $request->validate([
             'ai_enabled'         => 'boolean',
             'ai_active_provider' => 'nullable|string|in:gemini,openai,deepseek,claude',

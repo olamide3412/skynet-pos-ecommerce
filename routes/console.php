@@ -26,6 +26,16 @@ Schedule::command('orders:retry-pos-confirmations')->everyFifteenMinutes();
 // Periodic sweep to release mature affiliate commissions into wallets
 Schedule::command('affiliates:release-commissions')->hourly();
 
+// Automated daily MySQL database backup at 02:00 AM (keeps 30 days history)
+Schedule::command('app:database-back-up')
+    ->dailyAt('02:00')
+    ->withoutOverlapping()
+    ->runInBackground()
+    ->appendOutputTo(storage_path('logs/backup.log'))
+    ->onFailure(function () {
+        \Illuminate\Support\Facades\Log::error('Automated database backup scheduled run failed at 02:00 AM.');
+    });
+
 // Automatically process queued background jobs (order emails, alerts) every minute
 Schedule::command('queue:work --stop-when-empty --tries=3')
     ->everyMinute()

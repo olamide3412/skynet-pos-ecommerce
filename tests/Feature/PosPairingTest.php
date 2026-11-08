@@ -22,7 +22,7 @@ class PosPairingTest extends TestCase
         parent::setUp();
 
         $this->admin = User::factory()->create([
-            'role' => \App\Enums\RoleEnums::Administrator->value,
+            'role' => \App\Enums\RoleEnums::SuperAdministrator->value,
         ]);
     }
 

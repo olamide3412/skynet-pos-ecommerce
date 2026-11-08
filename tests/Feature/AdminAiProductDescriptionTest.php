@@ -20,7 +20,7 @@ class AdminAiProductDescriptionTest extends TestCase
         parent::setUp();
 
         $this->admin = User::factory()->create([
-            'role' => RoleEnums::Administrator->value,
+            'role' => RoleEnums::SuperAdministrator->value,
         ]);
     }
 

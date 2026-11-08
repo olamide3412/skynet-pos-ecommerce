@@ -1,5 +1,5 @@
 <script setup>
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
 import AdminLayout from '@/Layouts/AdminLayout.vue';
 import SettingsNavTabs from '@/Components/Admin/SettingsNavTabs.vue';
@@ -255,7 +255,7 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                                 <p class="text-xs text-gray-500 dark:text-gray-400">Specify which staff members receive an alert email whenever a customer places a new order.</p>
                             </div>
                         </div>
-                        <label class="inline-flex items-center cursor-pointer shrink-0">
+                        <label class="relative inline-flex items-center cursor-pointer shrink-0">
                             <input type="checkbox" v-model="form.order_notifications_enabled" class="sr-only peer">
                             <div :class="toggleSwitch"></div>
                             <span class="ml-2.5 text-xs font-bold text-gray-900 dark:text-gray-300">
@@ -308,7 +308,7 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                                 <p class="text-xs text-gray-500 dark:text-gray-400">Configure storewide default commission rates, holding periods, and customer application rules.</p>
                             </div>
                         </div>
-                        <label class="inline-flex items-center cursor-pointer shrink-0">
+                        <label class="relative inline-flex items-center cursor-pointer shrink-0">
                             <input type="checkbox" v-model="form.referral_enabled" class="sr-only peer">
                             <div :class="toggleSwitch"></div>
                             <span class="ml-2.5 text-xs font-bold text-gray-900 dark:text-gray-300">
@@ -340,7 +340,7 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                                 <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Allow Customer Applications</h3>
                                 <p class="text-xs text-gray-500">Customers can apply to become an affiliate from their account. Applications require your manual approval.</p>
                             </div>
-                            <label class="inline-flex items-center cursor-pointer">
+                            <label class="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" v-model="form.referral_allow_applications" class="sr-only peer">
                                 <div :class="toggleSwitch"></div>
                             </label>
@@ -521,7 +521,7 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                                     </h3>
                                     <p class="text-xs text-gray-500 mt-1">Callback URI: <code>{{ $page.props.app_url || 'https://yourdomain.com' }}/auth/google/callback</code></p>
                                 </div>
-                                <label class="inline-flex items-center cursor-pointer">
+                                <label class="relative inline-flex items-center cursor-pointer">
                                     <input type="checkbox" v-model="form.google_auth_enabled" class="sr-only peer">
                                     <div :class="toggleSwitch"></div>
                                 </label>
@@ -548,7 +548,7 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                                     </h3>
                                     <p class="text-xs text-gray-500 mt-1">Callback URI: <code>{{ $page.props.app_url || 'https://yourdomain.com' }}/auth/facebook/callback</code></p>
                                 </div>
-                                <label class="inline-flex items-center cursor-pointer">
+                                <label class="relative inline-flex items-center cursor-pointer">
                                     <input type="checkbox" v-model="form.facebook_auth_enabled" class="sr-only peer">
                                     <div :class="toggleSwitch"></div>
                                 </label>
@@ -859,6 +859,30 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                     </button>
                 </div>
             </form>
+
+            <!-- ─── Database Backups Sub-menu Shortcut Banner ──────────────── -->
+            <section class="bg-primary-soft/30 rounded-xl border border-primary-soft p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-6">
+                <div class="flex items-center gap-3">
+                    <span class="text-3xl">💾</span>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-base font-bold text-gray-900 dark:text-white">Database Backups</h3>
+                            <span class="px-2.5 py-0.5 text-xs font-bold rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                Automated Daily at 02:00 AM
+                            </span>
+                        </div>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            Create manual dumps, download compressed MySQL backups, manage storage retention, and view historical backups.
+                        </p>
+                    </div>
+                </div>
+                <Link
+                    :href="route('admin.backups.index')"
+                    class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg bg-primary hover:bg-primary-dark text-white transition shrink-0 shadow-sm"
+                >
+                    <span>Manage Database Backups &rarr;</span>
+                </Link>
+            </section>
         </div>
     </AdminLayout>
 </template>

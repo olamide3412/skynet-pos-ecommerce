@@ -206,7 +206,7 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                             Cycle through full-width hero slides at the top of the homepage.
                         </p>
                     </div>
-                    <label class="inline-flex items-center cursor-pointer ml-4 shrink-0">
+                    <label class="relative inline-flex items-center cursor-pointer ml-4 shrink-0">
                         <input type="checkbox" v-model="settingsForm.home_slider_enabled" class="sr-only peer" />
                         <div :class="toggleSwitch"></div>
                         <span class="ml-2.5 text-xs font-bold text-gray-700 dark:text-gray-300">
@@ -227,7 +227,7 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                                 Scrolling headline bar above product listings.
                             </p>
                         </div>
-                        <label class="inline-flex items-center cursor-pointer ml-4 shrink-0">
+                        <label class="relative inline-flex items-center cursor-pointer ml-4 shrink-0">
                             <input type="checkbox" v-model="settingsForm.home_marquee_enabled" class="sr-only peer" />
                             <div :class="toggleSwitch"></div>
                             <span class="ml-2.5 text-xs font-bold text-gray-700 dark:text-gray-300">
@@ -391,7 +391,7 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                             </p>
                         </div>
                     </div>
-                    <label class="inline-flex items-center cursor-pointer">
+                    <label class="relative inline-flex items-center cursor-pointer">
                         <input type="checkbox" v-model="settingsForm.hero_enabled" class="sr-only peer" />
                         <div :class="toggleSwitch"></div>
                         <span class="ml-2.5 text-xs font-bold text-gray-700 dark:text-gray-300">

@@ -267,19 +267,6 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::patch('reviews/{review}/toggle-approval', [\App\Http\Controllers\Admin\ProductReviewController::class, 'toggleApproval'])->name('reviews.toggle-approval');
             Route::delete('reviews/{review}', [\App\Http\Controllers\Admin\ProductReviewController::class, 'destroy'])->name('reviews.destroy');
 
-            // Shipping Zones Management
-            Route::patch('shipping-zones/{shipping_zone}/set-default', [\App\Http\Controllers\Admin\ShippingZoneController::class, 'setDefault'])->name('shipping-zones.set-default');
-            Route::patch('shipping-zones/{shipping_zone}/toggle-status', [\App\Http\Controllers\Admin\ShippingZoneController::class, 'toggleStatus'])->name('shipping-zones.toggle-status');
-            Route::resource('shipping-zones', \App\Http\Controllers\Admin\ShippingZoneController::class)->except(['create', 'edit', 'show']);
-
-            // Store & Payment Settings
-            Route::get('settings', [SettingsController::class , 'index'])->name('settings.index');
-            Route::put('settings', [SettingsController::class , 'update'])->name('settings.update');
-
-            // AI Assistant Settings (Sub-menu under Settings)
-            Route::get('ai-settings', [\App\Http\Controllers\Admin\AiSettingsController::class, 'index'])->name('ai-settings.index');
-            Route::put('ai-settings', [\App\Http\Controllers\Admin\AiSettingsController::class, 'update'])->name('ai-settings.update');
-
             // Referral Program & Affiliate Management
             Route::get('affiliates', [\App\Http\Controllers\Admin\AffiliateController::class, 'index'])->name('affiliates.index');
             Route::post('affiliates/enroll', [\App\Http\Controllers\Admin\AffiliateController::class, 'enrollCustomer'])->name('affiliates.enroll');
@@ -289,18 +276,58 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('affiliate-withdrawals/{withdrawal}/mark-paid', [\App\Http\Controllers\Admin\AffiliateWithdrawalController::class, 'markPaid'])->name('affiliates.withdrawals.mark-paid');
             Route::post('affiliate-withdrawals/{withdrawal}/reject', [\App\Http\Controllers\Admin\AffiliateWithdrawalController::class, 'reject'])->name('affiliates.withdrawals.reject');
 
-            // Promo Flyers & Timed Popup Modal
-            Route::get('promo-flyers', [\App\Http\Controllers\Admin\PromoFlyerController::class, 'index'])->name('promo-flyers.index');
-            Route::post('promo-flyers', [\App\Http\Controllers\Admin\PromoFlyerController::class, 'update'])->name('promo-flyers.update');
-
             // Newsletter Subscribers
             Route::get('newsletter-subscribers', [\App\Http\Controllers\Admin\NewsletterSubscriberController::class, 'index'])->name('newsletter.index');
             Route::delete('newsletter-subscribers/{subscriber}', [\App\Http\Controllers\Admin\NewsletterSubscriberController::class, 'destroy'])->name('newsletter.destroy');
             Route::patch('newsletter-subscribers/{subscriber}/toggle-status', [\App\Http\Controllers\Admin\NewsletterSubscriberController::class, 'toggleStatus'])->name('newsletter.toggle-status');
             Route::get('newsletter-subscribers/export/csv', [\App\Http\Controllers\Admin\NewsletterSubscriberController::class, 'exportCsv'])->name('newsletter.export');
 
-            // Roles & Permissions Management (STRICTLY Super Administrator)
+            // Settings, Backups, and Security (STRICTLY Super Administrator Only)
             Route::middleware('super_admin')->group(function () {
+                // Store & Payment Settings
+                Route::get('settings', [SettingsController::class , 'index'])->name('settings.index');
+                Route::put('settings', [SettingsController::class , 'update'])->name('settings.update');
+
+                // Database Backups Management
+                Route::get('backups', [\App\Http\Controllers\Admin\BackupController::class, 'index'])->name('backups.index');
+                Route::post('backups', [\App\Http\Controllers\Admin\BackupController::class, 'store'])->name('backups.store');
+                Route::get('backups/download/{filename?}', [\App\Http\Controllers\Admin\BackupController::class, 'download'])
+                    ->where('filename', '.*')
+                    ->name('backups.download');
+                Route::delete('backups/{filename?}', [\App\Http\Controllers\Admin\BackupController::class, 'destroy'])
+                    ->where('filename', '.*')
+                    ->name('backups.destroy');
+
+                // AI Assistant Settings (Sub-menu under Settings)
+                Route::get('ai-settings', [\App\Http\Controllers\Admin\AiSettingsController::class, 'index'])->name('ai-settings.index');
+                Route::put('ai-settings', [\App\Http\Controllers\Admin\AiSettingsController::class, 'update'])->name('ai-settings.update');
+
+                // Shipping Zones Management
+                Route::patch('shipping-zones/{shipping_zone}/set-default', [\App\Http\Controllers\Admin\ShippingZoneController::class, 'setDefault'])->name('shipping-zones.set-default');
+                Route::patch('shipping-zones/{shipping_zone}/toggle-status', [\App\Http\Controllers\Admin\ShippingZoneController::class, 'toggleStatus'])->name('shipping-zones.toggle-status');
+                Route::resource('shipping-zones', \App\Http\Controllers\Admin\ShippingZoneController::class)->except(['create', 'edit', 'show']);
+
+                // Promo Flyers & Timed Popup Modal
+                Route::get('promo-flyers', [\App\Http\Controllers\Admin\PromoFlyerController::class, 'index'])->name('promo-flyers.index');
+                Route::post('promo-flyers', [\App\Http\Controllers\Admin\PromoFlyerController::class, 'update'])->name('promo-flyers.update');
+
+                // Theme & Dual-Color Palette Settings
+                Route::get('theme-settings', [\App\Http\Controllers\Admin\ThemeController::class, 'index'])->name('themes.index');
+                Route::put('theme-settings', [\App\Http\Controllers\Admin\ThemeController::class, 'update'])->name('themes.update');
+
+                // POS Integration & Connection Settings
+                Route::get('pos-connection', [\App\Http\Controllers\Admin\PosConnectionController::class, 'index'])->name('pos-connection.index');
+                Route::get('pos-integration', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'index'])->name('pos-integration.index');
+                Route::post('pos-integration/save-and-test', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'saveAndTestConnection'])->name('pos-integration.save-and-test');
+                Route::post('pos-integration/test', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'testConnection'])->name('pos-integration.test');
+                Route::post('pos-integration/sync-catalog', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'syncCatalog'])->name('pos-integration.sync-catalog');
+                Route::post('pos-integration/sync-availability', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'syncAvailability'])->name('pos-integration.sync-availability');
+                Route::post('pos-integration/reconcile-mappings', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'reconcileMappings'])->name('pos-integration.reconcile-mappings');
+                Route::post('pos-integration/import-simple', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'importSimple'])->name('pos-integration.import-simple');
+                Route::post('pos-integration/bulk-import', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'bulkImport'])->name('pos-integration.bulk-import');
+                Route::post('pos-integration/import-all', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'importAllEligible'])->name('pos-integration.import-all');
+
+                // Roles & Permissions Management (STRICTLY Super Administrator)
                 Route::get('roles', [\App\Http\Controllers\Admin\RoleController::class, 'index'])->name('roles.index');
                 Route::post('roles', [\App\Http\Controllers\Admin\RoleController::class, 'store'])->name('roles.store');
                 Route::put('roles/{role}', [\App\Http\Controllers\Admin\RoleController::class, 'update'])->name('roles.update');
@@ -310,22 +337,6 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::get('activity-logs', [\App\Http\Controllers\Admin\ActivityLogController::class, 'index'])->name('activity-logs.index');
                 Route::get('activity-logs/export', [\App\Http\Controllers\Admin\ActivityLogController::class, 'export'])->name('activity-logs.export');
             });
-
-            // Theme & Dual-Color Palette Settings
-            Route::get('theme-settings', [\App\Http\Controllers\Admin\ThemeController::class, 'index'])->name('themes.index');
-            Route::put('theme-settings', [\App\Http\Controllers\Admin\ThemeController::class, 'update'])->name('themes.update');
-
-            // POS Integration & Connection Settings
-            Route::get('pos-connection', [\App\Http\Controllers\Admin\PosConnectionController::class, 'index'])->name('pos-connection.index');
-            Route::get('pos-integration', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'index'])->name('pos-integration.index');
-            Route::post('pos-integration/save-and-test', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'saveAndTestConnection'])->name('pos-integration.save-and-test');
-            Route::post('pos-integration/test', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'testConnection'])->name('pos-integration.test');
-            Route::post('pos-integration/sync-catalog', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'syncCatalog'])->name('pos-integration.sync-catalog');
-            Route::post('pos-integration/sync-availability', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'syncAvailability'])->name('pos-integration.sync-availability');
-            Route::post('pos-integration/reconcile-mappings', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'reconcileMappings'])->name('pos-integration.reconcile-mappings');
-            Route::post('pos-integration/import-simple', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'importSimple'])->name('pos-integration.import-simple');
-            Route::post('pos-integration/bulk-import', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'bulkImport'])->name('pos-integration.bulk-import');
-            Route::post('pos-integration/import-all', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'importAllEligible'])->name('pos-integration.import-all');
         }
         );
 
