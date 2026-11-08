@@ -1,12 +1,14 @@
 <script setup>
-import { useForm, usePage } from '@inertiajs/vue3'
-import { ref, onMounted } from 'vue'
+import { useForm, usePage, Link } from '@inertiajs/vue3'
+import { ref, computed, onMounted } from 'vue'
 import Layout from '@/Layouts/Layout.vue';
 import TextInput from '@/Components/Forms/TextInput.vue';
 import { useToast } from 'vue-toastification';
 
 const toast = useToast();
-const flashMsg = usePage().props.flash.message;
+const page = usePage();
+const flashMsg = page.props.flash.message;
+const isTurnstileEnabled = computed(() => page.props.store_settings?.turnstile_enabled !== '0');
 const form = useForm({
   email: '',
   password: '',
@@ -81,11 +83,13 @@ const reloadTurnstile = () => {
 
 // Load Turnstile when component mounts
 onMounted(() => {
-    loadTurnstile();
+    if (isTurnstileEnabled.value) {
+        loadTurnstile();
+    }
 });
 
 const handleLogin = () => {
-    if (!form.cf_turnstile_response) {
+    if (isTurnstileEnabled.value && !form.cf_turnstile_response) {
         turnstileError.value = 'Please complete the CAPTCHA verification';
         return;
     }
@@ -93,7 +97,9 @@ const handleLogin = () => {
     form.post(route('customer.login.submit'), {
         onFinish: () => {
             form.reset('password');
-            resetTurnstile();
+            if (isTurnstileEnabled.value) {
+                resetTurnstile();
+            }
         },
         onError: () => {
             toast.error(form.errors.email ?? 'Login failed. Please check credentials.');
@@ -121,24 +127,26 @@ const handleLogin = () => {
                     <TextInput name="password" label="Password" type="password" v-model="form.password" placeholder="••••••••" :required="true" autocomplete="current-password"/>
                     
                     <!-- Cloudflare Turnstile Widget -->
-                    <div class="flex justify-left">
-                        <div id="cf-turnstile-widget" class="cf-turnstile"></div>
-                    </div>
-                    <div v-if="turnstileError" class="text-red-600 text-sm text-center">
-                        {{ turnstileError }}
-                    </div>
-                    <div v-if="form.errors.cf_turnstile_response" class="text-red-600 text-sm text-center">
-                        {{ form.errors.cf_turnstile_response }}
-                    </div>
+                    <template v-if="isTurnstileEnabled">
+                        <div class="flex justify-left">
+                            <div id="cf-turnstile-widget" class="cf-turnstile"></div>
+                        </div>
+                        <div v-if="turnstileError" class="text-red-600 text-sm text-center">
+                            {{ turnstileError }}
+                        </div>
+                        <div v-if="form.errors.cf_turnstile_response" class="text-red-600 text-sm text-center">
+                            {{ form.errors.cf_turnstile_response }}
+                        </div>
+                    </template>
 
                     <div class="flex items-center justify-between">
                         <label class="flex items-center">
                             <input type="checkbox" class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded" v-model="form.remember" />
                             <span class="ml-2 text-sm text-gray-600 dark:text-gray-300">Remember me</span>
                         </label>
-                        <a :href="route('password.request')" class="text-sm font-medium text-primary hover:underline">
+                        <Link :href="route('password.request')" class="text-sm font-medium text-primary hover:underline">
                             Forgot password?
-                        </a>
+                        </Link>
                     </div>
                     <button class="w-full bg-primary hover:opacity-90 text-white font-bold py-3 rounded-md transition shadow-md" :disabled="form.processing">Sign in</button>
 

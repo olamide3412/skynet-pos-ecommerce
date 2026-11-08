@@ -17,12 +17,13 @@ class CartItem extends Model
         'price',
         'variant',
         'product_pos_unit_id',
+        'product_variant_mapping_id',
         'unit_name',
         'variant_key',
         'variant_label',
     ];
 
-    protected $with = ['product', 'posUnit'];
+    protected $with = ['product', 'posUnit', 'variantMapping'];
 
     public function cart(): BelongsTo
     {
@@ -37,5 +38,10 @@ class CartItem extends Model
     public function posUnit(): BelongsTo
     {
         return $this->belongsTo(ProductPosUnit::class, 'product_pos_unit_id');
+    }
+
+    public function variantMapping(): BelongsTo
+    {
+        return $this->belongsTo(ProductVariantMapping::class, 'product_variant_mapping_id');
     }
 }

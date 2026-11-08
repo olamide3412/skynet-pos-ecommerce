@@ -59,7 +59,8 @@ class HandleInertiaRequests extends Middleware
                 'error' => fn() => $request->session()->get('error'),
                 'info' => fn() => $request->session()->get('info'),
                 'warning' => fn() => $request->session()->get('warning'),
-                'message' => fn() => $request->session()->get('message')
+                'message' => fn() => $request->session()->get('message'),
+                'status' => fn() => $request->session()->get('status'),
             ],
             'support' => [
                 'phone' => '+2348032072831',

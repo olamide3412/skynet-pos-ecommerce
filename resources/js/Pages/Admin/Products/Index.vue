@@ -260,8 +260,84 @@ const handleGalleryUpload = (e) => {
     galleryPreviews.value = files.map(f => URL.createObjectURL(f));
 };
 
-const addVariant    = () => form.variants.push({ name: '', price: '', stock: '' });
+const addVariant = () => form.variants.push({
+    id: null,
+    name: '',
+    price: '',
+    stock: '',
+    inventory_source: form.inventory_source === 'pos' ? 'pos' : 'ecommerce',
+    pos_item_id: null,
+    absorb_standalone: true,
+});
 const removeVariant = (i) => form.variants.splice(i, 1);
+
+const isBasePosItemInVariants = computed(() => {
+    if (form.inventory_source !== 'pos' || !form.pos_item_id) return true;
+    return form.variants.some(v => v.inventory_source === 'pos' && Number(v.pos_item_id) === Number(form.pos_item_id));
+});
+
+const includeBasePosItemAsVariant = () => {
+    if (!form.pos_item_id) return;
+    const baseItem = getPosItemDetails(form.pos_item_id);
+    form.variants.unshift({
+        id: null,
+        name: baseItem ? baseItem.pos_item_name : (form.name || 'Standard'),
+        price: baseItem ? baseItem.standard_price : form.price,
+        stock: baseItem ? baseItem.effective_availability : form.stock,
+        inventory_source: 'pos',
+        pos_item_id: Number(form.pos_item_id),
+        absorb_standalone: false,
+    });
+};
+
+const handleVariantSourceChange = (v) => {
+    if (v.inventory_source === 'ecommerce') {
+        v.pos_item_id = null;
+    }
+};
+
+const handleVariantPosItemSelect = (v) => {
+    if (!v.pos_item_id) return;
+    const item = props.synced_pos_items.find(i => Number(i.pos_item_id) === Number(v.pos_item_id));
+    if (item) {
+        if (!v.name) {
+            v.name = item.pos_item_name;
+        }
+        v.price = item.standard_price;
+        v.stock = item.effective_availability;
+        if (v.absorb_standalone === undefined) {
+            v.absorb_standalone = true;
+        }
+    }
+};
+
+const getPosItemDetails = (posItemId) => {
+    if (!posItemId) return null;
+    return props.synced_pos_items.find(i => Number(i.pos_item_id) === Number(posItemId)) || null;
+};
+
+const getVariantStandaloneConflict = (posItemId) => {
+    const item = getPosItemDetails(posItemId);
+    if (!item || !item.mapped_product) return null;
+    if (editId.value && Number(item.mapped_product.id) === Number(editId.value)) return null;
+    return item.mapped_product;
+};
+
+const formatVariantPosOptionLabel = (item) => {
+    let prefix = '🟢 ';
+    let statusTag = '';
+    if (form.pos_item_id && Number(item.pos_item_id) === Number(form.pos_item_id)) {
+        prefix = '🔵 ';
+        statusTag = ' • [Base Item of This Product]';
+    } else if (item.mapped_product && (!editId.value || Number(item.mapped_product.id) !== Number(editId.value))) {
+        prefix = '🟡 ';
+        statusTag = ` • [Active Store Product: ${item.mapped_product.name}]`;
+    } else if (item.mapped_variant && (!editId.value || Number(item.mapped_variant.product_id) !== Number(editId.value))) {
+        prefix = '🟣 ';
+        statusTag = ` • [Variant of: ${item.mapped_variant.product_name}]`;
+    }
+    return `${prefix}${item.pos_item_name} (SKU: ${item.sku || 'N/A'} | ₦${Number(item.standard_price || 0).toLocaleString()} | Stock: ${item.effective_availability})${statusTag}`;
+};
 
 const save = () => {
     const url = isEditing.value
@@ -326,7 +402,27 @@ const openEditForm = (p) => {
     form.show_stock_level  = p.show_stock_level;
     form.compress_images   = true;
     form.related_products  = p.related_products || [];
-    form.variants          = p.variants || [];
+    if (p.variant_mappings && p.variant_mappings.length > 0) {
+        form.variants = p.variant_mappings.map(m => ({
+            id: m.id,
+            name: m.variant_label || '',
+            price: m.local_price !== null && m.local_price !== undefined ? m.local_price : (m.synced_pos_item?.standard_price ?? ''),
+            stock: m.local_stock !== null && m.local_stock !== undefined ? m.local_stock : (m.synced_pos_item?.effective_availability ?? ''),
+            inventory_source: m.inventory_source || (m.pos_item_id ? 'pos' : 'ecommerce'),
+            pos_item_id: m.pos_item_id || null,
+            absorb_standalone: true,
+        }));
+    } else {
+        form.variants = (p.variants || []).map(v => ({
+            id: v.id || null,
+            name: v.name || '',
+            price: v.price ?? '',
+            stock: v.stock ?? '',
+            inventory_source: v.inventory_source || (v.pos_item_id ? 'pos' : 'ecommerce'),
+            pos_item_id: v.pos_item_id || null,
+            absorb_standalone: true,
+        }));
+    }
     form.attributes        = p.attributes || {};
     imagePreview.value     = p.image ? '/storage/' + p.image : null;
     if (p.images?.length) galleryPreviews.value = p.images.map(img => '/storage/' + img);
@@ -1270,39 +1366,156 @@ const submitBulkDelete = () => {
 
                     <!-- Product Variants -->
                     <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border dark:border-gray-700">
-                        <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
                             <h3 class="text-base font-bold flex items-center gap-2">
                                 <span class="w-6 h-6 bg-primary-soft text-primary rounded flex items-center justify-center text-sm">🎛️</span>
                                 Product Variants
                             </h3>
-                            <button @click.prevent="addVariant"
-                                class="text-sm bg-primary-soft hover:bg-primary-soft text-primary px-3 py-1.5 rounded-lg font-semibold transition flex items-center gap-1">
-                                + Add Variant
-                            </button>
+                            <div class="flex items-center gap-2">
+                                <button
+                                    v-if="form.inventory_source === 'pos' && form.pos_item_id && !isBasePosItemInVariants"
+                                    @click.prevent="includeBasePosItemAsVariant"
+                                    type="button"
+                                    class="text-xs bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/40 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700 px-3 py-1.5 rounded-lg font-semibold transition flex items-center gap-1"
+                                    title="Include this product's base POS item as the first selectable variant option"
+                                >
+                                    <span>🏬</span> + Include Base POS Item as Variant #1
+                                </button>
+                                <button @click.prevent="addVariant"
+                                    class="text-sm bg-primary-soft hover:bg-primary-soft text-primary px-3 py-1.5 rounded-lg font-semibold transition flex items-center gap-1">
+                                    + Add Variant
+                                </button>
+                            </div>
                         </div>
                         <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">Add variations (Color, Size, Wattage…) with individual prices and stock counts.</p>
-                        <div class="space-y-3">
+                        <div class="space-y-4">
                             <div v-for="(v, i) in form.variants" :key="i"
-                                class="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border dark:border-gray-700 flex flex-wrap lg:flex-nowrap items-end gap-3 relative group">
+                                class="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border dark:border-gray-700 relative group space-y-3">
                                 <button @click.prevent="removeVariant(i)"
-                                    class="absolute -top-2 -right-2 bg-red-100 text-red-600 rounded-full p-1 shadow opacity-0 group-hover:opacity-100 transition">
+                                    type="button"
+                                    class="absolute -top-2 -right-2 bg-red-100 hover:bg-red-200 dark:bg-red-900/60 dark:hover:bg-red-900 text-red-600 dark:text-red-300 rounded-full p-1.5 shadow transition z-10"
+                                    title="Remove Variant">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                                 </button>
-                                <div class="w-full lg:w-1/2">
-                                    <label class="block text-xs font-semibold text-gray-500 mb-1">Variant Name</label>
-                                    <input v-model="v.name" type="text" placeholder="e.g. Red / 60W" class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700"/>
+
+                                <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                                    <div class="md:col-span-6">
+                                        <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Variant Name / Option</label>
+                                        <input v-model="v.name" type="text" placeholder="e.g. Red / Large, 128GB Blue" class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700"/>
+                                    </div>
+                                    <div class="md:col-span-6">
+                                        <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Inventory Source</label>
+                                        <select
+                                            v-model="v.inventory_source"
+                                            @change="handleVariantSourceChange(v)"
+                                            class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700">
+                                            <option value="ecommerce">Online Warehouse (Ecommerce Only)</option>
+                                            <option value="pos">Physical POS Branch Item</option>
+                                        </select>
+                                    </div>
                                 </div>
-                                <div class="w-full sm:w-1/2 lg:w-1/4">
-                                    <label class="block text-xs font-semibold text-gray-500 mb-1">Price (₦)</label>
-                                    <input v-model="v.price" type="number" step="0.01" class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700"/>
+
+                                <!-- POS Item Selector (if inventory_source === 'pos') -->
+                                <div v-if="v.inventory_source === 'pos'" class="p-3 bg-indigo-50/70 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg space-y-2">
+                                    <div class="flex items-center justify-between">
+                                        <label class="block text-xs font-bold text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5">
+                                            <span>🏬</span> Linked POS Inventory Item
+                                        </label>
+                                        <span v-if="getPosItemDetails(v.pos_item_id)" class="text-[11px] font-bold text-indigo-700 dark:text-indigo-300">
+                                            Branch Stock: {{ getPosItemDetails(v.pos_item_id).effective_availability }} {{ getPosItemDetails(v.pos_item_id).base_unit_name || 'Units' }}
+                                        </span>
+                                    </div>
+                                    <select
+                                        v-model="v.pos_item_id"
+                                        @change="handleVariantPosItemSelect(v)"
+                                        class="w-full text-sm rounded-lg border-indigo-300 dark:border-indigo-700 dark:bg-gray-800 focus:ring-indigo-500">
+                                        <option :value="null">-- Select POS Item to link --</option>
+                                        <option
+                                            v-for="item in props.synced_pos_items"
+                                            :key="item.pos_item_id"
+                                            :value="item.pos_item_id"
+                                        >
+                                            {{ formatVariantPosOptionLabel(item) }}
+                                        </option>
+                                    </select>
+
+                                    <!-- Safeguard Prompt when selecting a POS item that is already an active standalone product -->
+                                    <div
+                                        v-if="getVariantStandaloneConflict(v.pos_item_id)"
+                                        class="p-2.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700/80 rounded-lg text-xs space-y-2"
+                                    >
+                                        <div class="flex items-start gap-2 text-amber-900 dark:text-amber-200 font-semibold">
+                                            <span>⚠️</span>
+                                            <span>
+                                                This POS item is currently active on the store as standalone product
+                                                <strong class="underline">"{{ getVariantStandaloneConflict(v.pos_item_id).name }}"</strong>
+                                                (#{{ getVariantStandaloneConflict(v.pos_item_id).id }}).
+                                            </span>
+                                        </div>
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
+                                            <label
+                                                class="flex items-start gap-2 p-2 rounded-md border cursor-pointer transition"
+                                                :class="v.absorb_standalone !== false
+                                                    ? 'bg-amber-100/80 dark:bg-amber-900/50 border-amber-400 dark:border-amber-600 text-amber-950 dark:text-amber-100 font-semibold'
+                                                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300'"
+                                            >
+                                                <input
+                                                    type="radio"
+                                                    :name="`absorb_standalone_${i}`"
+                                                    :value="true"
+                                                    v-model="v.absorb_standalone"
+                                                    class="mt-0.5 text-amber-600 focus:ring-amber-500"
+                                                />
+                                                <div>
+                                                    <div>Consolidate into Variant (Recommended)</div>
+                                                    <div class="text-[11px] font-normal opacity-80">
+                                                        Removes duplicate standalone card & moves POS sync here.
+                                                    </div>
+                                                </div>
+                                            </label>
+                                            <label
+                                                class="flex items-start gap-2 p-2 rounded-md border cursor-pointer transition"
+                                                :class="v.absorb_standalone === false
+                                                    ? 'bg-amber-100/80 dark:bg-amber-900/50 border-amber-400 dark:border-amber-600 text-amber-950 dark:text-amber-100 font-semibold'
+                                                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300'"
+                                            >
+                                                <input
+                                                    type="radio"
+                                                    :name="`absorb_standalone_${i}`"
+                                                    :value="false"
+                                                    v-model="v.absorb_standalone"
+                                                    class="mt-0.5 text-amber-600 focus:ring-amber-500"
+                                                />
+                                                <div>
+                                                    <div>Keep Both Active on Store</div>
+                                                    <div class="text-[11px] font-normal opacity-80">
+                                                        Keeps standalone product & syncs both to POS.
+                                                    </div>
+                                                </div>
+                                            </label>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="w-full sm:w-1/2 lg:w-1/4">
-                                    <label class="block text-xs font-semibold text-gray-500 mb-1">Stock</label>
-                                    <input v-model="v.stock" type="number" class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700"/>
+
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">
+                                            Price (₦)
+                                            <span v-if="v.inventory_source === 'pos'" class="text-[10px] text-indigo-600 dark:text-indigo-400 font-normal ml-1">(POS standard)</span>
+                                        </label>
+                                        <input v-model="v.price" type="number" step="0.01" class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700"/>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">
+                                            Stock
+                                            <span v-if="v.inventory_source === 'pos'" class="text-[10px] text-indigo-600 dark:text-indigo-400 font-normal ml-1">(Live POS count)</span>
+                                        </label>
+                                        <input v-model="v.stock" type="number" class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700"/>
+                                    </div>
                                 </div>
                             </div>
                             <div v-if="!form.variants.length" class="text-center py-6 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl text-gray-400 text-sm">
-                                No variants. Click "+ Add Variant" above to get started.
+                                No variants. Click "+ Add Variant" above to configure color/size options.
                             </div>
                         </div>
                     </div>

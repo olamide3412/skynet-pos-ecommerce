@@ -117,15 +117,22 @@ class PersonalizedDashboardTest extends TestCase
         $revResp = $this->actingAs($this->staff)->get(route('admin.revenue.index'));
         $revResp->assertForbidden();
 
-        // 2. Staff cannot access system user management
+        // 2. Staff and normal Admin cannot access system user management (Super Admin only)
         $usersResp = $this->actingAs($this->staff)->get(route('admin.users.index'));
         $usersResp->assertForbidden();
 
-        // 3. Admin CAN access both
+        $adminUsersResp = $this->actingAs($this->admin)->get(route('admin.users.index'));
+        $adminUsersResp->assertForbidden();
+
+        // 3. Admin CAN access revenue
         $adminRevResp = $this->actingAs($this->admin)->get(route('admin.revenue.index'));
         $adminRevResp->assertOk();
 
-        $adminUsersResp = $this->actingAs($this->admin)->get(route('admin.users.index'));
-        $adminUsersResp->assertOk();
+        // 4. Super Admin CAN access system user management
+        $superAdmin = User::factory()->create([
+            'role' => 'super administrator',
+        ]);
+        $superAdminUsersResp = $this->actingAs($superAdmin)->get(route('admin.users.index'));
+        $superAdminUsersResp->assertOk();
     }
 }

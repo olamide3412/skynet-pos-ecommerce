@@ -17,11 +17,15 @@ class CustomerWelcomeMail extends Mailable implements ShouldQueue
 
     public Customer $customer;
     public string $storeName;
+    public string $themeColor;
+    public ?string $companyLogo;
 
     public function __construct(Customer $customer)
     {
         $this->customer = $customer;
         $this->storeName = StoreSetting::get('company_name', config('app.name', 'Skynet Store'));
+        $this->themeColor = StoreSetting::get('theme_primary_color', '#FF4B00');
+        $this->companyLogo = StoreSetting::get('company_logo', null);
     }
 
     public function envelope(): Envelope

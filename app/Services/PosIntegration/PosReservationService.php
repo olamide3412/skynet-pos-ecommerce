@@ -27,7 +27,7 @@ class PosReservationService
     public function reserveForCart(Cart $cart): array
     {
         if ($cart->exists) {
-            $cart->loadMissing(['items.product.posUnits', 'items.posUnit']);
+            $cart->loadMissing(['items.product.posUnits', 'items.posUnit', 'items.variantMapping.syncedPosItem']);
         }
         $posLines = [];
 
@@ -37,8 +37,17 @@ class PosReservationService
                 continue;
             }
 
-            // Determine if line is POS-linked
-            if ($product->inventory_source === 'pos' && $product->pos_item_id) {
+            // Check if cart item has a POS-controlled variant mapping
+            $variantMapping = $cartItem->variantMapping;
+            if ($variantMapping && $variantMapping->isPosControlled()) {
+                $posLines[] = [
+                    'cart_item_id'     => $cartItem->id,
+                    'pos_item_id'      => $variantMapping->pos_item_id,
+                    'pos_item_unit_id' => null,
+                    'quantity'         => $cartItem->quantity,
+                    'unit_name'        => $variantMapping->syncedPosItem?->base_unit_name ?? 'Piece',
+                ];
+            } elseif ($product->inventory_source === 'pos' && $product->pos_item_id) {
                 $posLines[] = [
                     'cart_item_id'     => $cartItem->id,
                     'pos_item_id'      => $product->pos_item_id,

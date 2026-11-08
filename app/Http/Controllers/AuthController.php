@@ -26,10 +26,12 @@ class AuthController extends Controller
 
     public function login(Request $request)
     {
+        $turnstileEnabled = \App\Models\StoreSetting::getBool('turnstile_enabled', true);
+
         $attributes = $request->validate([
             'login' => ['required', 'string'],
             'password' => ['required'],
-            'cf_turnstile_response' => ['required', new Turnstile()],
+            'cf_turnstile_response' => $turnstileEnabled ? ['required', new Turnstile()] : ['nullable'],
         ]);
 
         $login = $attributes['login'];

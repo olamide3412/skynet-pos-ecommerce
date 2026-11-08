@@ -1,14 +1,21 @@
 <script setup>
 import Logo from '../../images/logo.png';
-import { Link } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { Link, usePage } from '@inertiajs/vue3';
+import { ref, onMounted } from 'vue';
 
 // ─── Newsletter State ──────────────────────────────────────────
+const page = usePage();
 const newsletterEmail = ref('');
+const newsletterHoneypot = ref(''); // Invisible anti-bot trap field
+const renderedAt = ref(Date.now()); // Time-delay anti-bot lock
 const newsletterSubmitted = ref(false);
 const newsletterLoading = ref(false);
 const newsletterMessage = ref('');
 const newsletterError = ref('');
+
+onMounted(() => {
+    renderedAt.value = Date.now();
+});
 
 const handleNewsletterSubmit = async () => {
     if (!newsletterEmail.value || !newsletterEmail.value.includes('@')) return;
@@ -17,11 +24,14 @@ const handleNewsletterSubmit = async () => {
     try {
         const response = await window.axios.post(route('newsletter.subscribe'), {
             email: newsletterEmail.value,
-            source: 'footer'
+            source: 'footer',
+            b_hp_contact_secondary: newsletterHoneypot.value, // Honeypot field
+            _rendered_at: renderedAt.value,                   // Time delay check
         });
         newsletterSubmitted.value = true;
         newsletterMessage.value = response.data?.message || 'Thank you for subscribing!';
         newsletterEmail.value = '';
+        newsletterHoneypot.value = '';
     } catch (err) {
         newsletterError.value = err.response?.data?.message || 'Unable to subscribe right now. Please try again.';
     } finally {
@@ -114,7 +124,20 @@ const closeModal = () => {
                     </p>
 
                     <!-- Newsletter Subscription Form -->
-                    <form @submit.prevent="handleNewsletterSubmit" class="max-w-md w-full">
+                    <form @submit.prevent="handleNewsletterSubmit" class="max-w-md w-full relative">
+                        <!-- Anti-Bot Honeypot Field (Invisible to human users, filled by bots) -->
+                        <div class="sr-only" aria-hidden="true" style="display: none !important;">
+                            <label for="b_hp_contact_secondary">Do not fill this field</label>
+                            <input
+                                id="b_hp_contact_secondary"
+                                v-model="newsletterHoneypot"
+                                type="text"
+                                name="b_hp_contact_secondary"
+                                tabindex="-1"
+                                autocomplete="off"
+                            />
+                        </div>
+
                         <div class="bg-white rounded-full p-1 pl-4 sm:pl-5 flex items-center shadow-lg border border-gray-200 focus-within:ring-2 focus-within:ring-primary/40 transition">
                             <input
                                 v-model="newsletterEmail"

@@ -19,6 +19,8 @@ class OrderStatusUpdatedMail extends Mailable implements ShouldQueue
     public string $status;
     public string $storeName;
     public string $companyEmail;
+    public ?string $companyLogo;
+    public string $themeColor;
 
     public function __construct(Order $order, string $status)
     {
@@ -26,6 +28,8 @@ class OrderStatusUpdatedMail extends Mailable implements ShouldQueue
         $this->status = $status;
         $this->storeName = StoreSetting::get('company_name', config('app.name', 'Skynet Store'));
         $this->companyEmail = StoreSetting::get('company_email', config('mail.from.address', 'support@skynetdigitalltd.com.ng'));
+        $this->companyLogo = StoreSetting::get('company_logo', null);
+        $this->themeColor = StoreSetting::get('theme_primary_color', '#FF4B00');
     }
 
     public function envelope(): Envelope

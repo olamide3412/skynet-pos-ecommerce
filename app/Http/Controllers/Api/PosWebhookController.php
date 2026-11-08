@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\PosConnection;
 use App\Models\PosSyncLog;
 use App\Models\Product;
+use App\Models\ProductVariantMapping;
 use App\Models\SyncedPosItem;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -131,6 +132,21 @@ class PosWebhookController extends Controller
                 ], 422);
             }
 
+            // Always update local cached synced_pos_items table if present
+            if ($posItemId) {
+                $syncedUpdates = ['last_synced_at' => now()];
+                if ($availableQty !== null && is_numeric($availableQty)) {
+                    $syncedUpdates['effective_availability'] = (int) round((float) $availableQty);
+                }
+                if ($price !== null && is_numeric($price)) {
+                    $syncedUpdates['standard_price'] = (float) $price;
+                }
+                if ($buyingPrice !== null && is_numeric($buyingPrice)) {
+                    $syncedUpdates['buying_price'] = (float) $buyingPrice;
+                }
+                SyncedPosItem::where('pos_item_id', $posItemId)->update($syncedUpdates);
+            }
+
             // Strategy A: Match by pos_item_id column on Product
             $product = null;
             if ($posItemId) {
@@ -151,8 +167,8 @@ class PosWebhookController extends Controller
             }
 
             if ($product) {
-                // Update product stock
-                if ($availableQty !== null && is_numeric($availableQty)) {
+                // Update product stock (if product has variants, Strategy D below will reconcile total variant stock)
+                if ($availableQty !== null && is_numeric($availableQty) && empty($product->variants)) {
                     $product->stock = (int) floor($availableQty);
                 }
 
@@ -169,21 +185,6 @@ class PosWebhookController extends Controller
                 $product->last_pos_sync_at = now();
                 $product->save();
 
-                // Also update local cached synced_pos_items table if present
-                if ($posItemId) {
-                    $syncedUpdates = ['last_synced_at' => now()];
-                    if ($availableQty !== null && is_numeric($availableQty)) {
-                        $syncedUpdates['effective_availability'] = (int) round((float) $availableQty);
-                    }
-                    if ($price !== null && is_numeric($price)) {
-                        $syncedUpdates['standard_price'] = (float) $price;
-                    }
-                    if ($buyingPrice !== null && is_numeric($buyingPrice)) {
-                        $syncedUpdates['buying_price'] = (float) $buyingPrice;
-                    }
-                    SyncedPosItem::where('pos_item_id', $posItemId)->update($syncedUpdates);
-                }
-
                 $logMsg = "Webhook updated Product #{$product->id} ({$product->name}) stock to {$product->stock}";
                 if ($price !== null && is_numeric($price)) {
                     $logMsg .= " and price to {$product->price}";
@@ -195,13 +196,88 @@ class PosWebhookController extends Controller
                     'price'         => $product->price,
                     'branch_id'     => $branchId,
                 ]);
+            }
 
+            // Strategy D: Match via ProductVariantMapping (Multi-Variant POS integration)
+            // Runs even if a standalone/parent Product also matched above!
+            $variantMappings = collect();
+            if ($posItemId) {
+                $variantMappings = ProductVariantMapping::with('product')->where('pos_item_id', $posItemId)->get();
+            }
+
+            $firstUpdatedVariant = null;
+            foreach ($variantMappings as $variantMapping) {
+                $parentProduct = $variantMapping->product;
+
+                if ($availableQty !== null && is_numeric($availableQty)) {
+                    $variantMapping->local_stock = (int) floor($availableQty);
+                }
+                if ($price !== null && is_numeric($price)) {
+                    $variantMapping->local_price = (float) $price;
+                }
+                $variantMapping->last_pos_sync_at = now();
+                $variantMapping->save();
+
+                if (!$firstUpdatedVariant) {
+                    $firstUpdatedVariant = $variantMapping;
+                }
+
+                // Update parent product variants JSON so storefront stays synchronized
+                if ($parentProduct && is_array($parentProduct->variants)) {
+                    $updatedVariants = [];
+                    foreach ($parentProduct->variants as $var) {
+                        if (($var['pos_item_id'] ?? null) == $posItemId || ($var['name'] ?? null) === $variantMapping->variant_label) {
+                            if ($availableQty !== null && is_numeric($availableQty)) {
+                                $var['stock'] = (int) floor($availableQty);
+                            }
+                            if ($price !== null && is_numeric($price)) {
+                                $var['price'] = (float) $price;
+                            }
+                        }
+                        $updatedVariants[] = $var;
+                    }
+                    $totalVariantStock = !empty($updatedVariants)
+                        ? (int) array_sum(array_column($updatedVariants, 'stock'))
+                        : (int) ProductVariantMapping::where('product_id', $parentProduct->id)->sum('local_stock');
+
+                    $parentProduct->updateQuietly([
+                        'stock'    => $totalVariantStock,
+                        'variants' => $updatedVariants,
+                    ]);
+                }
+
+                $logMsg = "Webhook updated Variant '{$variantMapping->variant_label}' (Product #{$parentProduct?->id}) stock to {$variantMapping->local_stock}";
+                if ($price !== null && is_numeric($price)) {
+                    $logMsg .= " and price to {$variantMapping->local_price}";
+                }
+
+                PosSyncLog::log('webhook_inventory', 'success', $logMsg, (string) ($parentProduct?->id ?? $posItemId), [
+                    'pos_item_id' => $posItemId,
+                    'stock'       => $variantMapping->local_stock,
+                    'price'       => $variantMapping->local_price,
+                    'branch_id'   => $branchId,
+                    'type'        => 'variant',
+                ]);
+            }
+
+            if ($product && !$firstUpdatedVariant) {
                 return response()->json([
                     'success'    => true,
                     'message'    => "Product #{$product->id} updated successfully.",
                     'product_id' => $product->id,
                     'stock'      => $product->stock,
                     'price'      => $product->price,
+                ], 200);
+            }
+
+            if ($firstUpdatedVariant) {
+                return response()->json([
+                    'success'            => true,
+                    'message'            => "Variant '{$firstUpdatedVariant->variant_label}' updated successfully.",
+                    'variant_mapping_id' => $firstUpdatedVariant->id,
+                    'product_id'         => $firstUpdatedVariant->product_id,
+                    'stock'              => $firstUpdatedVariant->local_stock,
+                    'price'              => $firstUpdatedVariant->local_price,
                 ], 200);
             }
 

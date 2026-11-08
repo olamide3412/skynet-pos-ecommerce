@@ -205,7 +205,7 @@ class ProductController extends Controller
             'product'        => $product->load([
                 'category',
                 'posUnits' => fn($q) => $q->where('is_enabled_online', true)->orderBy('sort_order'),
-                'variantMappings' => fn($q) => $q->where('is_active', true)->orderBy('sort_order'),
+                'variantMappings' => fn($q) => $q->where('is_active', true)->with('syncedPosItem')->orderBy('sort_order'),
             ]),
             'is_wishlisted'  => $isWishlisted,
             'related'        => $this->getRelated($product),

@@ -136,7 +136,7 @@ class PosSyncService
     public function revalidateCart(Cart $cart): array
     {
         if ($cart->exists) {
-            $cart->loadMissing(['items.product.posUnits', 'items.posUnit']);
+            $cart->loadMissing(['items.product.posUnits', 'items.posUnit', 'items.variantMapping.syncedPosItem']);
         }
 
         $priceChanged = false;
@@ -149,6 +149,31 @@ class PosSyncService
             if (!$product || !$product->status) {
                 $outOfStock = true;
                 $messages[] = "Product '{$product?->name}' is no longer available.";
+                continue;
+            }
+
+            // Check if item is linked to a POS-controlled variant mapping
+            $variantMapping = $item->variantMapping;
+            if ($variantMapping && $variantMapping->isPosControlled()) {
+                $syncedItem = $variantMapping->syncedPosItem;
+                if (!$syncedItem || !$syncedItem->is_active) {
+                    $outOfStock = true;
+                    $messages[] = "Option '{$variantMapping->variant_label}' for '{$product->name}' is currently unavailable.";
+                    continue;
+                }
+
+                $variantPrice = (float) $syncedItem->standard_price;
+                if (abs($variantPrice - floatval($item->price)) > 0.01) {
+                    $priceChanged = true;
+                    $messages[] = "Price for '{$product->name} ({$variantMapping->variant_label})' has updated to ₦" . number_format($variantPrice, 2) . ".";
+                    $item->update(['price' => $variantPrice]);
+                }
+
+                $availableStock = (int) floor($syncedItem->effective_availability);
+                if ($availableStock < $item->quantity) {
+                    $outOfStock = true;
+                    $messages[] = "Only {$availableStock} unit(s) available for '{$product->name} ({$variantMapping->variant_label})'.";
+                }
                 continue;
             }
 

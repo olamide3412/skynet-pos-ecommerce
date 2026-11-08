@@ -1,5 +1,6 @@
 <script setup>
-import { useForm, Link } from '@inertiajs/vue3';
+import { useForm, usePage, Link } from '@inertiajs/vue3';
+import { ref, computed, onMounted } from 'vue';
 import Layout from '@/Layouts/Layout.vue';
 import TextInput from '@/Components/Forms/TextInput.vue';
 
@@ -7,12 +8,87 @@ const props = defineProps({
     status: String,
 });
 
+const page = usePage();
+const isTurnstileEnabled = computed(() => page.props.store_settings?.turnstile_enabled !== '0');
+
 const form = useForm({
     email: '',
+    cf_turnstile_response: '',
+});
+
+const turnstileWidgetId = ref(null);
+const isTurnstileLoaded = ref(false);
+const turnstileError = ref('');
+
+const loadTurnstile = () => {
+    if (!isTurnstileEnabled.value) return;
+    if (window.turnstile) {
+        renderTurnstile();
+        return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+        isTurnstileLoaded.value = true;
+        renderTurnstile();
+    };
+    script.onerror = () => {
+        turnstileError.value = 'Failed to load CAPTCHA. Please refresh the page.';
+    };
+    document.head.appendChild(script);
+};
+
+const renderTurnstile = () => {
+    if (window.turnstile && document.getElementById('cf-turnstile-widget')) {
+        turnstileWidgetId.value = window.turnstile.render('#cf-turnstile-widget', {
+            sitekey: page.props.turnstileSiteKey,
+            callback: (token) => {
+                form.cf_turnstile_response = token;
+                turnstileError.value = '';
+            },
+            'expired-callback': () => {
+                form.cf_turnstile_response = '';
+                turnstileError.value = 'CAPTCHA expired. Please verify again.';
+                resetTurnstile();
+            },
+            'error-callback': () => {
+                form.cf_turnstile_response = '';
+                turnstileError.value = 'CAPTCHA error. Please try again.';
+                resetTurnstile();
+            },
+        });
+    }
+};
+
+const resetTurnstile = () => {
+    if (window.turnstile && turnstileWidgetId.value !== null) {
+        window.turnstile.reset(turnstileWidgetId.value);
+    }
+};
+
+onMounted(() => {
+    if (isTurnstileEnabled.value) {
+        loadTurnstile();
+    }
 });
 
 const submit = () => {
-    form.post(route('password.email'));
+    if (isTurnstileEnabled.value && !form.cf_turnstile_response) {
+        turnstileError.value = 'Please complete the CAPTCHA verification';
+        return;
+    }
+
+    form.post(route('password.email'), {
+        onFinish: () => {
+            if (isTurnstileEnabled.value) {
+                resetTurnstile();
+                form.cf_turnstile_response = '';
+            }
+        },
+    });
 };
 </script>
 
@@ -32,8 +108,18 @@ const submit = () => {
                     </p>
                 </div>
 
-                <div v-if="status || $page.props.flash.status" class="p-3.5 rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-sm font-medium">
-                    {{ status || $page.props.flash.status }}
+                <div
+                    v-if="status || $page.props.flash.status || $page.props.flash.success"
+                    class="p-3.5 rounded-lg bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300 text-sm font-medium"
+                >
+                    {{ status || $page.props.flash.status || $page.props.flash.success }}
+                </div>
+
+                <div
+                    v-if="$page.props.flash.error || $page.props.flash.warning"
+                    class="p-3.5 rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm font-medium"
+                >
+                    {{ $page.props.flash.error || $page.props.flash.warning }}
                 </div>
 
                 <form @submit.prevent="submit" class="space-y-5">
@@ -43,10 +129,23 @@ const submit = () => {
                         v-model="form.email"
                         type="email"
                         placeholder="you@example.com"
+                        :message="form.errors.email"
                         autofocus
                         :required="true"
                     />
-                    <p v-if="form.errors.email" class="text-red-500 text-xs mt-1">{{ form.errors.email }}</p>
+
+                    <!-- Cloudflare Turnstile Widget (shown when enabled in Store Settings) -->
+                    <div v-if="isTurnstileEnabled" class="space-y-1.5">
+                        <div class="flex justify-left">
+                            <div id="cf-turnstile-widget" class="cf-turnstile"></div>
+                        </div>
+                        <div v-if="turnstileError" class="text-red-600 text-sm text-center">
+                            {{ turnstileError }}
+                        </div>
+                        <div v-if="form.errors.cf_turnstile_response" class="text-red-600 text-sm text-center">
+                            {{ form.errors.cf_turnstile_response }}
+                        </div>
+                    </div>
 
                     <button
                         type="submit"

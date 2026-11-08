@@ -1,3 +1,21 @@
+@php
+    $themeColor = $themeColor ?? \App\Models\StoreSetting::get('theme_primary_color', '#FF4B00');
+    $rawLogo = $companyLogo ?? \App\Models\StoreSetting::get('company_logo', null);
+    $logoUrl = null;
+    if ($rawLogo) {
+        if (\Illuminate\Support\Str::startsWith($rawLogo, ['http://', 'https://'])) {
+            $logoUrl = $rawLogo;
+        } elseif (\Illuminate\Support\Str::startsWith($rawLogo, '/storage/')) {
+            $logoUrl = url($rawLogo);
+        } elseif (\Illuminate\Support\Str::startsWith($rawLogo, 'storage/')) {
+            $logoUrl = url($rawLogo);
+        } else {
+            $logoUrl = url('storage/' . $rawLogo);
+        }
+    } elseif (file_exists(public_path('images/logo.png'))) {
+        $logoUrl = url('images/logo.png');
+    }
+@endphp
 <!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
@@ -49,7 +67,7 @@
         .header {
             padding: 32px 30px 24px 30px;
             background-color: #ffffff;
-            border-bottom: 1px solid #f1f5f9;
+            border-bottom: 3px solid {{ $themeColor }};
             text-align: center;
         }
         .header-title {
@@ -144,7 +162,7 @@
         }
         .btn-primary {
             display: inline-block;
-            background-color: #0f172a;
+            background-color: {{ $themeColor }};
             color: #ffffff !important;
             font-size: 14px;
             font-weight: 700;
@@ -197,10 +215,12 @@
                     <!-- Brand Header -->
                     <tr>
                         <td class="header">
-                            @if(!empty($companyLogo))
-                                <img src="{{ url('storage/' . $companyLogo) }}" alt="{{ $storeName }}" height="38" style="max-height: 38px; width: auto; border: 0; margin-bottom: 8px;" />
+                            @if(!empty($logoUrl))
+                                <a href="{{ url('/') }}" target="_blank" style="text-decoration: none; display: inline-block;">
+                                    <img src="{{ $logoUrl }}" alt="{{ $storeName }}" height="42" style="max-height: 42px; max-width: 200px; width: auto; border: 0; display: block; margin: 0 auto 8px auto;" />
+                                </a>
                             @else
-                                <h1 class="header-title">{{ $storeName }}</h1>
+                                <h1 class="header-title" style="color: {{ $themeColor }};">{{ $storeName }}</h1>
                             @endif
                             <p class="header-subtitle">Official Order Confirmation &amp; Receipt</p>
                         </td>
@@ -219,7 +239,7 @@
                                 <table class="badge-table" role="presentation">
                                     <tr>
                                         <td class="badge-label">Tracking Number:</td>
-                                        <td class="badge-value" style="color: #0284c7;">{{ $order->tracking_number }}</td>
+                                        <td class="badge-value" style="color: {{ $themeColor }};">{{ $order->tracking_number }}</td>
                                     </tr>
                                     <tr>
                                         <td class="badge-label">Order Date:</td>

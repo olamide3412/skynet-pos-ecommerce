@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
+use App\Services\ActivityLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
@@ -111,7 +112,30 @@ class CustomerController extends Controller
             'phone' => ['nullable', 'string', 'max:50'],
         ]);
 
+        $original = [
+            'name'  => $customer->name,
+            'email' => $customer->email,
+            'phone' => $customer->phone,
+        ];
+
         $customer->update($validated);
+
+        $changes = [];
+        foreach ($validated as $key => $newVal) {
+            if ($original[$key] !== $customer->{$key}) {
+                $changes[$key] = [
+                    'old' => $original[$key],
+                    'new' => $customer->{$key},
+                ];
+            }
+        }
+
+        ActivityLogger::customer("Updated customer profile for {$customer->name} (#{$customer->id})", [
+            'customer_id'    => $customer->id,
+            'customer_name'  => $customer->name,
+            'customer_email' => $customer->email,
+            'changes'        => $changes,
+        ]);
 
         return back()->with('success', "Customer record for {$customer->name} updated successfully.");
     }
@@ -129,6 +153,12 @@ class CustomerController extends Controller
             'password' => Hash::make($request->input('password')),
         ]);
 
+        ActivityLogger::customer("Reset password for customer {$customer->name} (#{$customer->id})", [
+            'customer_id'    => $customer->id,
+            'customer_name'  => $customer->name,
+            'customer_email' => $customer->email,
+        ]);
+
         return back()->with('success', "Password for {$customer->name} reset successfully.");
     }
 
@@ -138,6 +168,9 @@ class CustomerController extends Controller
     public function destroy(Customer $customer)
     {
         $name = $customer->name;
+        $id = $customer->id;
+        $email = $customer->email;
+        $ordersCount = $customer->orders()->count();
 
         // If customer has orders, dissociate customer_id to preserve financial history
         if ($customer->orders()->exists()) {
@@ -145,6 +178,13 @@ class CustomerController extends Controller
         }
 
         $customer->delete();
+
+        ActivityLogger::customer("Deleted customer account for {$name} (#{$id})", [
+            'customer_id'        => $id,
+            'customer_name'      => $name,
+            'customer_email'     => $email,
+            'dissociated_orders' => $ordersCount,
+        ]);
 
         return redirect()->route('admin.customers.index')
             ->with('success', "Customer account for {$name} deleted successfully.");

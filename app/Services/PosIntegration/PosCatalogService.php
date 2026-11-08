@@ -144,6 +144,45 @@ class PosCatalogService
                 $syncedItem->update(['mapping_status' => 'mapped_simple']);
             }
 
+            // If any product variants are mapped to this POS item, synchronize their price & stock as well
+            $mappedVariants = ProductVariantMapping::with('product')
+                ->where('pos_item_id', $syncedItem->pos_item_id)
+                ->get();
+
+            if ($mappedVariants->isNotEmpty()) {
+                foreach ($mappedVariants as $variantMapping) {
+                    $variantMapping->update([
+                        'local_stock'      => (int) floor($syncedItem->effective_availability),
+                        'local_price'      => (float) $syncedItem->standard_price,
+                        'last_pos_sync_at' => now(),
+                    ]);
+
+                    $parentProduct = $variantMapping->product;
+                    if ($parentProduct && is_array($parentProduct->variants)) {
+                        $updatedVariants = [];
+                        foreach ($parentProduct->variants as $var) {
+                            if (($var['pos_item_id'] ?? null) == $syncedItem->pos_item_id || ($var['name'] ?? null) === $variantMapping->variant_label) {
+                                $var['stock'] = (int) floor($syncedItem->effective_availability);
+                                $var['price'] = (float) $syncedItem->standard_price;
+                            }
+                            $updatedVariants[] = $var;
+                        }
+                        $totalVariantStock = !empty($updatedVariants)
+                            ? (int) array_sum(array_column($updatedVariants, 'stock'))
+                            : (int) ProductVariantMapping::where('product_id', $parentProduct->id)->sum('local_stock');
+
+                        $parentProduct->updateQuietly([
+                            'stock'    => $totalVariantStock,
+                            'variants' => $updatedVariants,
+                        ]);
+                    }
+                }
+
+                if (!$mappedProduct) {
+                    $syncedItem->update(['mapping_status' => 'mapped_variant']);
+                }
+            }
+
             return $syncedItem;
         });
     }
@@ -165,7 +204,7 @@ class PosCatalogService
             ? (bool) $customFields['status']
             : (bool) ($customFields['is_active'] ?? false);
 
-        // Check duplicate mapping
+        // Check duplicate mapping on simple products
         $existing = Product::where('pos_item_id', $posItemId)->first();
         if ($existing) {
             $updates = [];
@@ -179,6 +218,15 @@ class PosCatalogService
                 $existing->update($updates);
             }
             return $existing;
+        }
+
+        // Check if already consolidated/mapped as a product variant
+        $existingVariant = ProductVariantMapping::with('product')
+            ->where('pos_item_id', $posItemId)
+            ->where('is_active', true)
+            ->first();
+        if ($existingVariant && $existingVariant->product) {
+            return $existingVariant->product;
         }
 
         $product = DB::transaction(function () use ($syncedItem, $customFields, $status, &$categoryCache) {
@@ -423,12 +471,15 @@ class PosCatalogService
     {
         $updateData = [
             'price'                  => $syncedItem->standard_price,
-            'stock'                  => (int) floor($syncedItem->effective_availability),
             'pos_item_name_snapshot' => $syncedItem->pos_item_name,
             'pos_base_unit_name'     => $syncedItem->base_unit_name,
             'pos_sync_status'        => $syncedItem->is_active ? 'synced' : 'inactive_pos_item',
             'last_pos_sync_at'       => now(),
         ];
+
+        if (empty($product->variants)) {
+            $updateData['stock'] = (int) floor($syncedItem->effective_availability);
+        }
 
         if ($syncedItem->buying_price > 0 || $product->cost_price === null) {
             $updateData['cost_price'] = $syncedItem->buying_price ?? 0;
@@ -468,23 +519,55 @@ class PosCatalogService
     {
         @set_time_limit(300);
 
+        // 1. Simple product mappings
         $mappedProducts = Product::where('inventory_source', 'pos')
             ->whereNotNull('pos_item_id')
             ->get(['id', 'pos_item_id']);
 
-        $activePosItemIds = $mappedProducts->pluck('pos_item_id')->map(fn ($id) => (int) $id)->all();
+        $simplePosItemIds = $mappedProducts->pluck('pos_item_id')->map(fn ($id) => (int) $id)->all();
 
-        // Ensure local synced_pos_items mapping_status matches active products
+        // 2. Variant product mappings
+        $mappedVariants = ProductVariantMapping::where('inventory_source', 'pos')
+            ->whereNotNull('pos_item_id')
+            ->where('is_active', true)
+            ->get(['id', 'product_id', 'pos_item_id', 'variant_key']);
+
+        $variantPosItemIds = $mappedVariants->pluck('pos_item_id')->map(fn ($id) => (int) $id)->all();
+
+        $allActivePosItemIds = array_values(array_unique(array_merge($simplePosItemIds, $variantPosItemIds)));
+
+        // 3. Ensure local synced_pos_items mapping_status matches active products & variants
         SyncedPosItem::where('mapping_status', '!=', 'unmapped')
-            ->when(!empty($activePosItemIds), fn ($q) => $q->whereNotIn('pos_item_id', $activePosItemIds))
+            ->when(!empty($allActivePosItemIds), fn ($q) => $q->whereNotIn('pos_item_id', $allActivePosItemIds))
             ->update(['mapping_status' => 'unmapped']);
 
+        if (!empty($simplePosItemIds)) {
+            SyncedPosItem::whereIn('pos_item_id', $simplePosItemIds)
+                ->update(['mapping_status' => 'mapped_simple']);
+        }
+
+        if (!empty($variantPosItemIds)) {
+            SyncedPosItem::whereIn('pos_item_id', $variantPosItemIds)
+                ->whereNotIn('pos_item_id', $simplePosItemIds)
+                ->update(['mapping_status' => 'mapped_variant']);
+        }
+
+        // 4. Build deletion protection mappings payload
         $mappings = [];
         foreach ($mappedProducts as $product) {
             $mappings[] = [
                 'pos_item_id'          => (int) $product->pos_item_id,
                 'ecommerce_product_id' => (string) $product->id,
                 'type'                 => 'simple',
+            ];
+        }
+
+        foreach ($mappedVariants as $variant) {
+            $mappings[] = [
+                'pos_item_id'          => (int) $variant->pos_item_id,
+                'ecommerce_product_id' => (string) $variant->product_id,
+                'type'                 => 'variant',
+                'variant_key'          => $variant->variant_key,
             ];
         }
 

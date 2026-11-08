@@ -71,11 +71,58 @@ const form = useForm({
     product_id: props.product.id,
     quantity: 1,
     variant: null,
+    variant_key: null,
+    product_variant_mapping_id: null,
     product_pos_unit_id: selectedPosUnit.value ? selectedPosUnit.value.id : null,
+});
+
+const availableVariants = computed(() => {
+    if (props.product.variant_mappings && props.product.variant_mappings.length > 0) {
+        return props.product.variant_mappings.map(m => {
+            const isPos = m.inventory_source === 'pos' && !!m.pos_item_id;
+            const stock = isPos && m.synced_pos_item
+                ? Number(m.synced_pos_item.effective_availability)
+                : (m.local_stock !== null && m.local_stock !== undefined ? Number(m.local_stock) : 0);
+            const price = isPos && m.synced_pos_item
+                ? parseFloat(m.synced_pos_item.standard_price)
+                : (m.local_price !== null && m.local_price !== undefined ? parseFloat(m.local_price) : parseFloat(props.product.price));
+
+            return {
+                id: m.id,
+                name: m.variant_label,
+                variant_key: m.variant_key,
+                price: price,
+                stock: stock,
+                inventory_source: m.inventory_source,
+                pos_item_id: m.pos_item_id,
+                is_pos: isPos,
+            };
+        });
+    }
+
+    if (props.product.variants && Array.isArray(props.product.variants)) {
+        return props.product.variants.map(v => ({
+            id: v.id || null,
+            name: v.name,
+            variant_key: v.key || null,
+            price: v.price ? parseFloat(v.price) : null,
+            stock: v.stock !== undefined && v.stock !== null ? Number(v.stock) : null,
+            inventory_source: v.inventory_source || 'ecommerce',
+            pos_item_id: v.pos_item_id || null,
+            is_pos: v.inventory_source === 'pos' && !!v.pos_item_id,
+        }));
+    }
+
+    return [];
 });
 
 watch(selectedVariant, (newVal) => {
     form.variant = newVal ? newVal.name : null;
+    form.variant_key = newVal ? (newVal.variant_key || null) : null;
+    form.product_variant_mapping_id = newVal ? (newVal.id || null) : null;
+    if (form.quantity > maxStock.value && maxStock.value > 0) {
+        form.quantity = maxStock.value;
+    }
 });
 
 watch(selectedPosUnit, (newVal) => {
@@ -113,6 +160,9 @@ const maxStock = computed(() => {
 });
 
 const isPurchasable = computed(() => {
+    if (selectedVariant.value && selectedVariant.value.is_pos) {
+        return maxStock.value > 0;
+    }
     if (props.product.inventory_source === 'pos') {
         if (['missing_pos_item', 'inactive_pos_item', 'mapping_sync_failed'].includes(props.product.pos_sync_status)) {
             return false;
@@ -402,17 +452,30 @@ const structuredData = computed(() => JSON.stringify({
                         </div>
                     </div>
 
-                    <div v-if="product.variants && product.variants.length > 0" class="mb-6 bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 p-4 rounded-lg">
-                        <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">Available Options</label>
+                    <div v-if="availableVariants && availableVariants.length > 0" class="mb-6 bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 p-4 rounded-lg">
+                        <div class="flex items-center justify-between mb-3">
+                            <label class="block text-sm font-bold text-gray-700 dark:text-gray-300">Available Options</label>
+                            <span v-if="selectedVariant" class="text-xs font-semibold">
+                                <span v-if="selectedVariant.stock !== null && selectedVariant.stock <= 0" class="text-red-500 font-bold">Out of stock</span>
+                                <span v-else-if="selectedVariant.stock !== null && selectedVariant.stock <= 5" class="text-amber-600 font-bold">Only {{ selectedVariant.stock }} left in stock</span>
+                                <span v-else-if="selectedVariant.stock !== null" class="text-emerald-600 font-bold">In Stock ({{ selectedVariant.stock }} available)</span>
+                            </span>
+                        </div>
                         <div class="flex flex-wrap gap-3">
                             <button 
-                                v-for="(v, index) in product.variants" 
+                                v-for="(v, index) in availableVariants" 
                                 :key="index"
+                                type="button"
                                 @click="selectedVariant = v"
                                 :class="selectedVariant?.name === v.name ? 'ring-2 ring-primary bg-primary/10 border-primary text-primary font-bold' : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 hover:border-primary'"
-                                class="px-4 py-2 rounded-md border text-sm font-semibold transition relative overflow-hidden"
+                                class="px-4 py-2 rounded-md border text-sm font-semibold transition relative overflow-hidden text-left"
                             >
-                                {{ v.name }}
+                                <div class="flex items-center gap-1.5">
+                                    <span>{{ v.name }}</span>
+                                    <span v-if="v.stock !== null && v.stock <= 0" class="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
+                                        Sold out
+                                    </span>
+                                </div>
                                 <div v-if="v.price && parseFloat(v.price) > 0" class="text-xs font-normal text-gray-500 dark:text-gray-400 mt-0.5">
                                     ₦{{ parseFloat(v.price).toLocaleString() }}
                                 </div>
@@ -432,7 +495,7 @@ const structuredData = computed(() => JSON.stringify({
                                 <button type="button" @click="form.quantity < maxStock ? form.quantity++ : form.quantity" class="px-4 h-full text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition font-bold disabled:opacity-50 select-none">+</button>
                             </div>
                             <button @click="addToCart" 
-                                :disabled="form.processing || !isPurchasable || (product.variants?.length > 0 && !selectedVariant)" 
+                                :disabled="form.processing || !isPurchasable || (availableVariants?.length > 0 && !selectedVariant)" 
                                 class="bg-gray-800 hover:bg-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 text-white font-bold transition flex-1 h-12 rounded-md disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wide flex items-center justify-center gap-2 text-sm shadow-sm">
                                 <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
                                 {{ !isPurchasable ? 'Out of Stock' : 'Add to Cart' }}
@@ -451,10 +514,10 @@ const structuredData = computed(() => JSON.stringify({
                             </button>
                         </div>
                         <button @click="buyNow" 
-                            :disabled="form.processing || !isPurchasable || (product.variants?.length > 0 && !selectedVariant)" 
+                            :disabled="form.processing || !isPurchasable || (availableVariants?.length > 0 && !selectedVariant)" 
                             class="bg-primary hover:opacity-90 text-white font-bold transition w-full h-12 rounded-md disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wide flex items-center justify-center gap-2 text-sm shadow-md hover:shadow-lg">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                            {{ !isPurchasable ? 'Out of Stock' : ((product.variants?.length > 0 && !selectedVariant) ? 'Select Option to Buy Now' : 'Buy Now') }}
+                            {{ !isPurchasable ? 'Out of Stock' : ((availableVariants?.length > 0 && !selectedVariant) ? 'Select Option to Buy Now' : 'Buy Now') }}
                         </button>
                     </div>
                 </div>

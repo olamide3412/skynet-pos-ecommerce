@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\ActivityLog;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\User;
@@ -113,6 +114,12 @@ class AdminCustomerManagementTest extends TestCase
             'email' => 'updated@example.com',
             'phone' => '08099999999',
         ]);
+
+        $this->assertDatabaseHas('activity_logs', [
+            'action_type' => 'customer',
+            'user_id' => $admin->id,
+            'description' => "Updated customer profile for Updated Name (#{$customer->id})",
+        ]);
     }
 
     public function test_admin_can_reset_customer_password()
@@ -133,6 +140,12 @@ class AdminCustomerManagementTest extends TestCase
         $response->assertRedirect();
         $customer->refresh();
         $this->assertTrue(\Illuminate\Support\Facades\Hash::check('NewSecurePassword123!', $customer->password));
+
+        $this->assertDatabaseHas('activity_logs', [
+            'action_type' => 'customer',
+            'user_id' => $admin->id,
+            'description' => "Reset password for customer {$customer->name} (#{$customer->id})",
+        ]);
     }
 
     public function test_admin_can_delete_customer()
@@ -142,12 +155,20 @@ class AdminCustomerManagementTest extends TestCase
         ]);
 
         $customer = Customer::factory()->create();
+        $customerId = $customer->id;
+        $customerName = $customer->name;
 
         $response = $this->actingAs($admin, 'web')->delete(route('admin.customers.destroy', $customer->id));
 
         $response->assertRedirect(route('admin.customers.index'));
         $this->assertDatabaseMissing('customers', [
-            'id' => $customer->id,
+            'id' => $customerId,
+        ]);
+
+        $this->assertDatabaseHas('activity_logs', [
+            'action_type' => 'customer',
+            'user_id' => $admin->id,
+            'description' => "Deleted customer account for {$customerName} (#{$customerId})",
         ]);
     }
 

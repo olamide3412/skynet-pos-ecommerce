@@ -84,6 +84,7 @@ class SettingsController extends Controller
             'low_stock_threshold'           => 'nullable|integer|min:1|max:100',
 
             // Authentication Providers
+            'turnstile_enabled'             => 'boolean',
             'google_auth_enabled'           => 'boolean',
             'google_client_id'              => 'nullable|string',
             'google_client_secret'          => 'nullable|string',

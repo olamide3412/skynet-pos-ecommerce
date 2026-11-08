@@ -44,12 +44,14 @@ class CustomerAuthController extends Controller
             return redirect()->route('login')->with('error', 'New customer registration is currently disabled.');
         }
 
+        $turnstileEnabled = StoreSetting::getBool('turnstile_enabled', true);
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:customers',
             'password' => 'required|string|confirmed|min:8',
             'phone' => 'nullable|string|max:20',
-            'cf_turnstile_response' => ['required', new Turnstile()],
+            'cf_turnstile_response' => $turnstileEnabled ? ['required', new Turnstile()] : ['nullable'],
         ]);
 
         $guestSessionId = $request->session()->getId();
@@ -79,10 +81,12 @@ class CustomerAuthController extends Controller
 
     public function login(Request $request)
     {
+        $turnstileEnabled = StoreSetting::getBool('turnstile_enabled', true);
+
         $credentials = $request->validate([
             'email' => ['required', 'email'],
             'password' => ['required'],
-            'cf_turnstile_response' => ['required', new Turnstile()],
+            'cf_turnstile_response' => $turnstileEnabled ? ['required', new Turnstile()] : ['nullable'],
         ]);
         
         unset($credentials['cf_turnstile_response']);

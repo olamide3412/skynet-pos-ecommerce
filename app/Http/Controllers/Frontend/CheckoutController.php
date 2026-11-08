@@ -63,7 +63,7 @@ class CheckoutController extends Controller
         $customer = auth('customer')->user();
 
         return Inertia::render('Frontend/Checkout/Index', [
-            'cart'           => $cart->load(['items.product.posUnits', 'items.posUnit']),
+            'cart'           => $cart->load(['items.product.posUnits', 'items.posUnit', 'items.variantMapping.syncedPosItem']),
             'settings'       => StoreSetting::allAsArray(),
             'coupon'         => $request->session()->get('applied_coupon'),
             'shipping_zones' => ShippingZone::where('is_active', true)->orderByDesc('is_default')->orderBy('state')->orderBy('city')->get(),
@@ -98,6 +98,21 @@ class CheckoutController extends Controller
         }
         if (($settings['bank_transfer_enabled'] ?? '0') === '1') $allowed[] = 'bank_transfer';
 
+        // ─── Bot Protection: Honeypot & Timing Check ─────────────────────
+        if ($request->filled('b_hp_billing_company') || $request->filled('website_url')) {
+            Log::info("Checkout bot trapped via honeypot from IP {$request->ip()}");
+            return redirect()->route('cart.index')->with('error', 'Unable to complete your order at this time. Please contact support.');
+        }
+
+        $renderedAt = $request->input('_rendered_at');
+        if ($renderedAt && is_numeric($renderedAt)) {
+            $elapsedSeconds = (microtime(true) * 1000 - (float) $renderedAt) / 1000;
+            if ($elapsedSeconds > 0 && $elapsedSeconds < 1.5) {
+                Log::info("Checkout bot trapped via speed detection ({$elapsedSeconds}s) from IP {$request->ip()}");
+                return redirect()->route('cart.index')->with('error', 'Please take your time to review checkout details before placing your order.');
+            }
+        }
+
         $request->validate([
             'email'            => 'required|email',
             'name'             => 'required|string',
@@ -107,6 +122,37 @@ class CheckoutController extends Controller
             'shipping_zone_id' => 'nullable|exists:shipping_zones,id',
             'gateway'          => 'required|in:' . implode(',', $allowed ?: ['paystack']),
         ]);
+
+        $gateway = $request->gateway;
+
+        // ─── Excessive Pending Pay on Delivery (POD) Protection ───────────
+        if (in_array($gateway, ['pod', 'cod'], true)) {
+            $email = strtolower(trim($request->email));
+            $phone = preg_replace('/[^0-9]/', '', (string) $request->phone);
+
+            $pendingPodQuery = Order::where(function ($q) {
+                $q->where('payment_method', 'pod')
+                  ->orWhere('payment_method', 'cod');
+            })
+            ->whereNotIn('pod_status', ['cash_collected', 'remitted_to_store', 'reconciled'])
+            ->whereNotIn('status', ['completed', 'cancelled', 'refunded'])
+            ->where(function ($q) use ($email, $phone, $request) {
+                $q->where('billing_email', $email);
+                if (!empty($phone) && strlen($phone) >= 7) {
+                    $q->orWhere('billing_phone', 'like', "%{$phone}%");
+                }
+                if ($customerId = auth('customer')->id()) {
+                    $q->orWhere('customer_id', $customerId);
+                }
+            });
+
+            if ($pendingPodQuery->count() >= 3) {
+                return redirect()->route('cart.index')->with(
+                    'warning',
+                    'You currently have 3 pending Pay on Delivery orders awaiting fulfillment. Please wait for delivery or pay online to place additional orders.'
+                );
+            }
+        }
 
         $cart = $this->getCart($request);
 
@@ -200,6 +246,7 @@ class CheckoutController extends Controller
         foreach ($cart->items as $item) {
             $product = $item->product;
             $posUnit = $item->posUnit;
+            $variantMapping = $item->variantMapping;
 
             $invSource = $product?->inventory_source ?? 'ecommerce';
             $posItemId = $product?->pos_item_id;
@@ -210,8 +257,18 @@ class CheckoutController extends Controller
             $unitMultiplier = $posUnit ? floatval($posUnit->quantity_in_base_units) : 1.0;
             $unitCostPrice = floatval($product?->cost_price ?? 0) * $unitMultiplier;
 
+            // If line is bound to a POS-controlled variant mapping:
+            if ($variantMapping && $variantMapping->isPosControlled()) {
+                $invSource = 'pos';
+                $posItemId = $variantMapping->pos_item_id;
+                $unitCostPrice = floatval($variantMapping->syncedPosItem?->buying_price ?? $product?->cost_price ?? 0);
+                $standardSnapshot = $variantMapping->syncedPosItem?->standard_price ?? $item->price;
+                $unitName = $variantMapping->syncedPosItem?->base_unit_name ?? $unitName;
+            }
+
             $order->items()->create([
                 'product_id'                  => $item->product_id,
+                'product_variant_mapping_id'  => $item->product_variant_mapping_id,
                 'quantity'                    => $item->quantity,
                 'price'                       => $item->price,
                 'cost_price'                  => $unitCostPrice,
@@ -656,7 +713,7 @@ class CheckoutController extends Controller
 
     protected function getCart(Request $request)
     {
-        $query = Cart::with(['items.product.posUnits', 'items.posUnit']);
+        $query = Cart::with(['items.product.posUnits', 'items.posUnit', 'items.variantMapping.syncedPosItem']);
 
         if (auth('customer')->check()) {
             return $query->where('customer_id', auth('customer')->id())->first();

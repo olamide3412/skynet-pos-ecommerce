@@ -1,5 +1,6 @@
 <script setup>
 import { useForm, Link } from '@inertiajs/vue3';
+import { ref } from 'vue';
 import Layout from '@/Layouts/Layout.vue';
 import TextInput from '@/Components/Forms/TextInput.vue';
 
@@ -7,6 +8,9 @@ const props = defineProps({
     token: String,
     email: String,
 });
+
+const showPassword = ref(false);
+const showConfirmPassword = ref(false);
 
 const form = useForm({
     token: props.token || '',
@@ -34,7 +38,7 @@ const submit = () => {
                     </div>
                     <h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Set New Password</h2>
                     <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">
-                        Please choose a strong new password for your account.
+                        Please choose a strong new password (at least 8 characters) for your account.
                     </p>
                 </div>
 
@@ -44,30 +48,48 @@ const submit = () => {
                         label="Email Address"
                         v-model="form.email"
                         type="email"
+                        :message="form.errors.email"
                         :required="true"
                     />
-                    <p v-if="form.errors.email" class="text-red-500 text-xs mt-1">{{ form.errors.email }}</p>
 
-                    <TextInput
-                        name="password"
-                        label="New Password"
-                        v-model="form.password"
-                        type="password"
-                        placeholder="••••••••"
-                        :required="true"
-                        autofocus
-                    />
-                    <p v-if="form.errors.password" class="text-red-500 text-xs mt-1">{{ form.errors.password }}</p>
+                    <div class="relative">
+                        <TextInput
+                            name="password"
+                            label="New Password"
+                            v-model="form.password"
+                            :type="showPassword ? 'text' : 'password'"
+                            placeholder="••••••••"
+                            :message="form.errors.password"
+                            :required="true"
+                            autofocus
+                        />
+                        <button
+                            type="button"
+                            @click="showPassword = !showPassword"
+                            class="absolute right-3 top-9 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xs font-medium"
+                        >
+                            {{ showPassword ? 'Hide' : 'Show' }}
+                        </button>
+                    </div>
 
-                    <TextInput
-                        name="password_confirmation"
-                        label="Confirm New Password"
-                        v-model="form.password_confirmation"
-                        type="password"
-                        placeholder="••••••••"
-                        :required="true"
-                    />
-                    <p v-if="form.errors.password_confirmation" class="text-red-500 text-xs mt-1">{{ form.errors.password_confirmation }}</p>
+                    <div class="relative">
+                        <TextInput
+                            name="password_confirmation"
+                            label="Confirm New Password"
+                            v-model="form.password_confirmation"
+                            :type="showConfirmPassword ? 'text' : 'password'"
+                            placeholder="••••••••"
+                            :message="form.errors.password_confirmation"
+                            :required="true"
+                        />
+                        <button
+                            type="button"
+                            @click="showConfirmPassword = !showConfirmPassword"
+                            class="absolute right-3 top-9 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xs font-medium"
+                        >
+                            {{ showConfirmPassword ? 'Hide' : 'Show' }}
+                        </button>
+                    </div>
 
                     <button
                         type="submit"

@@ -26,6 +26,7 @@ const copied = ref(false);
 const actionCategories = [
     { key: '', label: 'All Categories' },
     { key: 'auth', label: 'Auth & Security', color: 'indigo' },
+    { key: 'customer', label: 'Customer Management', color: 'cyan' },
     { key: 'product', label: 'Products & Catalog', color: 'emerald' },
     { key: 'order', label: 'Orders & POD Cash', color: 'amber' },
     { key: 'setting', label: 'Store Config', color: 'sky' },
@@ -109,6 +110,8 @@ const getCategoryBadgeClass = (type) => {
     switch (type) {
         case 'auth':
             return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800';
+        case 'customer':
+            return 'bg-cyan-100 text-cyan-800 border-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-300 dark:border-cyan-800';
         case 'product':
             return 'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800';
         case 'order':

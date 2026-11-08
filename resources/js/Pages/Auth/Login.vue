@@ -1,13 +1,15 @@
 <script setup>
 import { useForm, usePage } from '@inertiajs/vue3'
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import Logo from '../../../images/logo.png'
 import Footer from '@/Components/Footer.vue';
 import TextInput from '@/Components/Forms/TextInput.vue';
 import { useToast } from 'vue-toastification';
 
 const toast = useToast();
-const flashMsg = usePage().props.flash.message;
+const page = usePage();
+const flashMsg = page.props.flash.message;
+const isTurnstileEnabled = computed(() => page.props.store_settings?.turnstile_enabled !== '0');
 const form = useForm({
   login: null,
   password: null,
@@ -78,11 +80,13 @@ const reloadTurnstile = () => {
 };
 // Load Turnstile when component mounts
 onMounted(() => {
-    loadTurnstile();
+    if (isTurnstileEnabled.value) {
+        loadTurnstile();
+    }
 });
 
 const handleLogin = () => {
-    if (!form.cf_turnstile_response) {
+    if (isTurnstileEnabled.value && !form.cf_turnstile_response) {
         turnstileError.value = 'Please complete the CAPTCHA verification';
         return;
     }
@@ -91,7 +95,9 @@ const handleLogin = () => {
         onFinish: () => {
             form.reset('password');
             // Reset Turnstile after submission
-            resetTurnstile();
+            if (isTurnstileEnabled.value) {
+                resetTurnstile();
+            }
         },
         onError: () => {
             form.reset("password");
@@ -150,15 +156,17 @@ const handleLogin = () => {
             :required="true" autocomplete="current-password"/>
 
                  <!-- Cloudflare Turnstile Widget -->
-                <div class="flex justify-left">
-                    <div id="cf-turnstile-widget" class="cf-turnstile"></div>
-                </div>
-                <div v-if="turnstileError" class="text-red-600 text-sm text-center">
-                    {{ turnstileError }}
-                </div>
-                <div v-if="form.errors.cf_turnstile_response" class="text-red-600 text-sm text-center">
-                    {{ form.errors.cf_turnstile_response }}
-                </div>
+                <template v-if="isTurnstileEnabled">
+                    <div class="flex justify-left">
+                        <div id="cf-turnstile-widget" class="cf-turnstile"></div>
+                    </div>
+                    <div v-if="turnstileError" class="text-red-600 text-sm text-center">
+                        {{ turnstileError }}
+                    </div>
+                    <div v-if="form.errors.cf_turnstile_response" class="text-red-600 text-sm text-center">
+                        {{ form.errors.cf_turnstile_response }}
+                    </div>
+                </template>
                 <div class=" hidden text-center">
                     <a href="#" class="text-sm text-indigo-600 hover:text-indigo-500" @click.prevent="reloadTurnstile">
                         Reload CAPTCHA

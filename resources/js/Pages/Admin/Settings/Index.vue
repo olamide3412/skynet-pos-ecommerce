@@ -69,6 +69,7 @@ const form = useForm({
     stock_display_mode:             props.settings.stock_display_mode || 'threshold_only',
     low_stock_threshold:            props.settings.low_stock_threshold || '5',
     // Authentication Providers
+    turnstile_enabled:              props.settings.turnstile_enabled !== '0',
     google_auth_enabled:            props.settings.google_auth_enabled === '1',
     google_client_id:               props.settings.google_client_id || '',
     google_client_secret:           props.settings.google_client_secret || '',
@@ -119,6 +120,7 @@ const storeFeatures = computed(() => ({
     shop_enabled:                  { label: 'Shop / Product Listing',   desc: 'Show the /shop page and product listings to visitors.' },
     order_tracking_enabled:        { label: 'Order Tracking',            desc: 'Allow customers to track orders by tracking number or ID.' },
     customer_registration_enabled: { label: 'Customer Registration',     desc: 'Allow new customers to create accounts.' },
+    turnstile_enabled:             { label: 'Cloudflare Turnstile CAPTCHA', desc: 'Protect Login, Registration, and Forgot Password forms with Cloudflare CAPTCHA. Disable temporarily if poor network prevents loading.' },
     guest_checkout_enabled:        { label: 'Guest Checkout',            desc: 'Let customers checkout without creating an account.' },
     reviews_enabled:               { label: 'Product Reviews',           desc: 'Show and allow customer reviews on products.' },
     wishlist_enabled:              { label: 'Wishlist',                  desc: 'Let customers save products to a wishlist.' },

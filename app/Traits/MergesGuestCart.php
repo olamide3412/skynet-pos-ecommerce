@@ -33,24 +33,33 @@ trait MergesGuestCart
             $existing = $customerCart->items()
                 ->where('product_id', $guestItem->product_id)
                 ->where('product_pos_unit_id', $guestItem->product_pos_unit_id)
-                ->where('variant', $guestItem->variant)
+                ->where(function ($q) use ($guestItem) {
+                    if ($guestItem->product_variant_mapping_id) {
+                        $q->where('product_variant_mapping_id', $guestItem->product_variant_mapping_id)
+                          ->orWhere('variant', $guestItem->variant);
+                    } else {
+                        $q->where('variant', $guestItem->variant);
+                    }
+                })
                 ->first();
 
             if ($existing) {
                 $existing->update([
-                    'quantity' => $existing->quantity + $guestItem->quantity,
-                    'price'    => $guestItem->price,
+                    'quantity'                   => $existing->quantity + $guestItem->quantity,
+                    'price'                      => $guestItem->price,
+                    'product_variant_mapping_id' => $guestItem->product_variant_mapping_id ?: $existing->product_variant_mapping_id,
                 ]);
             } else {
                 $customerCart->items()->create([
-                    'product_id'          => $guestItem->product_id,
-                    'product_pos_unit_id' => $guestItem->product_pos_unit_id,
-                    'unit_name'           => $guestItem->unit_name,
-                    'quantity'            => $guestItem->quantity,
-                    'price'               => $guestItem->price,
-                    'variant'             => $guestItem->variant,
-                    'variant_key'         => $guestItem->variant_key,
-                    'variant_label'       => $guestItem->variant_label,
+                    'product_id'                 => $guestItem->product_id,
+                    'product_pos_unit_id'        => $guestItem->product_pos_unit_id,
+                    'product_variant_mapping_id' => $guestItem->product_variant_mapping_id,
+                    'unit_name'                  => $guestItem->unit_name,
+                    'quantity'                   => $guestItem->quantity,
+                    'price'                      => $guestItem->price,
+                    'variant'                    => $guestItem->variant,
+                    'variant_key'                => $guestItem->variant_key,
+                    'variant_label'              => $guestItem->variant_label,
                 ]);
             }
         }

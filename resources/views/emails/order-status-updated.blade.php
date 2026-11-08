@@ -1,3 +1,21 @@
+@php
+    $themeColor = $themeColor ?? \App\Models\StoreSetting::get('theme_primary_color', '#FF4B00');
+    $rawLogo = $companyLogo ?? \App\Models\StoreSetting::get('company_logo', null);
+    $logoUrl = null;
+    if ($rawLogo) {
+        if (\Illuminate\Support\Str::startsWith($rawLogo, ['http://', 'https://'])) {
+            $logoUrl = $rawLogo;
+        } elseif (\Illuminate\Support\Str::startsWith($rawLogo, '/storage/')) {
+            $logoUrl = url($rawLogo);
+        } elseif (\Illuminate\Support\Str::startsWith($rawLogo, 'storage/')) {
+            $logoUrl = url($rawLogo);
+        } else {
+            $logoUrl = url('storage/' . $rawLogo);
+        }
+    } elseif (file_exists(public_path('images/logo.png'))) {
+        $logoUrl = url('images/logo.png');
+    }
+@endphp
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,28 +23,111 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Order Status Update #{{ $order->tracking_number }}</title>
     <style>
-        body { margin: 0; padding: 24px; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b; }
-        .card { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-        .header { background: #0f172a; color: #ffffff; padding: 28px 24px; text-align: center; }
-        .content { padding: 28px 24px; }
-        .status-badge { display: inline-block; background: #e0f2fe; color: #0369a1; padding: 8px 16px; border-radius: 8px; font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin: 12px 0 16px 0; }
-        .btn { display: inline-block; background: #0f172a; color: #ffffff !important; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 700; font-size: 14px; }
-        .footer { padding: 20px 24px; text-align: center; font-size: 12px; color: #94a3b8; border-top: 1px solid #f1f5f9; background: #f8fafc; }
-        .footer a { color: #64748b; text-decoration: underline; }
+        body {
+            margin: 0;
+            padding: 32px 16px;
+            background-color: #f1f5f9;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            color: #1e293b;
+            -webkit-font-smoothing: antialiased;
+        }
+        .card {
+            max-width: 580px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            overflow: hidden;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+        .brand-header {
+            background-color: #ffffff;
+            padding: 28px 24px 20px 24px;
+            text-align: center;
+            border-bottom: 3px solid {{ $themeColor }};
+        }
+        .hero-banner {
+            background-color: #f8fafc;
+            padding: 22px 24px;
+            text-align: center;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .hero-title {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 800;
+            color: #0f172a;
+        }
+        .hero-subtitle {
+            margin: 4px 0 0;
+            font-size: 13px;
+            color: #64748b;
+        }
+        .content {
+            padding: 32px 28px;
+            line-height: 1.6;
+        }
+        .status-badge {
+            display: inline-block;
+            background: #fff7ed;
+            color: {{ $themeColor }};
+            border: 2px solid {{ $themeColor }};
+            padding: 8px 18px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 14px 0 18px 0;
+        }
+        .btn {
+            display: inline-block;
+            background-color: {{ $themeColor }};
+            color: #ffffff !important;
+            text-decoration: none;
+            padding: 13px 32px;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 14px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .footer {
+            padding: 24px;
+            text-align: center;
+            font-size: 12px;
+            color: #94a3b8;
+            border-top: 1px solid #f1f5f9;
+            background: #f8fafc;
+        }
+        .footer a {
+            color: #64748b;
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
     <div class="card">
-        <div class="header">
-            <h1 style="margin: 0; font-size: 20px; font-weight: 800;">{{ $storeName }}</h1>
-            <p style="margin: 4px 0 0; opacity: 0.8; font-size: 13px;">Order Status Update</p>
+        <div class="brand-header">
+            @if(!empty($logoUrl))
+                <a href="{{ url('/') }}" target="_blank" style="text-decoration: none; display: inline-block;">
+                    <img src="{{ $logoUrl }}" alt="{{ $storeName }}" height="42" style="max-height: 42px; max-width: 200px; width: auto; border: 0; display: block; margin: 0 auto;" />
+                </a>
+            @else
+                <h1 style="margin: 0; font-size: 24px; font-weight: 800; color: {{ $themeColor }};">{{ $storeName }}</h1>
+            @endif
         </div>
+
+        <div class="hero-banner">
+            <h2 class="hero-title">Order Status Update</h2>
+            <p class="hero-subtitle">Tracking #{{ $order->tracking_number }}</p>
+        </div>
+
         <div class="content">
             <p style="margin-top: 0; font-size: 15px; color: #334155;">
                 Hello <strong>{{ $order->billing_name }}</strong>,
             </p>
             <p style="font-size: 14px; color: #475569; line-height: 1.6;">
-                There is a status update on your order <strong>#{{ $order->tracking_number }}</strong>:
+                There is an update regarding your order <strong>#{{ $order->tracking_number }}</strong>:
             </p>
 
             <div style="text-align: center;">
@@ -49,10 +150,11 @@
                 @endif
             </p>
 
-            <div style="text-align: center; margin-top: 24px;">
+            <div style="text-align: center; margin-top: 28px;">
                 <a href="{{ url('/track/' . $order->tracking_number) }}" class="btn" target="_blank">Track Order Live Online &rarr;</a>
             </div>
         </div>
+
         <div class="footer">
             <p style="margin: 0 0 6px 0;">Need help? Reply directly to this email or reach us at <a href="mailto:{{ $companyEmail }}">{{ $companyEmail }}</a></p>
             <p style="margin: 0; font-size: 11px;">&copy; {{ date('Y') }} {{ $storeName }}. All rights reserved.</p>

@@ -28,7 +28,7 @@ Route::get('/', [HomeController::class , 'index'])->name('home');
 Route::get('/shop', [FrontProductController::class , 'index'])->name('shop.index');
 Route::get('/product/{url_key}', [FrontProductController::class , 'show'])->name('shop.show');
 Route::post('/newsletter/subscribe', [\App\Http\Controllers\Frontend\NewsletterController::class, 'subscribe'])
-    ->middleware('throttle:10,1')
+    ->middleware('throttle:3,1')
     ->name('newsletter.subscribe');
 
 // Quick search suggestions (JSON — used by the header search dropdown)
@@ -119,7 +119,9 @@ Route::post('/compare', [CompareController::class , 'store'])->name('compare.sto
 Route::delete('/compare/{compareItem}', [CompareController::class , 'destroy'])->name('compare.destroy');
 
 Route::get('/checkout', [CheckoutController::class , 'index'])->name('checkout.index');
-Route::post('/checkout/process', [CheckoutController::class , 'process'])->name('checkout.process');
+Route::post('/checkout/process', [CheckoutController::class , 'process'])
+    ->middleware('throttle:5,1')
+    ->name('checkout.process');
 Route::get('/checkout/success/{tracking}', [CheckoutController::class , 'success'])->name('checkout.success');
 Route::get('/payment/callback', [CheckoutController::class , 'callback'])->name('payment.callback');
 Route::post('/webhook/paystack', [CheckoutController::class , 'paystackWebhook'])->name('webhook.paystack');
@@ -162,9 +164,13 @@ Route::post('/register', [CustomerAuthController::class , 'register'])->name('cu
 
 // Password Reset Routes
 Route::get('/forgot-password', [\App\Http\Controllers\Frontend\CustomerPasswordResetController::class, 'showForgotPassword'])->name('password.request');
-Route::post('/forgot-password', [\App\Http\Controllers\Frontend\CustomerPasswordResetController::class, 'sendResetLink'])->name('password.email');
+Route::post('/forgot-password', [\App\Http\Controllers\Frontend\CustomerPasswordResetController::class, 'sendResetLink'])
+    ->middleware('throttle:5,1')
+    ->name('password.email');
 Route::get('/reset-password/{token}', [\App\Http\Controllers\Frontend\CustomerPasswordResetController::class, 'showResetPassword'])->name('password.reset');
-Route::post('/reset-password', [\App\Http\Controllers\Frontend\CustomerPasswordResetController::class, 'resetPassword'])->name('password.update');
+Route::post('/reset-password', [\App\Http\Controllers\Frontend\CustomerPasswordResetController::class, 'resetPassword'])
+    ->middleware('throttle:5,1')
+    ->name('password.update');
 
 Route::get('/auth/{provider}/redirect', [\App\Http\Controllers\Frontend\SocialLoginController::class, 'redirect'])->name('social.redirect');
 Route::get('/auth/{provider}/callback', [\App\Http\Controllers\Frontend\SocialLoginController::class, 'callback'])->name('social.callback');
@@ -200,9 +206,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('ai/suggest-related-products', [\App\Http\Controllers\Admin\AiController::class, 'suggestRelatedProducts'])->name('ai.suggest-related-products');
             Route::post('ai/test-connection', [\App\Http\Controllers\Admin\AiController::class, 'testConnection'])->name('ai.test-connection');
             Route::resource('attributes', \App\Http\Controllers\Admin\AttributeController::class)->except(['create', 'edit', 'show']);
-            Route::patch('users/{user}/toggle-status', [\App\Http\Controllers\Admin\UserController::class, 'toggleStatus'])->name('users.toggle-status');
-            Route::put('users/{user}/reset-password', [\App\Http\Controllers\Admin\UserController::class, 'resetPassword'])->name('users.reset-password');
-            Route::resource('users', \App\Http\Controllers\Admin\UserController::class)->except(['create', 'edit', 'show']);
+
+            // System Users Management (Strictly Super Administrator Only)
+            Route::middleware('super_admin')->group(function () {
+                Route::patch('users/{user}/toggle-status', [\App\Http\Controllers\Admin\UserController::class, 'toggleStatus'])->name('users.toggle-status');
+                Route::put('users/{user}/reset-password', [\App\Http\Controllers\Admin\UserController::class, 'resetPassword'])->name('users.reset-password');
+                Route::resource('users', \App\Http\Controllers\Admin\UserController::class)->except(['create', 'edit', 'show']);
+            });
 
             // Customer Management (Strictly Admin and Super Admin Only)
             Route::middleware('admin_only')->group(function () {

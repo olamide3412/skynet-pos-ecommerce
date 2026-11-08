@@ -17,12 +17,16 @@ class AdminNewOrderAlertMail extends Mailable
     public Order $order;
     public string $storeName;
     public string $companyEmail;
+    public ?string $companyLogo;
+    public string $themeColor;
 
     public function __construct(Order $order)
     {
         $this->order = $order->loadMissing('items.product');
         $this->storeName = StoreSetting::get('company_name', config('app.name', 'Skynet Store'));
         $this->companyEmail = StoreSetting::get('company_email', config('mail.from.address'));
+        $this->companyLogo = StoreSetting::get('company_logo', null);
+        $this->themeColor = StoreSetting::get('theme_primary_color', '#FF4B00');
     }
 
     public function envelope(): Envelope

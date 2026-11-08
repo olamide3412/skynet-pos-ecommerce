@@ -16,11 +16,11 @@ class UserController extends Controller
     public function index(Request $request)
     {
         $currentUser = auth('web')->user();
-        $isSuperAdmin = $currentUser->isSuperAdmin();
-
-        if (!$isSuperAdmin && !in_array($currentUser->role, [RoleEnums::Administrator->value, RoleEnums::SuperAdministrator->value], true) && !$currentUser->can('users.view')) {
-            abort(403, 'Unauthorized. You do not have permission to view users.');
+        if (!$currentUser || !$currentUser->isSuperAdmin()) {
+            abort(403, 'Access denied. Only the Super Administrator can manage system users.');
         }
+
+        $isSuperAdmin = true; // Guaranteed by check above
 
         $query = User::with('roles:id,name')->latest();
 

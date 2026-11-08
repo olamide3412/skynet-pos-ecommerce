@@ -32,6 +32,13 @@ class InventoryService
                         $newStock = max(0, $product->stock - $item->quantity);
                         $product->update(['stock' => $newStock]);
                     }
+
+                    if ($item->product_variant_mapping_id) {
+                        $mapping = \App\Models\ProductVariantMapping::where('id', $item->product_variant_mapping_id)->lockForUpdate()->first();
+                        if ($mapping && $mapping->inventory_source === 'ecommerce') {
+                            $mapping->update(['local_stock' => max(0, $mapping->local_stock - $item->quantity)]);
+                        }
+                    }
                 }
             }
         });
@@ -48,6 +55,13 @@ class InventoryService
                     $product = Product::where('id', $item->product_id)->lockForUpdate()->first();
                     if ($product) {
                         $product->increment('stock', $item->quantity);
+                    }
+
+                    if ($item->product_variant_mapping_id) {
+                        $mapping = \App\Models\ProductVariantMapping::where('id', $item->product_variant_mapping_id)->lockForUpdate()->first();
+                        if ($mapping && $mapping->inventory_source === 'ecommerce') {
+                            $mapping->increment('local_stock', $item->quantity);
+                        }
                     }
                 }
             }

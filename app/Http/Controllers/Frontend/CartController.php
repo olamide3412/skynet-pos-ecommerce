@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\Product;
+use App\Models\ProductPosUnit;
+use App\Models\ProductVariantMapping;
 use App\Models\StoreSetting;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -18,7 +20,7 @@ class CartController extends Controller
         $cart = $this->getCart($request);
         
         return Inertia::render('Frontend/Cart/Index', [
-            'cart'   => $cart ? $cart->load(['items.product.posUnits', 'items.posUnit']) : null,
+            'cart'   => $cart ? $cart->load(['items.product.posUnits', 'items.posUnit', 'items.variantMapping.syncedPosItem']) : null,
             'coupon' => $request->session()->get('applied_coupon'),
         ]);
     }
@@ -30,14 +32,15 @@ class CartController extends Controller
         }
 
         $request->validate([
-            'product_id'          => 'required|exists:products,id',
-            'quantity'            => 'required|integer|min:1',
-            'product_pos_unit_id' => 'nullable|exists:product_pos_units,id',
-            'variant'             => 'nullable|string',
-            'variant_key'         => 'nullable|string',
+            'product_id'                 => 'required|exists:products,id',
+            'quantity'                   => 'required|integer|min:1',
+            'product_pos_unit_id'        => 'nullable|exists:product_pos_units,id',
+            'product_variant_mapping_id' => 'nullable|exists:product_variant_mappings,id',
+            'variant'                    => 'nullable|string',
+            'variant_key'                => 'nullable|string',
         ]);
 
-        $product = Product::with('posUnits')->findOrFail($request->product_id);
+        $product = Product::with(['posUnits', 'variantMappings.syncedPosItem'])->findOrFail($request->product_id);
 
         if (!$product->isAvailableForPurchase()) {
             return back()->with('error', 'This product is currently unavailable for purchase.');
@@ -57,8 +60,33 @@ class CartController extends Controller
         $unitName = $selectedUnit ? $selectedUnit->display_label : ($product->pos_base_unit_name ?? 'Piece');
         $price = $product->getEffectivePriceForUnit($selectedUnit);
 
-        // Apply distinct variant pricing override if provided
-        if ($request->variant && $product->variants) {
+        // Resolve variant mapping if present
+        $variantMapping = null;
+        if ($request->product_variant_mapping_id) {
+            $variantMapping = $product->variantMappings->firstWhere('id', $request->product_variant_mapping_id);
+        } elseif ($request->variant) {
+            $variantMapping = $product->variantMappings->first(function ($m) use ($request) {
+                return $m->variant_label === $request->variant
+                    || $m->variant_key === ($request->variant_key ?? $request->variant);
+            });
+        }
+
+        if ($variantMapping) {
+            if ($variantMapping->isPosControlled()) {
+                $available = $variantMapping->syncedPosItem
+                    ? (int) floor($variantMapping->syncedPosItem->effective_availability)
+                    : (int) $variantMapping->local_stock;
+
+                if ($available < $request->quantity) {
+                    return back()->with('error', "The selected option '{$variantMapping->variant_label}' is currently out of stock in our branch.");
+                }
+
+                $price = $variantMapping->syncedPosItem?->standard_price ?? $variantMapping->local_price ?? $price;
+            } elseif ($variantMapping->local_price !== null && $variantMapping->local_price > 0) {
+                $price = floatval($variantMapping->local_price);
+            }
+        } elseif ($request->variant && $product->variants) {
+            // Fallback for simple JSON variants
             $variantsArray = is_string($product->variants) ? json_decode($product->variants, true) : $product->variants;
             if (is_array($variantsArray)) {
                 foreach ($variantsArray as $v) {
@@ -73,24 +101,44 @@ class CartController extends Controller
         $cartItem = $cart->items()
             ->where('product_id', $product->id)
             ->where('product_pos_unit_id', $selectedUnit?->id)
-            ->where('variant', $request->variant)
+            ->where(function ($q) use ($request, $variantMapping) {
+                if ($variantMapping) {
+                    $q->where('product_variant_mapping_id', $variantMapping->id)
+                      ->orWhere('variant', $request->variant);
+                } else {
+                    $q->where('variant', $request->variant);
+                }
+            })
             ->first();
 
         if ($cartItem) {
+            $newQuantity = $cartItem->quantity + $request->quantity;
+
+            if ($variantMapping && $variantMapping->isPosControlled()) {
+                $available = $variantMapping->syncedPosItem
+                    ? (int) floor($variantMapping->syncedPosItem->effective_availability)
+                    : (int) $variantMapping->local_stock;
+                if ($available < $newQuantity) {
+                    return back()->with('error', "Cannot add more. Only {$available} units available in stock.");
+                }
+            }
+
             $cartItem->update([
-                'quantity' => $cartItem->quantity + $request->quantity,
-                'price'    => $price,
+                'quantity'                   => $newQuantity,
+                'price'                      => $price,
+                'product_variant_mapping_id' => $variantMapping?->id,
             ]);
         } else {
             $cart->items()->create([
-                'product_id'          => $product->id,
-                'product_pos_unit_id' => $selectedUnit?->id,
-                'unit_name'           => $unitName,
-                'quantity'            => $request->quantity,
-                'price'               => $price,
-                'variant'             => $request->variant,
-                'variant_key'         => $request->variant_key ?? $request->variant,
-                'variant_label'       => $request->variant,
+                'product_id'                 => $product->id,
+                'product_pos_unit_id'        => $selectedUnit?->id,
+                'product_variant_mapping_id' => $variantMapping?->id,
+                'unit_name'                  => $unitName,
+                'quantity'                   => $request->quantity,
+                'price'                      => $price,
+                'variant'                    => $request->variant,
+                'variant_key'                => $variantMapping?->variant_key ?? $request->variant_key ?? $request->variant,
+                'variant_label'              => $variantMapping?->variant_label ?? $request->variant,
             ]);
         }
 
@@ -136,7 +184,7 @@ class CartController extends Controller
 
     protected function getCart(Request $request)
     {
-        $query = Cart::with(['items.product.posUnits', 'items.posUnit']);
+        $query = Cart::with(['items.product.posUnits', 'items.posUnit', 'items.variantMapping.syncedPosItem']);
 
         if (auth('customer')->check()) {
             return $query->where('customer_id', auth('customer')->id())->first();

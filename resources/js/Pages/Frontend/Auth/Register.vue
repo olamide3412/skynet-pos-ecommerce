@@ -1,12 +1,13 @@
 <script setup>
-import { useForm } from '@inertiajs/vue3'
-import { ref, onMounted } from 'vue'
+import { useForm, usePage, Link } from '@inertiajs/vue3'
+import { ref, computed, onMounted } from 'vue'
 import Layout from '@/Layouts/Layout.vue';
 import TextInput from '@/Components/Forms/TextInput.vue';
 import { useToast } from 'vue-toastification';
-import { usePage } from '@inertiajs/vue3';
 
 const toast = useToast();
+const page = usePage();
+const isTurnstileEnabled = computed(() => page.props.store_settings?.turnstile_enabled !== '0');
 const form = useForm({
   name: '',
   email: '',
@@ -49,10 +50,14 @@ const resetTurnstile = () => {
     if (window.turnstile && turnstileWidgetId.value) window.turnstile.reset(turnstileWidgetId.value);
 };
 
-onMounted(() => { loadTurnstile(); });
+onMounted(() => {
+    if (isTurnstileEnabled.value) {
+        loadTurnstile();
+    }
+});
 
 const handleRegister = () => {
-    if (!form.cf_turnstile_response) {
+    if (isTurnstileEnabled.value && !form.cf_turnstile_response) {
         turnstileError.value = 'Please complete the CAPTCHA verification';
         return;
     }
@@ -60,7 +65,9 @@ const handleRegister = () => {
     form.post(route('customer.register.submit'), {
         onFinish: () => {
             form.reset('password', 'password_confirmation');
-            resetTurnstile();
+            if (isTurnstileEnabled.value) {
+                resetTurnstile();
+            }
         },
         onError: () => {
             toast.error('Registration failed. Check the form for errors.');
@@ -90,15 +97,17 @@ const handleRegister = () => {
                     <TextInput name="password" label="Password" type="password" v-model="form.password" placeholder="••••••••" :message="form.errors.password" :required="true"/>
                     <TextInput name="password_confirmation" label="Confirm Password" type="password" v-model="form.password_confirmation" placeholder="••••••••" :required="true"/>
                     <!-- Cloudflare Turnstile Widget -->
-                    <div class="flex justify-left mt-2">
-                        <div id="cf-turnstile-widget" class="cf-turnstile"></div>
-                    </div>
-                    <div v-if="turnstileError" class="text-red-600 text-sm mt-1">
-                        {{ turnstileError }}
-                    </div>
-                    <div v-if="form.errors.cf_turnstile_response" class="text-red-600 text-sm mt-1">
-                        {{ form.errors.cf_turnstile_response }}
-                    </div>
+                    <template v-if="isTurnstileEnabled">
+                        <div class="flex justify-left mt-2">
+                            <div id="cf-turnstile-widget" class="cf-turnstile"></div>
+                        </div>
+                        <div v-if="turnstileError" class="text-red-600 text-sm mt-1">
+                            {{ turnstileError }}
+                        </div>
+                        <div v-if="form.errors.cf_turnstile_response" class="text-red-600 text-sm mt-1">
+                            {{ form.errors.cf_turnstile_response }}
+                        </div>
+                    </template>
 
                     <button class="w-full bg-primary hover:opacity-90 text-white font-bold py-3 rounded-md transition shadow-md" :disabled="form.processing">Register</button>
                     <!-- Divider -->

@@ -17,7 +17,11 @@ class Turnstile implements ValidationRule
      */
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
-       try {
+        if (!\App\Models\StoreSetting::getBool('turnstile_enabled', true)) {
+            return;
+        }
+
+        try {
             $response = Http::asForm()->timeout(5)->post('https://challenges.cloudflare.com/turnstile/v0/siteverify', [
                 'secret' => config('services.turnstile.secret_key'),
                 'response' => $value,

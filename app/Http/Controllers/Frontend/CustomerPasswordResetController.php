@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Frontend;
 use App\Http\Controllers\Controller;
 use App\Mail\CustomerResetPasswordMail;
 use App\Models\Customer;
+use App\Models\StoreSetting;
 use App\Rules\Turnstile;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -19,21 +21,34 @@ class CustomerPasswordResetController extends Controller
 {
     public function showForgotPassword()
     {
+        if (Auth::guard('customer')->check()) {
+            return redirect()->route('home');
+        }
+
         return Inertia::render('Frontend/Auth/ForgotPassword');
     }
 
     public function sendResetLink(Request $request)
     {
+        $turnstileEnabled = StoreSetting::getBool('turnstile_enabled', true);
+
         $request->validate([
             'email' => ['required', 'email'],
-            'cf_turnstile_response' => ['nullable', new Turnstile()],
+            'cf_turnstile_response' => $turnstileEnabled ? ['required', new Turnstile()] : ['nullable'],
         ]);
 
         $customer = Customer::where('email', $request->email)->first();
 
         // Prevent email enumeration: return generic success even if not found
         if ($customer) {
-            $token = Password::broker('customers')->createToken($customer);
+            $broker = Password::broker('customers');
+
+            // Respect cooldown window to prevent email flooding
+            if ($broker->getRepository()->recentlyCreatedToken($customer)) {
+                return back()->with('warning', 'Please wait a moment before requesting another password reset link.');
+            }
+
+            $token = $broker->createToken($customer);
 
             try {
                 Mail::to($customer->email)->send(new CustomerResetPasswordMail($customer, $token));
@@ -43,14 +58,31 @@ class CustomerPasswordResetController extends Controller
             }
         }
 
-        return back()->with('status', 'If an account exists for this email address, a password reset link has been sent.');
+        $message = 'If an account exists for this email address, a password reset link has been sent.';
+
+        return back()
+            ->with('status', $message)
+            ->with('success', $message);
     }
 
     public function showResetPassword(Request $request, string $token)
     {
+        if (Auth::guard('customer')->check()) {
+            return redirect()->route('home');
+        }
+
+        $email = (string) $request->query('email', '');
+        if ($email !== '') {
+            $customer = Customer::where('email', $email)->first();
+            if (!$customer || !Password::broker('customers')->tokenExists($customer, $token)) {
+                return redirect()->route('password.request')
+                    ->with('error', 'This password reset link is invalid or has expired. Please request a new one.');
+            }
+        }
+
         return Inertia::render('Frontend/Auth/ResetPassword', [
             'token' => $token,
-            'email' => $request->query('email', ''),
+            'email' => $email,
         ]);
     }
 

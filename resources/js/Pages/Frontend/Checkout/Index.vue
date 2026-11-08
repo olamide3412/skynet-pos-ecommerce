@@ -1,7 +1,7 @@
 <script setup>
 import { Head, useForm, usePage, router } from '@inertiajs/vue3';
 import Layout from '@/Layouts/Layout.vue';
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 
 const props = defineProps({
     cart: Object,
@@ -87,14 +87,22 @@ const initialAddressText = computed(() => {
 });
 
 // ─── Form ─────────────────────────────────────────────────────────
+const renderedAt = ref(Date.now());
+
+onMounted(() => {
+    renderedAt.value = Date.now();
+});
+
 const form = useForm({
-    name:             defaultAddress.value?.name  || props.customer?.name  || '',
-    email:            props.customer?.email || '',
-    phone:            defaultAddress.value?.phone || props.customer?.phone || '',
-    address:          initialAddressText.value,
-    delivery_method:  shippingEnabled.value ? 'delivery' : (pickupEnabled.value ? 'pickup' : 'delivery'),
-    shipping_zone_id: selectedZoneId.value,
-    gateway:          enabledGateways.value[0]?.value ?? 'paystack',
+    name:                   defaultAddress.value?.name  || props.customer?.name  || '',
+    email:                  props.customer?.email || '',
+    phone:                  defaultAddress.value?.phone || props.customer?.phone || '',
+    address:                initialAddressText.value,
+    delivery_method:        shippingEnabled.value ? 'delivery' : (pickupEnabled.value ? 'pickup' : 'delivery'),
+    shipping_zone_id:       selectedZoneId.value,
+    gateway:                enabledGateways.value[0]?.value ?? 'paystack',
+    b_hp_billing_company:   '', // Invisible honeypot field
+    _rendered_at:           renderedAt.value,
 });
 
 watch(selectedZoneId, (newVal) => {
@@ -144,6 +152,7 @@ const removeCoupon = () => {
 };
 
 const submit = () => {
+    form._rendered_at = renderedAt.value;
     form.post(route('checkout.process'));
 };
 </script>
@@ -158,6 +167,19 @@ const submit = () => {
                 <!-- ─── Left: Form ─── -->
                 <div class="w-full lg:w-3/5 order-2 lg:order-1">
                     <form @submit.prevent="submit" class="space-y-6">
+
+                        <!-- Invisible Honeypot Anti-Bot Field -->
+                        <div class="sr-only" aria-hidden="true" style="display: none !important;">
+                            <label for="b_hp_billing_company">Leave this field blank</label>
+                            <input
+                                id="b_hp_billing_company"
+                                v-model="form.b_hp_billing_company"
+                                type="text"
+                                name="b_hp_billing_company"
+                                tabindex="-1"
+                                autocomplete="off"
+                            />
+                        </div>
 
                         <!-- Saved Addresses Picker (if available) -->
                         <div v-if="addresses && addresses.length > 0" class="bg-white dark:bg-gray-800 shadow-sm rounded-xl p-6 border dark:border-gray-700">

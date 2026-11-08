@@ -77,6 +77,11 @@ class ActivityLogger
         return self::log('order', $message, $details);
     }
 
+    public static function customer(string $message, ?array $details = null, ?int $userId = null, ?string $actorType = null): ?ActivityLog
+    {
+        return self::log('customer', $message, $details, $userId, $actorType);
+    }
+
     public static function setting(string $message, ?array $details = null): ?ActivityLog
     {
         return self::log('setting', $message, $details);

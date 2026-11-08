@@ -20,6 +20,7 @@ class CustomerOrderConfirmationMail extends Mailable
     public string $companyPhone;
     public string $companyAddress;
     public ?string $companyLogo;
+    public string $themeColor;
 
     public function __construct(Order $order)
     {
@@ -29,6 +30,7 @@ class CustomerOrderConfirmationMail extends Mailable
         $this->companyPhone = StoreSetting::get('company_phone', '+234 803 207 2831');
         $this->companyAddress = StoreSetting::get('company_address', 'Delta State, Nigeria');
         $this->companyLogo = StoreSetting::get('company_logo', null);
+        $this->themeColor = StoreSetting::get('theme_primary_color', '#FF4B00');
     }
 
     public function envelope(): Envelope
