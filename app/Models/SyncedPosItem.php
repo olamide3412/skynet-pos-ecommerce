@@ -16,10 +16,13 @@ class SyncedPosItem extends Model
         'pos_item_name',
         'pos_category_id',
         'pos_category_name',
+        'pos_brand_id',
+        'pos_brand_name',
         'barcode',
         'item_reference',
         'sku',
         'is_active',
+        'is_active_in_pos',
         'base_unit_name',
         'standard_price',
         'buying_price',
@@ -39,6 +42,16 @@ class SyncedPosItem extends Model
         'pos_updated_at'         => 'datetime',
         'last_synced_at'         => 'datetime',
     ];
+
+    public function getIsActiveInPosAttribute(): bool
+    {
+        return (bool) ($this->attributes['is_active'] ?? false);
+    }
+
+    public function setIsActiveInPosAttribute($value): void
+    {
+        $this->attributes['is_active'] = (bool) $value;
+    }
 
     public function units(): HasMany
     {

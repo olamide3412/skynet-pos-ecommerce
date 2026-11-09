@@ -14,12 +14,15 @@ const props = defineProps({
     stats: Object,
     filters: Object,
     pos_categories: Array,
+    pos_brands: Array,
     ecommerce_categories: Array,
+    ecommerce_brands: Array,
 });
 
 const search = ref(props.filters?.search || '');
 const mappingStatus = ref(props.filters?.mapping_status || '');
 const posCategory = ref(props.filters?.pos_category || '');
+const posBrand = ref(props.filters?.pos_brand || '');
 const perPage = ref(props.filters?.per_page || '25');
 const activeTab = ref('catalog'); // 'catalog' | 'logs'
 const selectedItems = ref([]);
@@ -31,6 +34,7 @@ const importTargetItem = ref(null);
 const importTargetIds = ref([]);
 const isImportingAll = ref(false);
 const selectedTargetCategoryId = ref('');
+const selectedTargetBrandId = ref('');
 const makeActive = ref(true);
 const isSubmittingImport = ref(false);
 
@@ -61,6 +65,7 @@ const handleFilter = () => {
         search: search.value || undefined,
         mapping_status: mappingStatus.value || undefined,
         pos_category: posCategory.value || undefined,
+        pos_brand: posBrand.value || undefined,
         per_page: perPage.value !== '25' ? perPage.value : undefined,
     }, { preserveState: true, replace: true });
 };
@@ -69,6 +74,7 @@ const resetFilter = () => {
     search.value = '';
     mappingStatus.value = '';
     posCategory.value = '';
+    posBrand.value = '';
     perPage.value = '25';
     handleFilter();
 };
@@ -122,6 +128,7 @@ const openSingleImport = (item) => {
     importTargetIds.value = [item.pos_item_id];
     isImportingAll.value = false;
     selectedTargetCategoryId.value = '';
+    selectedTargetBrandId.value = '';
     makeActive.value = true;
     showImportModal.value = true;
 };
@@ -140,6 +147,7 @@ const openBulkImport = () => {
     importTargetIds.value = [...selectedItems.value];
     isImportingAll.value = false;
     selectedTargetCategoryId.value = '';
+    selectedTargetBrandId.value = '';
     makeActive.value = true;
     showImportModal.value = true;
 };
@@ -150,6 +158,7 @@ const openImportAll = () => {
     importTargetIds.value = [];
     isImportingAll.value = true;
     selectedTargetCategoryId.value = '';
+    selectedTargetBrandId.value = '';
     makeActive.value = true;
     showImportModal.value = true;
 };
@@ -161,6 +170,7 @@ const confirmImport = () => {
 
     const payload = {
         category_id: selectedTargetCategoryId.value || null,
+        brand_id: selectedTargetBrandId.value || null,
         is_active: makeActive.value,
     };
 
@@ -450,7 +460,7 @@ const confirmImport = () => {
             </div>
 
             <!-- Stats Overview -->
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div class="grid grid-cols-2 sm:grid-cols-5 gap-4">
                 <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xs">
                     <p class="text-xs font-medium text-gray-500 dark:text-gray-400">Synced Items</p>
                     <p class="text-2xl font-bold text-gray-900 dark:text-white mt-1">{{ stats.total_synced }}</p>
@@ -462,6 +472,10 @@ const confirmImport = () => {
                 <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xs">
                     <p class="text-xs font-medium text-gray-500 dark:text-gray-400">Unmapped Items</p>
                     <p class="text-2xl font-bold text-gray-700 dark:text-gray-300 mt-1">{{ stats.unmapped }}</p>
+                </div>
+                <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xs">
+                    <p class="text-xs font-medium text-gray-500 dark:text-gray-400">Brands Synced</p>
+                    <p class="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">{{ stats.brands_synced ?? 0 }}</p>
                 </div>
                 <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xs">
                     <p class="text-xs font-medium text-gray-500 dark:text-gray-400">Missing from POS</p>
@@ -527,6 +541,17 @@ const confirmImport = () => {
                             </option>
                         </select>
                         <select
+                            v-if="pos_brands && pos_brands.length"
+                            v-model="posBrand"
+                            @change="handleFilter"
+                            class="text-sm py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-primary"
+                        >
+                            <option value="">All POS Brands</option>
+                            <option v-for="br in pos_brands" :key="br" :value="br">
+                                {{ br }}
+                            </option>
+                        </select>
+                        <select
                             v-model="perPage"
                             @change="handleFilter"
                             class="text-sm py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-primary"
@@ -537,7 +562,7 @@ const confirmImport = () => {
                             <option value="all">All</option>
                         </select>
                         <button
-                            v-if="search || mappingStatus || posCategory || perPage !== '25'"
+                            v-if="search || mappingStatus || posCategory || posBrand || perPage !== '25'"
                             @click="resetFilter"
                             class="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 underline"
                         >
@@ -577,6 +602,7 @@ const confirmImport = () => {
                                     <th class="p-3">POS ID</th>
                                     <th class="p-3">Item Name</th>
                                     <th class="p-3">Category</th>
+                                    <th class="p-3">POS Brand</th>
                                     <th class="p-3">Units & Price</th>
                                     <th class="p-3">Availability</th>
                                     <th class="p-3">Mapping</th>
@@ -606,6 +632,12 @@ const confirmImport = () => {
                                     <td class="p-3">
                                         <span v-if="item.pos_category_name" class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium theme-primary-badge border border-primary-soft">
                                             {{ item.pos_category_name }}
+                                        </span>
+                                        <span v-else class="text-xs text-gray-400 italic">None</span>
+                                    </td>
+                                    <td class="p-3">
+                                        <span v-if="item.pos_brand_name" class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
+                                            🏷️ {{ item.pos_brand_name }}
                                         </span>
                                         <span v-else class="text-xs text-gray-400 italic">None</span>
                                     </td>
@@ -670,7 +702,7 @@ const confirmImport = () => {
                                     </td>
                                 </tr>
                                 <tr v-if="!items.data || !items.data.length">
-                                    <td colspan="8" class="p-8 text-center text-gray-500">
+                                    <td colspan="9" class="p-8 text-center text-gray-500">
                                         No synchronized POS items found. Click "Sync Catalog" to pull items from your connected POS branch.
                                     </td>
                                 </tr>
@@ -777,6 +809,12 @@ const confirmImport = () => {
                             {{ importTargetItem.pos_category_name }}
                         </span>
                         <span v-else class="italic">None</span>
+                        <span class="mx-2 text-gray-300">|</span>
+                        POS Brand:
+                        <span v-if="importTargetItem.pos_brand_name" class="font-medium text-primary">
+                            {{ importTargetItem.pos_brand_name }}
+                        </span>
+                        <span v-else class="italic">None</span>
                     </p>
                 </div>
                 <div v-else class="bg-gray-50 dark:bg-gray-900/50 p-3 rounded-xl">
@@ -812,6 +850,26 @@ const confirmImport = () => {
                     </select>
                     <p class="text-[11px] text-gray-400 mt-1.5">
                         Leave as "Auto-match" to use the item's POS category, or select a specific subcategory above.
+                    </p>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+                        Target Ecommerce Brand
+                    </label>
+                    <select
+                        v-model="selectedTargetBrandId"
+                        class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white py-2 px-3 focus:ring-2 focus:ring-primary"
+                    >
+                        <option value="">
+                            Auto-match POS Brand (or create if new)
+                        </option>
+                        <option v-for="br in ecommerce_brands" :key="br.id" :value="br.id">
+                            {{ br.name }}
+                        </option>
+                    </select>
+                    <p class="text-[11px] text-gray-400 mt-1.5">
+                        Leave as "Auto-match" to use the item's POS brand, or select a specific brand override above.
                     </p>
                 </div>
 

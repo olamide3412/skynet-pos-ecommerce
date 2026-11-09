@@ -13,6 +13,10 @@ const page = usePage();
 const props = defineProps({
     products:         Object,
     categories:       Array,
+    brands: {
+        type: Array,
+        default: () => []
+    },
     synced_pos_items: {
         type: Array,
         default: () => []
@@ -24,9 +28,16 @@ const props = defineProps({
     }
 });
 
+// Local mutable copy of brands so quick-created brands appear immediately
+const localBrands = ref([...(props.brands || [])]);
+watch(() => props.brands, (val) => {
+    localBrands.value = [...(val || [])];
+});
+
 // Table Filters
 const search = ref(props.filters?.search || '');
 const filterCategory = ref(props.filters?.category_id || '');
+const filterBrand = ref(props.filters?.brand_id || '');
 const filterStatus = ref(props.filters?.status || '');
 const perPage = ref(props.filters?.per_page || '25');
 
@@ -34,16 +45,18 @@ const applyFilters = debounce(() => {
     router.get(route('admin.products.index'), {
         search: search.value || undefined,
         category_id: filterCategory.value || undefined,
+        brand_id: filterBrand.value || undefined,
         status: filterStatus.value || undefined,
         per_page: perPage.value !== '25' ? perPage.value : undefined,
     }, { preserveState: true, replace: true });
 }, 300);
 
-watch([search, filterCategory, filterStatus, perPage], applyFilters);
+watch([search, filterCategory, filterBrand, filterStatus, perPage], applyFilters);
 
 const clearFilters = () => {
     search.value = '';
     filterCategory.value = '';
+    filterBrand.value = '';
     filterStatus.value = '';
     perPage.value = '25';
 };
@@ -62,6 +75,7 @@ const form = useForm({
     // Identity
     name:              '',
     category_id:       '',
+    brand_id:          '',
     url_key:           '',
     product_number:    '',
     sku:               '',
@@ -150,6 +164,15 @@ const selectPosItem = (item) => {
     if (!form.sku) {
         form.sku = item.sku || '';
     }
+    if (!form.brand_id && item.pos_brand_name) {
+        const matchedBrand = localBrands.value.find(b =>
+            (item.pos_brand_id && Number(b.pos_brand_id) === Number(item.pos_brand_id))
+            || (b.name || '').toLowerCase() === item.pos_brand_name.toLowerCase()
+        );
+        if (matchedBrand) {
+            form.brand_id = matchedBrand.id;
+        }
+    }
     posDropdownOpen.value = false;
     posSearchQuery.value = '';
     openVariantDropdownIndex.value = null;
@@ -161,9 +184,89 @@ const clearPosItem = () => {
     posSearchQuery.value = '';
 };
 
+// ── Searchable Brand Picker & Inline Quick-Add ────────────────
+const brandDropdownOpen   = ref(false);
+const brandSearchQuery    = ref('');
+const brandSearchInputRef = ref(null);
+const brandDropdownRef    = ref(null);
+
+const showQuickAddBrand   = ref(false);
+const quickBrandName      = ref('');
+const quickBrandSaving    = ref(false);
+
+const selectedBrandObj = computed(() => {
+    if (!form.brand_id) return null;
+    return localBrands.value.find(b => Number(b.id) === Number(form.brand_id)) || null;
+});
+
+const filteredBrandsAll = computed(() => {
+    const q = brandSearchQuery.value.trim().toLowerCase();
+    if (!q) return localBrands.value;
+    return localBrands.value.filter(b =>
+        (b.name || '').toLowerCase().includes(q)
+        || (b.slug || '').toLowerCase().includes(q)
+    );
+});
+
+const filteredBrands = computed(() => filteredBrandsAll.value.slice(0, 25));
+
+const toggleBrandDropdown = () => {
+    brandDropdownOpen.value = !brandDropdownOpen.value;
+    if (brandDropdownOpen.value) {
+        nextTick(() => {
+            brandSearchInputRef.value?.focus();
+        });
+    }
+};
+
+const selectBrandOption = (brand) => {
+    form.brand_id = brand ? brand.id : '';
+    brandDropdownOpen.value = false;
+    brandSearchQuery.value = '';
+};
+
+const clearBrandSelection = () => {
+    form.brand_id = '';
+    brandSearchQuery.value = '';
+};
+
+const createQuickBrand = async () => {
+    const name = quickBrandName.value.trim();
+    if (!name || quickBrandSaving.value) return;
+    quickBrandSaving.value = true;
+    try {
+        const res = await window.axios.post(route('admin.brands.store'), {
+            name,
+            status: true,
+        }, {
+            headers: { 'Accept': 'application/json' }
+        });
+        if (res.data?.brand) {
+            const newBrand = res.data.brand;
+            if (!localBrands.value.find(b => Number(b.id) === Number(newBrand.id))) {
+                localBrands.value.push(newBrand);
+                localBrands.value.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+            }
+            form.brand_id = newBrand.id;
+            quickBrandName.value = '';
+            showQuickAddBrand.value = false;
+            brandDropdownOpen.value = false;
+            toast.success(`Brand "${newBrand.name}" created and selected!`);
+        }
+    } catch (e) {
+        const msg = e.response?.data?.errors?.name?.[0] || e.response?.data?.message || 'Failed to create brand.';
+        toast.error(msg);
+    } finally {
+        quickBrandSaving.value = false;
+    }
+};
+
 const handleClickOutsidePosDropdown = (e) => {
     if (posDropdownOpen.value && posDropdownRef.value && !posDropdownRef.value.contains(e.target)) {
         posDropdownOpen.value = false;
+    }
+    if (brandDropdownOpen.value && brandDropdownRef.value && !brandDropdownRef.value.contains(e.target)) {
+        brandDropdownOpen.value = false;
     }
     if (openVariantDropdownIndex.value !== null && !e.target.closest('.variant-pos-dropdown-container')) {
         openVariantDropdownIndex.value = null;
@@ -437,6 +540,7 @@ const openEditForm = (p) => {
     form.pos_item_id       = p.pos_item_id || null;
     form.name              = p.name;
     form.category_id       = p.category_id;
+    form.brand_id          = p.brand_id || '';
     form.url_key           = p.url_key || '';
     form.product_number    = p.product_number || '';
     form.sku               = p.sku || '';
@@ -493,8 +597,13 @@ const resetFormState = () => {
     form.reset(); form.clearErrors();
     form.inventory_source = 'ecommerce';
     form.pos_item_id = null;
+    form.brand_id = '';
     posDropdownOpen.value = false;
     posSearchQuery.value = '';
+    brandDropdownOpen.value = false;
+    brandSearchQuery.value = '';
+    showQuickAddBrand.value = false;
+    quickBrandName.value = '';
     openVariantDropdownIndex.value = null;
     variantPosSearchQuery.value = '';
     editId.value = null; imagePreview.value = null; galleryPreviews.value = [];
@@ -534,6 +643,12 @@ const getSelectedCategoryName = () => {
     return cat ? cat.name : '';
 };
 
+const getSelectedBrandName = () => {
+    if (!form.brand_id) return '';
+    const b = localBrands.value.find(br => Number(br.id) === Number(form.brand_id));
+    return b ? b.name : '';
+};
+
 const generateAiDescription = async (type = 'short') => {
     if (!form.name || !form.name.trim()) {
         toast.warning('Please enter the Product Name first before generating descriptions.');
@@ -546,6 +661,7 @@ const generateAiDescription = async (type = 'short') => {
             type,
             product_name: form.name.trim(),
             category_name: getSelectedCategoryName(),
+            brand_name: getSelectedBrandName() || undefined,
             price: form.price ? Number(form.price) : null,
             keywords: (type === 'seo' && form.meta_keywords) ? form.meta_keywords : (aiKeywords.value ? aiKeywords.value.trim() : undefined),
         });
@@ -675,6 +791,9 @@ const clearSelection = () => {
 const showBulkCategoryModal = ref(false);
 const targetCategoryId = ref('');
 
+const showBulkBrandModal = ref(false);
+const targetBrandId = ref('');
+
 const showBulkPriceModal = ref(false);
 const bulkPriceOperation = ref('increase');
 const bulkPriceType = ref('percentage');
@@ -694,6 +813,7 @@ const executeBulkAction = (action, extraData = {}) => {
         onSuccess: () => {
             selectedIds.value = [];
             showBulkCategoryModal.value = false;
+            showBulkBrandModal.value = false;
             showBulkPriceModal.value = false;
             showBulkDeleteModal.value = false;
         },
@@ -706,6 +826,10 @@ const executeBulkAction = (action, extraData = {}) => {
 const submitBulkCategory = () => {
     if (!targetCategoryId.value) return;
     executeBulkAction('update_category', { category_id: targetCategoryId.value });
+};
+
+const submitBulkBrand = () => {
+    executeBulkAction('update_brand', { brand_id: targetBrandId.value === 'none' ? null : targetBrandId.value });
 };
 
 const submitBulkPrice = () => {
@@ -774,6 +898,16 @@ const submitBulkDelete = () => {
                 </div>
 
                 <div class="w-full sm:w-auto min-w-[150px]">
+                    <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Brand</label>
+                    <select v-model="filterBrand" 
+                        class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary focus:border-primary">
+                        <option value="">All Brands</option>
+                        <option value="none">— No Brand —</option>
+                        <option v-for="b in localBrands" :key="b.id" :value="b.id">{{ b.name }}</option>
+                    </select>
+                </div>
+
+                <div class="w-full sm:w-auto min-w-[150px]">
                     <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Status</label>
                     <select v-model="filterStatus" 
                         class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary focus:border-primary">
@@ -794,7 +928,7 @@ const submitBulkDelete = () => {
                     </select>
                 </div>
 
-                <div v-if="search || filterCategory || filterStatus || perPage !== '25'">
+                <div v-if="search || filterCategory || filterBrand || filterStatus || perPage !== '25'">
                     <button @click="clearFilters" class="px-4 py-2 text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition h-[38px]">
                         Clear
                     </button>
@@ -837,6 +971,17 @@ const submitBulkDelete = () => {
                         >
                             <svg class="w-3.5 h-3.5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
                             Change Category
+                        </button>
+
+                        <!-- Set Brand -->
+                        <button
+                            type="button"
+                            @click="showBulkBrandModal = true"
+                            :disabled="bulkProcessing"
+                            class="px-3 py-1.5 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg text-xs font-semibold border border-gray-300 dark:border-gray-600 transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
+                        >
+                            <span class="text-primary">🏷️</span>
+                            Set Brand
                         </button>
 
                         <!-- Make Active -->
@@ -925,6 +1070,7 @@ const submitBulkDelete = () => {
                                 </th>
                                 <th class="px-5 py-3 font-semibold">Product</th>
                                 <th class="px-5 py-3 font-semibold">Category</th>
+                                <th class="px-5 py-3 font-semibold">Brand</th>
                                 <th class="px-5 py-3 font-semibold">Pricing</th>
                                 <th class="px-5 py-3 font-semibold">Stock</th>
                                 <th class="px-5 py-3 font-semibold">Flags</th>
@@ -964,6 +1110,13 @@ const submitBulkDelete = () => {
                                     <span class="text-xs theme-primary-badge px-2 py-0.5 rounded-full font-medium">{{ p.category?.name }}</span>
                                 </td>
                                 <td class="px-5 py-3">
+                                    <span v-if="p.brand?.name" class="inline-flex items-center gap-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 px-2.5 py-0.5 rounded-full font-medium">
+                                        <img v-if="p.brand.logo_url" :src="p.brand.logo_url" class="w-3.5 h-3.5 rounded-full object-contain" />
+                                        {{ p.brand.name }}
+                                    </span>
+                                    <span v-else class="text-xs text-gray-400">—</span>
+                                </td>
+                                <td class="px-5 py-3">
                                     <div class="font-bold text-gray-900 dark:text-white">₦{{ parseFloat(p.price).toLocaleString() }}</div>
                                     <div class="text-xs text-gray-500 dark:text-gray-400">
                                         Cost: <span class="font-semibold text-gray-700 dark:text-gray-300">₦{{ parseFloat(p.cost_price || 0).toLocaleString() }}</span>
@@ -995,7 +1148,7 @@ const submitBulkDelete = () => {
                                 </td>
                             </tr>
                             <tr v-if="!products.data?.length">
-                                <td colspan="7" class="px-6 py-12 text-center text-gray-400">No products yet. Click "Add Product" to get started.</td>
+                                <td colspan="8" class="px-6 py-12 text-center text-gray-400">No products yet. Click "Add Product" to get started.</td>
                             </tr>
                         </tbody>
                     </table>
@@ -1027,7 +1180,7 @@ const submitBulkDelete = () => {
                             <div>
                                 <label class="block text-sm font-semibold mb-1">Product Title *</label>
                                 <input v-model="form.name" type="text" required placeholder="e.g. iPhone 16 Pro Max"
-                                    class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-primary shadow-sm"/>
+                                    class="w-full h-11 px-3.5 py-2.5 text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 focus:ring-primary shadow-sm"/>
                                 <p v-if="form.errors.name" class="text-red-500 text-xs mt-1">{{ form.errors.name }}</p>
                             </div>
 
@@ -1035,7 +1188,7 @@ const submitBulkDelete = () => {
                                 <div>
                                     <label class="block text-sm font-semibold mb-1">Category *</label>
                                     <select v-model="form.category_id" required
-                                        class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-primary shadow-sm">
+                                        class="w-full h-11 px-3.5 py-2.5 text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 focus:ring-primary focus:border-primary shadow-sm">
                                         <option value="" disabled>— Select a category —</option>
                                         <template v-for="parent in categories" :key="parent.id">
                                             <!-- If parent has subcategories, use optgroup -->
@@ -1053,30 +1206,148 @@ const submitBulkDelete = () => {
                                     <p v-if="form.errors.category_id" class="text-red-500 text-xs mt-1">{{ form.errors.category_id }}</p>
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-semibold mb-1">
-                                        URL Key *
-                                        <span class="font-normal text-gray-400 ml-1">— used for direct product link</span>
+                                    <label class="block text-sm font-semibold mb-1 flex items-center justify-between">
+                                        <span>URL Key *</span>
+                                        <span class="font-normal text-xs text-gray-400">— used for direct product link</span>
                                     </label>
                                     <div class="relative">
-                                        <span class="absolute inset-y-0 left-3 flex items-center text-gray-400 text-xs pointer-events-none">/product/</span>
+                                        <span class="absolute inset-y-0 left-3 flex items-center text-gray-400 text-xs pointer-events-none font-mono">/product/</span>
                                         <input v-model="form.url_key" type="text" required placeholder="iphone-16-pro-max"
-                                            class="w-full pl-16 rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-primary shadow-sm font-mono text-sm"/>
+                                            class="w-full h-11 pl-16 px-3.5 py-2.5 rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 focus:ring-primary shadow-sm font-mono text-sm"/>
                                     </div>
                                     <p v-if="form.errors.url_key" class="text-red-500 text-xs mt-1">{{ form.errors.url_key }}</p>
                                 </div>
+                            </div>
+
+                            <!-- Brand Selector + Quick Add -->
+                            <div ref="brandDropdownRef" class="relative">
+                                <div class="flex items-center justify-between mb-1">
+                                    <label class="block text-sm font-semibold">
+                                        Brand <span class="font-normal text-gray-400">(optional)</span>
+                                    </label>
+                                    <button
+                                        type="button"
+                                        @click="showQuickAddBrand = !showQuickAddBrand"
+                                        class="text-xs font-semibold text-primary hover:opacity-80 flex items-center gap-1"
+                                    >
+                                        <span>{{ showQuickAddBrand ? '✕ Cancel' : '+ New Brand' }}</span>
+                                    </button>
+                                </div>
+
+                                <!-- Quick-add inline form -->
+                                <div v-if="showQuickAddBrand" class="mb-2.5 p-3 rounded-xl bg-gray-50 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700 flex items-center gap-2">
+                                    <input
+                                        v-model="quickBrandName"
+                                        type="text"
+                                        placeholder="Enter new brand name (e.g. Samsung, Nike)..."
+                                        @keydown.enter.prevent="createQuickBrand"
+                                        class="flex-1 text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-3 py-1.5 focus:ring-primary"
+                                    />
+                                    <button
+                                        type="button"
+                                        @click="createQuickBrand"
+                                        :disabled="!quickBrandName.trim() || quickBrandSaving"
+                                        class="px-3.5 py-1.5 rounded-lg bg-primary text-white text-xs font-bold shadow hover:bg-primary-dark disabled:opacity-50"
+                                    >
+                                        {{ quickBrandSaving ? 'Adding...' : 'Create & Select' }}
+                                    </button>
+                                </div>
+
+                                <!-- Searchable Brand Trigger -->
+                                <div
+                                    @click="toggleBrandDropdown"
+                                    class="w-full h-11 text-sm py-2.5 px-3.5 border rounded-lg bg-white dark:bg-gray-700 cursor-pointer flex items-center justify-between gap-2 transition shadow-xs"
+                                    :class="brandDropdownOpen ? 'border-primary ring-2 ring-primary/20' : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'"
+                                >
+                                    <div v-if="selectedBrandObj" class="flex items-center gap-2 min-w-0">
+                                        <img v-if="selectedBrandObj.logo_url" :src="selectedBrandObj.logo_url" class="w-5 h-5 rounded object-contain bg-white border dark:border-gray-600" />
+                                        <span v-else class="text-sm">🏷️</span>
+                                        <span class="font-semibold text-gray-900 dark:text-white truncate">{{ selectedBrandObj.name }}</span>
+                                        <span v-if="selectedBrandObj.pos_brand_id" class="text-[10px] font-bold px-1.5 py-0.5 rounded theme-primary-badge">POS #{{ selectedBrandObj.pos_brand_id }}</span>
+                                    </div>
+                                    <span v-else class="text-gray-400 dark:text-gray-400">— Select or search brand (optional) —</span>
+
+                                    <div class="flex items-center gap-1.5 shrink-0">
+                                        <button
+                                            v-if="form.brand_id"
+                                            type="button"
+                                            @click.stop="clearBrandSelection"
+                                            class="p-1 rounded-md text-gray-400 hover:text-rose-500 hover:bg-gray-100 dark:hover:bg-gray-600 transition"
+                                            title="Clear brand"
+                                        >
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                        </button>
+                                        <svg class="w-4 h-4 text-gray-400 transition-transform duration-150" :class="brandDropdownOpen ? 'rotate-180 text-primary' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                        </svg>
+                                    </div>
+                                </div>
+
+                                <!-- Searchable Brand Dropdown Panel -->
+                                <div
+                                    v-if="brandDropdownOpen"
+                                    class="absolute left-0 right-0 z-40 mt-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl overflow-hidden"
+                                >
+                                    <div class="p-2.5 border-b border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/50">
+                                        <input
+                                            ref="brandSearchInputRef"
+                                            v-model="brandSearchQuery"
+                                            type="text"
+                                            placeholder="Search brands by name..."
+                                            @keydown.escape.stop="brandDropdownOpen = false"
+                                            class="w-full text-sm px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary"
+                                        />
+                                        <div class="flex items-center justify-between mt-1 px-1 text-[11px] text-gray-500 dark:text-gray-400">
+                                            <span>{{ filteredBrandsAll.length }} matching brand(s)</span>
+                                            <span v-if="filteredBrandsAll.length > 25">Showing first 25 — type to refine</span>
+                                        </div>
+                                    </div>
+                                    <div class="max-h-60 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700/60">
+                                        <button
+                                            type="button"
+                                            @click="selectBrandOption(null)"
+                                            class="w-full text-left px-3.5 py-2 text-xs text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700/60"
+                                        >
+                                            — No Brand —
+                                        </button>
+                                        <button
+                                            v-for="b in filteredBrands"
+                                            :key="b.id"
+                                            type="button"
+                                            @click="selectBrandOption(b)"
+                                            class="w-full text-left px-3.5 py-2 flex items-center justify-between gap-2 transition"
+                                            :class="Number(form.brand_id) === Number(b.id) ? 'bg-primary-soft text-primary font-semibold' : 'hover:bg-gray-50 dark:hover:bg-gray-700/60 text-gray-800 dark:text-gray-200'"
+                                        >
+                                            <div class="flex items-center gap-2 min-w-0">
+                                                <img v-if="b.logo_url" :src="b.logo_url" class="w-5 h-5 rounded object-contain bg-white border dark:border-gray-600" />
+                                                <span v-else class="text-xs">🏷️</span>
+                                                <span class="text-sm truncate">{{ b.name }}</span>
+                                            </div>
+                                            <span v-if="b.pos_brand_id" class="text-[10px] px-1.5 py-0.5 rounded theme-primary-badge shrink-0">POS #{{ b.pos_brand_id }}</span>
+                                        </button>
+                                        <div v-if="!filteredBrands.length" class="p-4 text-center text-xs text-gray-400">
+                                            No brands match "{{ brandSearchQuery }}". Click "+ New Brand" above to create it.
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <p v-if="form.inventory_source === 'pos' && selectedPosItem?.pos_brand_name" class="text-xs text-primary mt-1.5 flex items-center gap-1">
+                                    <span>🏷️ POS Brand: <strong>{{ selectedPosItem.pos_brand_name }}</strong> (auto-matched/created on save if left empty)</span>
+                                </p>
+                                <p v-if="form.errors.brand_id" class="text-red-500 text-xs mt-1">{{ form.errors.brand_id }}</p>
                             </div>
 
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label class="block text-sm font-semibold mb-1">Product Number <span class="font-normal text-gray-400">(optional)</span></label>
                                     <input v-model="form.product_number" type="text" placeholder="e.g. PRD-001"
-                                        class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-primary shadow-sm font-mono text-sm"/>
+                                        class="w-full h-11 px-3.5 py-2.5 rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 focus:ring-primary shadow-sm font-mono text-sm"/>
                                     <p v-if="form.errors.product_number" class="text-red-500 text-xs mt-1">{{ form.errors.product_number }}</p>
                                 </div>
                                 <div>
                                     <label class="block text-sm font-semibold mb-1">SKU <span class="font-normal text-gray-400">(optional)</span></label>
                                     <input v-model="form.sku" type="text" placeholder="e.g. APPLE-IP16-PRO"
-                                        class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-primary shadow-sm font-mono text-sm"/>
+                                        class="w-full h-11 px-3.5 py-2.5 rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 focus:ring-primary shadow-sm font-mono text-sm"/>
                                     <p v-if="form.errors.sku" class="text-red-500 text-xs mt-1">{{ form.errors.sku }}</p>
                                 </div>
                             </div>
@@ -1457,17 +1728,17 @@ const submitBulkDelete = () => {
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                                 </button>
 
-                                <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                                <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-start">
                                     <div class="md:col-span-6">
                                         <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Variant Name / Option</label>
-                                        <input v-model="v.name" type="text" placeholder="e.g. Red / Large, 128GB Blue" class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700"/>
+                                        <input v-model="v.name" type="text" placeholder="e.g. Red / Large, 128GB Blue" class="w-full h-10 px-3 py-2 text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 focus:ring-primary shadow-xs"/>
                                     </div>
                                     <div class="md:col-span-6">
                                         <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Inventory Source</label>
                                         <select
                                             v-model="v.inventory_source"
                                             @change="handleVariantSourceChange(v)"
-                                            class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700">
+                                            class="w-full h-10 px-3 py-2 text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 font-medium focus:ring-primary shadow-xs">
                                             <option value="ecommerce">Online Warehouse (Ecommerce Only)</option>
                                             <option value="pos">Physical POS Branch Item</option>
                                         </select>
@@ -1675,14 +1946,14 @@ const submitBulkDelete = () => {
                                             Price (₦)
                                             <span v-if="v.inventory_source === 'pos'" class="text-[10px] text-indigo-600 dark:text-indigo-400 font-normal ml-1">(POS standard)</span>
                                         </label>
-                                        <input v-model="v.price" type="number" step="0.01" class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700"/>
+                                        <input v-model="v.price" type="number" step="0.01" class="w-full h-10 px-3 py-2 text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 focus:ring-primary shadow-xs"/>
                                     </div>
                                     <div>
                                         <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">
                                             Stock
                                             <span v-if="v.inventory_source === 'pos'" class="text-[10px] text-indigo-600 dark:text-indigo-400 font-normal ml-1">(Live POS count)</span>
                                         </label>
-                                        <input v-model="v.stock" type="number" class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700"/>
+                                        <input v-model="v.stock" type="number" class="w-full h-10 px-3 py-2 text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 focus:ring-primary shadow-xs"/>
                                     </div>
                                 </div>
                             </div>
@@ -2078,6 +2349,48 @@ const submitBulkDelete = () => {
                         >
                             <svg v-if="bulkProcessing" class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
                             Apply Category
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Bulk Set Brand Modal ────────────────────── -->
+            <div v-if="showBulkBrandModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full p-6 border dark:border-gray-700 space-y-4">
+                    <div class="flex items-center justify-between pb-3 border-b dark:border-gray-700">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xl">🏷️</span>
+                            <h3 class="font-bold text-lg text-gray-900 dark:text-white">Set Brand</h3>
+                        </div>
+                        <button @click="showBulkBrandModal = false" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-lg">✕</button>
+                    </div>
+                    <p class="text-sm text-gray-600 dark:text-gray-300">
+                        Assign or clear brand for <span class="font-bold text-primary">{{ selectedIds.length }}</span> selected product(s):
+                    </p>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Target Brand</label>
+                        <select v-model="targetBrandId" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary focus:border-primary">
+                            <option value="" disabled>Select brand action...</option>
+                            <option value="none">— Remove Brand (Set None) —</option>
+                            <option v-for="b in localBrands" :key="b.id" :value="b.id">{{ b.name }}</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center justify-end gap-2.5 pt-3">
+                        <button
+                            type="button"
+                            @click="showBulkBrandModal = false"
+                            class="px-4 py-2 rounded-lg border dark:border-gray-600 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            @click="submitBulkBrand"
+                            :disabled="!targetBrandId || bulkProcessing"
+                            class="px-5 py-2 rounded-lg bg-primary hover:bg-primary-dark text-white text-sm font-bold shadow transition disabled:opacity-50 flex items-center gap-1.5"
+                        >
+                            <svg v-if="bulkProcessing" class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+                            Apply Brand
                         </button>
                     </div>
                 </div>

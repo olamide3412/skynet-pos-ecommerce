@@ -95,6 +95,7 @@ class SettingsController extends Controller
             'show_stock_level_default'      => 'boolean',
             'stock_display_mode'            => 'nullable|string|in:threshold_only,always,hidden',
             'low_stock_threshold'           => 'nullable|integer|min:1|max:100',
+            'pos_brand_sync_overwrite'      => 'boolean',
 
             // Authentication Providers
             'turnstile_enabled'             => 'boolean',

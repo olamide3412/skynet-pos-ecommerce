@@ -69,6 +69,7 @@ const form = useForm({
     show_stock_level_default:       props.settings.show_stock_level_default !== '0',
     stock_display_mode:             props.settings.stock_display_mode || 'threshold_only',
     low_stock_threshold:            props.settings.low_stock_threshold || '5',
+    pos_brand_sync_overwrite:       props.settings.pos_brand_sync_overwrite === '1',
     // Authentication Providers
     turnstile_enabled:              props.settings.turnstile_enabled !== '0',
     google_auth_enabled:            props.settings.google_auth_enabled === '1',
@@ -134,6 +135,7 @@ const storeFeatures = computed(() => ({
     wishlist_enabled:              { label: 'Wishlist',                  desc: 'Let customers save products to a wishlist.' },
     show_cart_total_header:        { label: 'Show Cart Total in Header', desc: 'Display live total monetary worth of cart items in the storefront top bar and navigation bar.' },
     show_stock_level_default:      { label: 'Show Stock Level (Default)', desc: 'Pre-fills the stock level toggle ON when creating new products.' },
+    pos_brand_sync_overwrite:      { label: 'POS Brand Sync Overwrite', desc: 'When enabled, POS catalog sync and webhooks will overwrite existing eCommerce product brands when the POS item brand changes. When off, only unassigned products get their brand filled from POS.' },
 }));
 
 // Reusable toggle row component logic

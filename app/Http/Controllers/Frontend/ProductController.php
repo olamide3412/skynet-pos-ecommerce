@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Frontend;
 
 use App\Http\Controllers\Controller;
+use App\Models\Brand;
 use App\Models\Product;
 use App\Models\Category;
 use App\Models\Wishlist;
@@ -11,9 +12,9 @@ use Illuminate\Http\Request;
 
 class ProductController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, ?Brand $currentBrand = null)
     {
-        $query = Product::where('status', true)->with('category');
+        $query = Product::where('status', true)->with(['category', 'brand:id,name,slug,logo']);
         
         $collection = $request->input('collection', $request->input('filter'));
 
@@ -84,11 +85,25 @@ class ProductController extends Controller
                 }
             }
         }
+
+        $brandParam = $currentBrand ? $currentBrand->slug : $request->input('brand');
+        if ($currentBrand) {
+            $query->where('brand_id', $currentBrand->id);
+        } elseif (!empty($brandParam)) {
+            $slugs = array_filter(array_map('trim', is_array($brandParam) ? $brandParam : explode(',', (string) $brandParam)));
+            if (!empty($slugs)) {
+                $brandIds = Brand::active()->whereIn('slug', $slugs)->pluck('id')->toArray();
+                $query->whereIn('brand_id', $brandIds ?: [0]);
+            }
+        }
         
         if ($request->has('search')) {
             $searchTerm = trim($request->search);
             if ($searchTerm !== '') {
-                $query->where('name', 'like', '%' . $searchTerm . '%');
+                $query->where(function ($q) use ($searchTerm) {
+                    $q->where('name', 'like', '%' . $searchTerm . '%')
+                        ->orWhereHas('brand', fn ($bq) => $bq->where('name', 'like', '%' . $searchTerm . '%'));
+                });
 
                 // Log full shop search (first page only to avoid inflating count on pagination clicks)
                 if ((int) $request->input('page', 1) <= 1) {
@@ -153,9 +168,10 @@ class ProductController extends Controller
                 ->toArray();
         }
 
-        $filters = $request->only(['search', 'category', 'collection', 'sort']);
+        $filters = $request->only(['search', 'category', 'collection', 'sort', 'brand']);
         $filters['collection'] = $collection ?: '';
         $filters['sort']       = $sort ?: 'default';
+        $filters['brand']      = is_array($brandParam) ? implode(',', $brandParam) : ($brandParam ?: '');
         $filters['attrs']      = $attrs;
 
         // Build categories with parent/child grouping for the sidebar filter
@@ -164,12 +180,29 @@ class ProductController extends Controller
             ->orderBy('name')
             ->get(['id','name','slug','parent_id']);
 
+        // Active brands with active product counts for sidebar filter
+        $brands = Brand::active()
+            ->withCount(['products' => fn ($q) => $q->where('status', true)])
+            ->ordered()
+            ->get(['id', 'name', 'slug', 'logo'])
+            ->filter(fn ($b) => $b->products_count > 0 || ($currentBrand && $b->id === $currentBrand->id))
+            ->values();
+
         return Inertia::render('Frontend/Products/Index', [
-            'products'     => $query->paginate(16)->withQueryString(),
-            'categories'   => $categories,
-            'filters'      => $filters,
-            'wishlist_ids' => $wishlistIds,
+            'products'      => $query->paginate(16)->withQueryString(),
+            'categories'    => $categories,
+            'brands'        => $brands,
+            'current_brand' => $currentBrand,
+            'filters'       => $filters,
+            'wishlist_ids'  => $wishlistIds,
         ]);
+    }
+
+    public function brand(Request $request, string $slug)
+    {
+        $brand = Brand::active()->where('slug', $slug)->firstOrFail();
+
+        return $this->index($request, $brand);
     }
 
     public function show(string $url_key)
@@ -204,6 +237,7 @@ class ProductController extends Controller
         return Inertia::render('Frontend/Products/Show', [
             'product'        => $product->load([
                 'category',
+                'brand:id,name,slug,logo',
                 'posUnits' => fn($q) => $q->where('is_enabled_online', true)->orderBy('sort_order'),
                 'variantMappings' => fn($q) => $q->where('is_active', true)->with('syncedPosItem')->orderBy('sort_order'),
             ]),
@@ -220,7 +254,8 @@ class ProductController extends Controller
     {
         // Manually selected takes priority
         if (!empty($product->related_products)) {
-            $related = Product::whereIn('id', $product->related_products)
+            $related = Product::with(['category', 'brand:id,name,slug,logo'])
+                ->whereIn('id', $product->related_products)
                 ->where('status', true)
                 ->where('id', '!=', $product->id)
                 ->take(8)
@@ -228,7 +263,8 @@ class ProductController extends Controller
             if ($related->isNotEmpty()) return $related;
         }
         // Fallback: same category
-        return Product::where('category_id', $product->category_id)
+        return Product::with(['category', 'brand:id,name,slug,logo'])
+            ->where('category_id', $product->category_id)
             ->where('id', '!=', $product->id)
             ->where('status', true)
             ->take(4)

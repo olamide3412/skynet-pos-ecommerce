@@ -156,6 +156,48 @@ class PosApiClient
     }
 
     /**
+     * List branch brands from POS (optional endpoint; returns empty array with unsupported=true on 404).
+     */
+    public function listBrands(?string $since = null, int $page = 1, int $perPage = 100): array
+    {
+        $this->ensureConfigured();
+
+        $params = [
+            'page'     => $page,
+            'per_page' => $perPage,
+        ];
+        if ($since) {
+            $params['since'] = $since;
+        }
+
+        try {
+            $response = $this->sendRequest('GET', '/brands', $params);
+
+            if ($response->status() === 404) {
+                return [
+                    'data'        => [],
+                    'unsupported' => true,
+                ];
+            }
+
+            if (!$response->successful()) {
+                return [
+                    'data'        => [],
+                    'unsupported' => true,
+                ];
+            }
+
+            $this->recordSuccess();
+            return $response->json() ?? ['data' => []];
+        } catch (\Throwable) {
+            return [
+                'data'        => [],
+                'unsupported' => true,
+            ];
+        }
+    }
+
+    /**
      * Get a single POS item with all selling units.
      */
     public function getItem(int|string $posItemId): array

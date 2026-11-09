@@ -26,6 +26,7 @@ const navLinks = [
         children: [
             { label: 'Products', route: 'admin.products.index', match: 'Admin/Products', permission: 'products.view' },
             { label: 'Categories', route: 'admin.categories.index', match: 'Admin/Categories', permission: 'categories.manage' },
+            { label: 'Brands', route: 'admin.brands.index', match: 'Admin/Brands', permission: 'brands.manage' },
             { label: 'Attributes', route: 'admin.attributes.index', match: 'Admin/Attributes', permission: 'attributes.manage' },
             { label: 'Reviews', route: 'admin.reviews.index', match: 'Admin/Reviews', permission: 'reviews.moderate' },
         ]

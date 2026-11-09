@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Frontend;
 
 use App\Http\Controllers\Controller;
+use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Product;
 use Illuminate\Http\Response;
@@ -59,6 +60,19 @@ class SitemapController extends Controller
                 ];
             });
 
+        // Active Brands
+        $brands = Brand::active()
+            ->latest('updated_at')
+            ->get(['slug', 'updated_at'])
+            ->map(function ($brand) use ($today) {
+                return [
+                    'loc'        => route('shop.brand', $brand->slug),
+                    'lastmod'    => $brand->updated_at ? $brand->updated_at->format('Y-m-d') : $today,
+                    'changefreq' => 'weekly',
+                    'priority'   => '0.7',
+                ];
+            });
+
         // Active Published Products only
         $products = Product::where('status', true)
             ->whereNotNull('url_key')
@@ -73,7 +87,7 @@ class SitemapController extends Controller
                 ];
             });
 
-        $urls = array_merge($staticPages, $categories->toArray(), $products->toArray());
+        $urls = array_merge($staticPages, $categories->toArray(), $brands->toArray(), $products->toArray());
 
         $xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
         $xml .= "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n";

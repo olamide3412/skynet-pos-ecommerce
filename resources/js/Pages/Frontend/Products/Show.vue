@@ -298,22 +298,31 @@ const seoImage = computed(() => {
     return `${origin}/storage/${img}`;
 });
 
-const structuredData = computed(() => JSON.stringify({
-    '@context': 'https://schema.org/',
-    '@type': 'Product',
-    'name': props.product.name,
-    'image': seoImage.value ? [seoImage.value] : [],
-    'description': seoDescription.value,
-    'sku': props.product.sku || props.product.product_number || `SKU-${props.product.id}`,
-    'offers': {
-        '@type': 'Offer',
-        'url': pageUrl.value,
-        'priceCurrency': 'NGN',
-        'price': Number(props.product.discount_price > 0 ? props.product.discount_price : props.product.price),
-        'availability': isPurchasable.value ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
-        'itemCondition': 'https://schema.org/NewCondition'
+const structuredData = computed(() => {
+    const schema = {
+        '@context': 'https://schema.org/',
+        '@type': 'Product',
+        'name': props.product.name,
+        'image': seoImage.value ? [seoImage.value] : [],
+        'description': seoDescription.value,
+        'sku': props.product.sku || props.product.product_number || `SKU-${props.product.id}`,
+        'offers': {
+            '@type': 'Offer',
+            'url': pageUrl.value,
+            'priceCurrency': 'NGN',
+            'price': Number(props.product.discount_price > 0 ? props.product.discount_price : props.product.price),
+            'availability': isPurchasable.value ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+            'itemCondition': 'https://schema.org/NewCondition'
+        }
+    };
+    if (props.product.brand?.name) {
+        schema.brand = {
+            '@type': 'Brand',
+            'name': props.product.brand.name
+        };
     }
-}));
+    return JSON.stringify(schema);
+});
 </script>
 
 <template>
@@ -393,7 +402,19 @@ const structuredData = computed(() => JSON.stringify({
                         </button>
                     </div>
 
-                    <div class="mb-4 text-gray-500 dark:text-gray-400">Category: <Link :href="route('shop.index', {category: product.category.slug})" class="text-primary hover:underline font-medium">{{ product.category.name }}</Link></div>
+                    <div class="mb-4 flex flex-wrap items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
+                        <div>
+                            Category: <Link :href="route('shop.index', {category: product.category.slug})" class="text-primary hover:underline font-medium">{{ product.category.name }}</Link>
+                        </div>
+                        <div v-if="product.brand" class="flex items-center gap-1.5">
+                            <span>•</span>
+                            <span>Brand:</span>
+                            <Link :href="route('shop.brand', product.brand.slug)" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-primary/10 hover:text-primary font-semibold transition">
+                                <img v-if="product.brand.logo_url" :src="product.brand.logo_url" :alt="product.brand.name" class="w-4 h-4 rounded-full object-contain" />
+                                <span>{{ product.brand.name }}</span>
+                            </Link>
+                        </div>
+                    </div>
 
                     <!-- Star Rating Summary -->
                     <div v-if="reviewsEnabled" class="flex items-center gap-2 mb-4">

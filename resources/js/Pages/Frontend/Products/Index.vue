@@ -11,6 +11,14 @@ import { useCart } from '@/Composables/useCart';
 const props = defineProps({
     products: Object,
     categories: Array,
+    brands: {
+        type: Array,
+        default: () => [],
+    },
+    current_brand: {
+        type: Object,
+        default: null,
+    },
     filters: Object,
     wishlist_ids: {
         type: Array,
@@ -22,6 +30,7 @@ const page = usePage();
 const toast = useToast();
 const search     = ref(props.filters.search || '');
 const category   = ref(props.filters.category || '');
+const brand      = ref(props.filters.brand || (props.current_brand ? props.current_brand.slug : ''));
 const collection = ref(props.filters.collection || '');
 const sort       = ref(props.filters.sort || 'default');
 const attrs      = ref(props.filters.attrs || {});
@@ -76,7 +85,7 @@ const activeCategoryParams = computed(() => {
 });
 const activeAttributes = computed(() => activeCategoryParams.value?.attributes || []);
 
-// Debounced search + category filter + attributes + collection + sort -> router call
+// Debounced search + category filter + brand + attributes + collection + sort -> router call
 const applyFilters = debounce(() => {
     // Filter out empty/null values
     const cleanAttrs = Object.fromEntries(
@@ -86,6 +95,7 @@ const applyFilters = debounce(() => {
     router.get(route('shop.index'), {
         search:     search.value || undefined,
         category:   category.value || undefined,
+        brand:      brand.value || undefined,
         collection: collection.value || undefined,
         sort:       (sort.value && sort.value !== 'default') ? sort.value : undefined,
         attrs:      Object.keys(cleanAttrs).length ? cleanAttrs : undefined,
@@ -95,6 +105,7 @@ const applyFilters = debounce(() => {
 watch(search, applyFilters);
 watch(collection, applyFilters);
 watch(sort, applyFilters);
+watch(brand, applyFilters);
 watch(category, () => {
     attrs.value = {}; // Reset attributes when category changes
     applyFilters();
@@ -137,6 +148,21 @@ const toggleWishlist = (product) => {
 
 const showMobileFilters = ref(false);
 const showAllCategories = ref(false);
+const showAllBrands     = ref(false);
+
+const activeBrandObj = computed(() => {
+    if (props.current_brand && (!brand.value || brand.value === props.current_brand.slug)) {
+        return props.current_brand;
+    }
+    if (!brand.value) return null;
+    return (props.brands || []).find(b => b.slug === brand.value) || null;
+});
+
+const visibleBrands = computed(() => {
+    const list = props.brands || [];
+    if (showAllBrands.value || list.length <= 10) return list;
+    return list.slice(0, 10);
+});
 
 // Auto-expand categories if the selected category is beyond the first 7
 onMounted(() => {
@@ -144,6 +170,12 @@ onMounted(() => {
         const idx = props.categories.findIndex(p => p.slug === category.value || p.children?.some(c => c.slug === category.value));
         if (idx >= 7) {
             showAllCategories.value = true;
+        }
+    }
+    if (brand.value && props.brands?.length > 10) {
+        const bIdx = props.brands.findIndex(b => b.slug === brand.value);
+        if (bIdx >= 10) {
+            showAllBrands.value = true;
         }
     }
 });
@@ -181,12 +213,20 @@ const breadcrumbs = computed(() => {
             return crumbs;
         }
     }
+    if (activeBrandObj.value) {
+        crumbs.push({ label: `Brand: ${activeBrandObj.value.name}` });
+        return crumbs;
+    }
     return [{ label: 'All Products' }];
 });
 
 // Dynamic SEO
 const seoTitle = computed(() => {
     const store = page.props.store_settings?.company_name || 'Skynet';
+    if (activeBrandObj.value) {
+        if (activeBrandObj.value.meta_title) return `${activeBrandObj.value.meta_title} | ${store}`;
+        return `${activeBrandObj.value.name} Products — Shop Online | ${store}`;
+    }
     if (collectionTitle.value) {
         if (category.value) {
             const cat = props.categories?.find(c => c.slug === category.value);
@@ -206,6 +246,11 @@ const seoTitle = computed(() => {
 
 const seoDescription = computed(() => {
     const store = page.props.store_settings?.company_name || 'Skynet';
+    if (activeBrandObj.value) {
+        if (activeBrandObj.value.meta_description) return activeBrandObj.value.meta_description;
+        if (activeBrandObj.value.description) return activeBrandObj.value.description;
+        return `Shop authentic ${activeBrandObj.value.name} products online at ${store}. Fast nationwide delivery.`;
+    }
     if (collectionTitle.value) {
         return `Browse ${collectionTitle.value.toLowerCase()} with exclusive prices at ${store}. Nationwide delivery across Nigeria.`;
     }
@@ -375,6 +420,47 @@ const seoDescription = computed(() => {
                             </ul>
                         </div>
 
+                        <!-- Brand Filter Menu -->
+                        <div v-if="brands && brands.length > 0" class="bg-white dark:bg-gray-800 p-5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                            <h3 class="font-bold mb-4 uppercase text-sm tracking-wider text-gray-900 dark:text-gray-100">Brands</h3>
+                            <ul class="space-y-1 text-sm">
+                                <li>
+                                    <button @click="brand = ''; showMobileFilters = false"
+                                        class="text-left w-full px-2 py-1.5 rounded-lg transition flex items-center justify-between"
+                                        :class="!brand ? 'bg-primary/10 font-bold text-primary' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary'">
+                                        <span>✨ All Brands</span>
+                                    </button>
+                                </li>
+                                <li v-for="b in visibleBrands" :key="b.id">
+                                    <button @click="brand = b.slug; showMobileFilters = false"
+                                        class="text-left w-full px-2 py-1.5 rounded-lg transition flex items-center justify-between gap-2"
+                                        :class="brand === b.slug
+                                            ? 'bg-primary/10 text-primary font-bold'
+                                            : 'text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary'">
+                                        <span class="flex items-center gap-2 min-w-0">
+                                            <img v-if="b.logo_url" :src="b.logo_url" class="w-4 h-4 rounded object-contain bg-white border dark:border-gray-600 shrink-0" />
+                                            <span class="truncate">{{ b.name }}</span>
+                                        </span>
+                                        <span v-if="b.products_count !== undefined" class="text-[11px] px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 font-semibold shrink-0">
+                                            {{ b.products_count }}
+                                        </span>
+                                    </button>
+                                </li>
+                                <li v-if="brands.length > 10" class="pt-2 border-t border-gray-100 dark:border-gray-700/60">
+                                    <button
+                                        type="button"
+                                        @click="showAllBrands = !showAllBrands"
+                                        class="w-full py-1.5 px-2 rounded-lg text-xs font-bold text-primary hover:bg-primary/10 transition flex items-center justify-between cursor-pointer"
+                                    >
+                                        <span>{{ showAllBrands ? 'Show Less' : `See All (${brands.length})` }}</span>
+                                        <svg class="w-3.5 h-3.5 transform transition-transform" :class="showAllBrands ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7" />
+                                        </svg>
+                                    </button>
+                                </li>
+                            </ul>
+                        </div>
+
                         <!-- Dynamic Category Attributes Filters -->
                         <div v-if="activeAttributes.length > 0" class="bg-white dark:bg-gray-800 p-5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 transition">
                             <h3 class="font-bold mb-4 uppercase text-sm tracking-wider text-gray-900 dark:text-gray-100 flex items-center gap-2">
@@ -466,7 +552,7 @@ const seoDescription = computed(() => {
                     </div>
 
                     <!-- Active filter pill -->
-                    <div v-if="search || category || collectionTitle || sortLabel || Object.keys(attrs).length > 0" class="flex flex-wrap gap-2 mb-6">
+                    <div v-if="search || category || brand || collectionTitle || sortLabel || Object.keys(attrs).length > 0" class="flex flex-wrap gap-2 mb-6">
                         <span v-if="collectionTitle" class="inline-flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 px-3 py-1 rounded-full text-xs sm:text-sm font-medium">
                             Collection: {{ collectionTitle }}
                             <button @click="collection = ''" class="hover:opacity-75 font-bold cursor-pointer">×</button>
@@ -480,8 +566,12 @@ const seoDescription = computed(() => {
                             <button @click="search = ''" class="hover:opacity-75 font-bold">×</button>
                         </span>
                         <span v-if="category" class="inline-flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 px-3 py-1 rounded-full text-sm font-medium">
-                            Category: {{ categories.find(c => c.slug === category)?.name }}
+                            Category: {{ allCategoriesFlat.find(c => c.slug === category)?.name || category }}
                             <button @click="category = ''" class="hover:opacity-75 font-bold">×</button>
+                        </span>
+                        <span v-if="brand" class="inline-flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 px-3 py-1 rounded-full text-sm font-medium">
+                            Brand: {{ activeBrandObj?.name || brand }}
+                            <button @click="brand = ''" class="hover:opacity-75 font-bold">×</button>
                         </span>
                         
                         <!-- Attribute Pills -->
@@ -495,6 +585,29 @@ const seoDescription = computed(() => {
                                 <button @click="attrs[key] = ''" class="hover:text-yellow-900 dark:hover:text-yellow-100 font-bold">×</button>
                             </span>
                         </template>
+                    </div>
+
+                    <!-- Active Brand Header Banner -->
+                    <div v-if="activeBrandObj && !collectionTitle" class="mb-5 flex flex-wrap items-center justify-between gap-4 bg-white dark:bg-gray-800 p-4 sm:p-5 rounded-xl border border-gray-100 dark:border-gray-700 shadow-2xs">
+                        <div class="flex items-center gap-3.5">
+                            <img v-if="activeBrandObj.logo_url" :src="activeBrandObj.logo_url" :alt="activeBrandObj.name" class="w-12 h-12 rounded-xl object-contain bg-white border dark:border-gray-700 p-1.5 shrink-0" />
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <h1 class="text-lg sm:text-2xl font-black text-gray-900 dark:text-white">
+                                        {{ activeBrandObj.name }}
+                                    </h1>
+                                    <span class="text-[10px] sm:text-xs font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider bg-primary/10 text-primary">
+                                        {{ products.total }} {{ products.total === 1 ? 'Product' : 'Products' }}
+                                    </span>
+                                </div>
+                                <p v-if="activeBrandObj.description" class="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
+                                    {{ activeBrandObj.description }}
+                                </p>
+                            </div>
+                        </div>
+                        <button @click="brand = ''" class="text-xs font-semibold text-primary hover:underline flex items-center gap-1 cursor-pointer">
+                            All Brands &rarr;
+                        </button>
                     </div>
 
                     <!-- Collection Header Banner -->
@@ -550,7 +663,10 @@ const seoDescription = computed(() => {
                         <img :src="product.image ? '/storage/' + product.image : 'https://placehold.co/400x300?text=Product'"
                             :alt="product.name" class="w-full h-36 sm:h-44 md:h-48 object-cover group-hover:scale-105 transition duration-300" />
                         <div class="p-2 sm:p-3 flex-1 flex flex-col">
-                            <p v-if="product.category" class="text-[10px] sm:text-xs text-gray-400 dark:text-gray-500 mb-0.5 uppercase tracking-wide truncate">{{ product.category.name }}</p>
+                            <div class="flex items-center justify-between gap-1 mb-0.5">
+                                <p v-if="product.category" class="text-[10px] sm:text-xs text-gray-400 dark:text-gray-500 uppercase tracking-wide truncate">{{ product.category.name }}</p>
+                                <span v-if="product.brand?.name" class="text-[10px] font-bold text-primary/90 truncate shrink-0">{{ product.brand.name }}</span>
+                            </div>
                             <h4 class="text-xs sm:text-sm font-semibold mb-1 text-gray-900 dark:text-white line-clamp-2 leading-snug">{{ product.name }}</h4>
                             <div class="flex flex-col mt-auto pt-1 sm:pt-2">
                                 <span v-if="product.is_on_flash_sale || product.discount_price" class="text-[10px] sm:text-xs font-medium text-gray-400 line-through">₦{{ parseFloat(product.price).toLocaleString() }}</span>
@@ -620,7 +736,7 @@ const seoDescription = computed(() => {
                 <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>
-                No products found. <button @click="search=''; category=''" class="text-primary underline ml-1 font-semibold">Clear filters</button>
+                No products found. <button @click="search=''; category=''; brand=''" class="text-primary underline ml-1 font-semibold">Clear filters</button>
             </div>
 
             <Pagination v-if="products.data && products.data.length > 0" :paginator="products" class="mt-8 mb-4 border-t dark:border-gray-700 pt-6" />

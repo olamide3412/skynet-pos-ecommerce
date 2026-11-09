@@ -7,7 +7,10 @@ use App\Models\PosConnection;
 use App\Models\PosSyncLog;
 use App\Models\Product;
 use App\Models\ProductVariantMapping;
+use App\Models\StoreSetting;
 use App\Models\SyncedPosItem;
+use App\Services\ActivityLogger;
+use App\Services\Brands\PosBrandResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -116,14 +119,77 @@ class PosWebhookController extends Controller
             ], 200);
         }
 
-        // 2. Handle Real-time Inventory & Price Updates
-        if ($event === 'inventory.updated' || $event === 'item.price_updated') {
-            $data = $request->input('data', []);
-            $posItemId = $data['pos_item_id'] ?? null;
-            $barcode = $data['barcode_number'] ?? null;
+        // 2. Handle Brand Lifecycle Webhooks (brand.created, brand.updated, brand.deleted)
+        if ($event === 'brand.created' || $event === 'brand.updated') {
+            $data = $request->input('data') ?: $request->input('brand') ?: $request->all();
+            $resolver = new PosBrandResolver();
+            $brand = $resolver->upsertFromPos(is_array($data) ? $data : []);
+
+            if ($brand) {
+                ActivityLogger::webhook(
+                    "POS webhook [{$event}]: Synchronized brand '{$brand->name}' (#{$brand->id})",
+                    ['pos_brand_id' => $brand->pos_brand_id, 'brand_id' => $brand->id, 'branch_id' => $branchId],
+                    'POS Webhook'
+                );
+                PosSyncLog::log('webhook_brand', 'success', "Synchronized brand '{$brand->name}' via {$event}.", (string) $brand->id);
+            }
+
+            return response()->json([
+                'success'  => true,
+                'event'    => $event,
+                'message'  => "Brand webhook '{$event}' processed.",
+                'brand_id' => $brand?->id,
+            ], 200);
+        }
+
+        if ($event === 'brand.deleted') {
+            $data = $request->input('data') ?: $request->input('brand') ?: $request->all();
+            $posBrandId = $data['pos_brand_id'] ?? $data['id'] ?? $data['brand_id'] ?? $request->input('pos_brand_id') ?? null;
+
+            if ($posBrandId) {
+                $resolver = new PosBrandResolver();
+                $unlinked = $resolver->unlinkPosBrand($posBrandId);
+
+                ActivityLogger::webhook(
+                    "POS webhook [brand.deleted]: Unlinked POS brand #{$posBrandId} ({$unlinked} eCommerce brand preserved)",
+                    ['pos_brand_id' => $posBrandId, 'branch_id' => $branchId],
+                    'POS Webhook'
+                );
+                PosSyncLog::log('webhook_brand', 'success', "Unlinked deleted POS brand #{$posBrandId}.", (string) $posBrandId);
+            }
+
+            return response()->json([
+                'success' => true,
+                'event'   => $event,
+                'message' => 'POS brand unlinked; eCommerce brand preserved.',
+            ], 200);
+        }
+
+        // 3. Handle Real-time Inventory, Price & Item Metadata Updates
+        if (in_array($event, ['inventory.updated', 'item.price_updated', 'item.updated'], true)) {
+            $data = $request->input('data');
+            if (empty($data) || !is_array($data)) {
+                $itemsInput = $request->input('items');
+                if (is_array($itemsInput) && !empty($itemsInput[0]) && is_array($itemsInput[0])) {
+                    $data = $itemsInput[0];
+                } elseif (is_array($request->input('item'))) {
+                    $data = $request->input('item');
+                } else {
+                    $data = $request->all();
+                }
+            }
+            $posItemId = $data['pos_item_id'] ?? $data['item_id'] ?? $data['id'] ?? null;
+            $barcode = $data['barcode_number'] ?? $data['barcode'] ?? null;
             $availableQty = $data['available_qty'] ?? null;
             $price = $data['price'] ?? null;
-            $buyingPrice = $data['buying_price'] ?? $data['cost_price'] ?? $data['purchase_price'] ?? null;
+            $buyingPrice = $data['buying_price'] ?? $data['buy_price'] ?? $data['cost_price'] ?? $data['purchase_price'] ?? null;
+            $hasBrandField = array_key_exists('pos_brand_id', $data)
+                || array_key_exists('brand_id', $data)
+                || array_key_exists('pos_brand_name', $data)
+                || array_key_exists('brand_name', $data)
+                || isset($data['brand']);
+            $posBrandId = $data['pos_brand_id'] ?? $data['brand_id'] ?? ($data['brand']['id'] ?? null);
+            $posBrandName = $data['pos_brand_name'] ?? $data['brand_name'] ?? ($data['brand']['name'] ?? null);
 
             if (!$posItemId && !$barcode) {
                 return response()->json([
@@ -144,8 +210,28 @@ class PosWebhookController extends Controller
                 if ($buyingPrice !== null && is_numeric($buyingPrice)) {
                     $syncedUpdates['buying_price'] = (float) $buyingPrice;
                 }
+                if (!empty($data['item_name']) || !empty($data['name'])) {
+                    $syncedUpdates['pos_item_name'] = $data['item_name'] ?? $data['name'];
+                }
+                if (array_key_exists('pos_category_id', $data) || array_key_exists('category_id', $data)) {
+                    $syncedUpdates['pos_category_id'] = $data['pos_category_id'] ?? $data['category_id'];
+                }
+                if (array_key_exists('pos_category_name', $data) || array_key_exists('category_name', $data)) {
+                    $syncedUpdates['pos_category_name'] = $data['pos_category_name'] ?? $data['category_name'];
+                }
+                if ($hasBrandField) {
+                    $syncedUpdates['pos_brand_id'] = $posBrandId;
+                    $syncedUpdates['pos_brand_name'] = $posBrandName;
+                }
                 SyncedPosItem::where('pos_item_id', $posItemId)->update($syncedUpdates);
             }
+
+            $resolvedWebhookBrandId = null;
+            if ($hasBrandField && (!empty($posBrandId) || !empty($posBrandName))) {
+                $resolver = new PosBrandResolver();
+                $resolvedWebhookBrandId = $resolver->resolve($posBrandId, $posBrandName);
+            }
+            $overwriteBrand = StoreSetting::getBool('pos_brand_sync_overwrite', false);
 
             // Strategy A: Match by pos_item_id column on Product
             $product = null;
@@ -182,8 +268,21 @@ class PosWebhookController extends Controller
                     $product->cost_price = (float) $buyingPrice;
                 }
 
+                // Apply brand overwrite policy when POS sends brand metadata
+                if ($resolvedWebhookBrandId !== null && (empty($product->brand_id) || $overwriteBrand)) {
+                    $product->brand_id = $resolvedWebhookBrandId;
+                }
+
                 $product->last_pos_sync_at = now();
                 $product->save();
+
+                if ($event === 'item.updated') {
+                    ActivityLogger::webhook(
+                        "POS webhook [item.updated]: Updated Product #{$product->id} ({$product->name})",
+                        ['pos_item_id' => $posItemId, 'product_id' => $product->id, 'brand_id' => $product->brand_id],
+                        'POS Webhook'
+                    );
+                }
 
                 $logMsg = "Webhook updated Product #{$product->id} ({$product->name}) stock to {$product->stock}";
                 if ($price !== null && is_numeric($price)) {
@@ -240,10 +339,15 @@ class PosWebhookController extends Controller
                         ? (int) array_sum(array_column($updatedVariants, 'stock'))
                         : (int) ProductVariantMapping::where('product_id', $parentProduct->id)->sum('local_stock');
 
-                    $parentProduct->updateQuietly([
+                    $parentUpdates = [
                         'stock'    => $totalVariantStock,
                         'variants' => $updatedVariants,
-                    ]);
+                    ];
+                    if ($resolvedWebhookBrandId !== null && (empty($parentProduct->brand_id) || $overwriteBrand)) {
+                        $parentUpdates['brand_id'] = $resolvedWebhookBrandId;
+                    }
+
+                    $parentProduct->updateQuietly($parentUpdates);
                 }
 
                 $logMsg = "Webhook updated Variant '{$variantMapping->variant_label}' (Product #{$parentProduct?->id}) stock to {$variantMapping->local_stock}";

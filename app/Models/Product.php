@@ -12,7 +12,7 @@ class Product extends Model
     use HasFactory;
 
     protected $fillable = [
-        'category_id', 'name', 'slug', 'url_key', 'product_number',
+        'category_id', 'brand_id', 'name', 'slug', 'url_key', 'product_number',
         'sku', 'description',
         'price', 'cost_price', 'discount_price',
         'special_price', 'special_price_from', 'special_price_to',
@@ -49,6 +49,11 @@ class Product extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
+    }
+
+    public function brand(): BelongsTo
+    {
+        return $this->belongsTo(Brand::class);
     }
 
     public function orderItems(): HasMany

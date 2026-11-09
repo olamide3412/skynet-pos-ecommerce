@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Frontend;
 
 use App\Http\Controllers\Controller;
+use App\Models\Brand;
 use App\Models\Product;
 use App\Models\Category;
 use App\Models\OrderItem;
@@ -14,7 +15,7 @@ class HomeController extends Controller
     {
         // 0. Active flash sale products (only when currently running)
         $now = now();
-        $flashSales = Product::with('category')
+        $flashSales = Product::with(['category', 'brand:id,name,slug,logo'])
             ->where('status', true)
             ->whereNotNull('special_price')
             ->where('special_price', '>', 0)
@@ -33,7 +34,7 @@ class HomeController extends Controller
         $flashSaleEndTime = $flashSales->whereNotNull('special_price_to')->min('special_price_to');
 
         // 1. Featured products (10 products)
-        $featured = Product::with('category')
+        $featured = Product::with(['category', 'brand:id,name,slug,logo'])
             ->where('status', true)
             ->when(Product::where('status', true)->where('is_featured', true)->exists(), function ($q) {
                 $q->orderByDesc('is_featured');
@@ -52,7 +53,7 @@ class HomeController extends Controller
             ->pluck('product_id')
             ->toArray();
 
-        $bestSellers = Product::with('category')
+        $bestSellers = Product::with(['category', 'brand:id,name,slug,logo'])
             ->where('status', true)
             ->whereIn('id', $bestSellerIds)
             ->get();
@@ -65,7 +66,7 @@ class HomeController extends Controller
 
         if ($bestSellers->count() < 10) {
             $existingIds = $bestSellers->pluck('id')->toArray();
-            $fillers = Product::with('category')
+            $fillers = Product::with(['category', 'brand:id,name,slug,logo'])
                 ->where('status', true)
                 ->whereNotIn('id', $existingIds)
                 ->inRandomOrder()
@@ -75,7 +76,7 @@ class HomeController extends Controller
         }
 
         // 3. New arrivals (10 products)
-        $newArrivals = Product::with('category')
+        $newArrivals = Product::with(['category', 'brand:id,name,slug,logo'])
             ->where('status', true)
             ->latest()
             ->take(10)
@@ -95,7 +96,7 @@ class HomeController extends Controller
 
         $mostSearched = collect();
         if (!empty($topTerms)) {
-            $searchedQuery = Product::with('category')->where('status', true);
+            $searchedQuery = Product::with(['category', 'brand:id,name,slug,logo'])->where('status', true);
             $searchedQuery->where(function ($sub) use ($topTerms) {
                 foreach ($topTerms as $term) {
                     $sub->orWhere('name', 'like', '%' . $term . '%');
@@ -107,7 +108,7 @@ class HomeController extends Controller
         // Fill up to 10 if fewer match or before searches accumulate
         if ($mostSearched->count() < 10) {
             $excludeIds = $mostSearched->pluck('id')->toArray();
-            $fallback = Product::with('category')
+            $fallback = Product::with(['category', 'brand:id,name,slug,logo'])
                 ->where('status', true)
                 ->whereNotIn('id', $excludeIds)
                 ->inRandomOrder()
@@ -115,6 +116,13 @@ class HomeController extends Controller
                 ->get();
             $mostSearched = $mostSearched->concat($fallback);
         }
+
+        $featuredBrands = Brand::active()
+            ->withCount(['products' => fn ($q) => $q->where('status', true)])
+            ->orderByDesc('is_featured')
+            ->ordered()
+            ->take(12)
+            ->get(['id', 'name', 'slug', 'logo', 'is_featured']);
 
         return Inertia::render('Home', [
             'flash_sales' => $flashSales,
@@ -131,6 +139,7 @@ class HomeController extends Controller
                 ->orderBy('menu_position')
                 ->take(8)
                 ->get(['id', 'name', 'slug', 'image']),
+            'featured_brands' => $featuredBrands,
         ]);
     }
 }

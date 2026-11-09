@@ -26,6 +26,7 @@ Route::get('/robots.txt', [\App\Http\Controllers\Frontend\SitemapController::cla
 
 Route::get('/', [HomeController::class , 'index'])->name('home');
 Route::get('/shop', [FrontProductController::class , 'index'])->name('shop.index');
+Route::get('/brand/{slug}', [FrontProductController::class , 'brand'])->name('shop.brand');
 Route::get('/product/{url_key}', [FrontProductController::class , 'show'])->name('shop.show');
 Route::post('/newsletter/subscribe', [\App\Http\Controllers\Frontend\NewsletterController::class, 'subscribe'])
     ->middleware('throttle:3,1')
@@ -38,9 +39,12 @@ Route::get('/search/suggestions', function (\Illuminate\Http\Request $request) {
         return response()->json([]);
 
     $products = \App\Models\Product::where('status', true)
-        ->where('name', 'like', '%' . $q . '%')
-        ->with('category:id,name,slug')
-        ->select('id', 'name', 'price', 'discount_price', 'image', 'category_id', 'url_key')
+        ->where(function ($sub) use ($q) {
+            $sub->where('name', 'like', '%' . $q . '%')
+                ->orWhereHas('brand', fn ($bq) => $bq->where('name', 'like', '%' . $q . '%'));
+        })
+        ->with(['category:id,name,slug', 'brand:id,name,slug,logo'])
+        ->select('id', 'name', 'price', 'discount_price', 'image', 'category_id', 'brand_id', 'url_key')
         ->limit(5)
         ->get();
 
@@ -72,9 +76,9 @@ Route::get('/search/trending', function () {
 
     $products = collect();
     if (!empty($topTerms)) {
-        $searchedQuery = \App\Models\Product::with('category:id,name,slug')
+        $searchedQuery = \App\Models\Product::with(['category:id,name,slug', 'brand:id,name,slug,logo'])
             ->where('status', true)
-            ->select('id', 'name', 'price', 'discount_price', 'image', 'category_id', 'url_key');
+            ->select('id', 'name', 'price', 'discount_price', 'image', 'category_id', 'brand_id', 'url_key');
 
         $searchedQuery->where(function ($sub) use ($topTerms) {
             foreach ($topTerms as $term) {
@@ -86,10 +90,10 @@ Route::get('/search/trending', function () {
 
     if ($products->count() < 5) {
         $excludeIds = $products->pluck('id')->toArray();
-        $fallback = \App\Models\Product::with('category:id,name,slug')
+        $fallback = \App\Models\Product::with(['category:id,name,slug', 'brand:id,name,slug,logo'])
             ->where('status', true)
             ->whereNotIn('id', $excludeIds)
-            ->select('id', 'name', 'price', 'discount_price', 'image', 'category_id', 'url_key')
+            ->select('id', 'name', 'price', 'discount_price', 'image', 'category_id', 'brand_id', 'url_key')
             ->inRandomOrder()
             ->take(5 - $products->count())
             ->get();
@@ -199,6 +203,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::put('/profile/password', [ProfileController::class , 'updatePassword'])->name('profile.password.update');
 
             Route::resource('categories', CategoryController::class)->except(['create', 'edit', 'show']);
+            Route::middleware('permission:brands.manage')->group(function () {
+                Route::get('brands/search', [\App\Http\Controllers\Admin\BrandController::class, 'search'])->name('brands.search');
+                Route::resource('brands', \App\Http\Controllers\Admin\BrandController::class)->except(['create', 'edit', 'show']);
+            });
             Route::post('sliders/settings', [SliderController::class, 'updateSettings'])->name('sliders.settings.update');
             Route::resource('sliders', SliderController::class)->except(['create', 'edit', 'show']);
             Route::post('products/bulk-action', [AdminProductController::class , 'bulkAction'])->name('products.bulk-action');

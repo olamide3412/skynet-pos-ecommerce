@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Brand;
 use App\Models\CartItem;
 use App\Models\Category;
 use App\Models\OrderItem;
@@ -11,6 +12,7 @@ use App\Models\ProductPosUnit;
 use App\Models\ProductVariantMapping;
 use App\Models\SyncedPosItem;
 use App\Services\ActivityLogger;
+use App\Services\Brands\PosBrandResolver;
 use App\Services\ImageOptimizer;
 use App\Services\PosIntegration\PosApiClient;
 use App\Services\PosIntegration\PosCatalogService;
@@ -36,18 +38,27 @@ class ProductController extends Controller
 
     public function index(Request $request)
     {
-        $query = Product::with(['category', 'posUnits', 'syncedPosItem', 'variantMappings.syncedPosItem'])->latest();
+        $query = Product::with(['category', 'brand', 'posUnits', 'syncedPosItem', 'variantMappings.syncedPosItem'])->latest();
 
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
                     ->orWhere('sku', 'like', "%{$search}%")
-                    ->orWhere('url_key', 'like', "%{$search}%");
+                    ->orWhere('url_key', 'like', "%{$search}%")
+                    ->orWhereHas('brand', fn ($bq) => $bq->where('name', 'like', "%{$search}%"));
             });
         }
 
         if ($categoryId = $request->input('category_id')) {
             $query->where('category_id', $categoryId);
+        }
+
+        if ($brandId = $request->input('brand_id')) {
+            if ($brandId === 'none') {
+                $query->whereNull('brand_id');
+            } else {
+                $query->where('brand_id', $brandId);
+            }
         }
 
         if ($status = $request->input('status')) {
@@ -60,7 +71,7 @@ class ProductController extends Controller
 
         // List synced POS items for selection in the product creation modal
         $syncedItems = SyncedPosItem::where('is_active', true)
-            ->select('pos_item_id', 'pos_item_name', 'pos_category_name', 'sku', 'barcode', 'item_reference', 'standard_price', 'buying_price', 'effective_availability', 'base_unit_name', 'mapping_status')
+            ->select('pos_item_id', 'pos_item_name', 'pos_category_name', 'pos_brand_id', 'pos_brand_name', 'sku', 'barcode', 'item_reference', 'standard_price', 'buying_price', 'effective_availability', 'base_unit_name', 'mapping_status')
             ->orderBy('pos_item_name')
             ->get();
 
@@ -108,9 +119,10 @@ class ProductController extends Controller
                 ->with('attributes')
                 ->orderBy('name')
                 ->get(),
+            'brands' => Brand::ordered()->get(['id', 'name', 'slug', 'logo', 'is_active', 'pos_brand_id']),
             'synced_pos_items' => $syncedItems,
             'store_settings' => \App\Models\StoreSetting::allAsArray(),
-            'filters' => array_merge($request->only(['search', 'category_id', 'status', 'inventory_source']), [
+            'filters' => array_merge($request->only(['search', 'category_id', 'brand_id', 'status', 'inventory_source']), [
                 'per_page' => (string) $perPageInput,
             ]),
         ]);
@@ -148,6 +160,7 @@ class ProductController extends Controller
             'pos_item_id'          => "nullable|required_if:inventory_source,pos|integer|unique:products,pos_item_id{$uniqueSuffix}",
             'name'                 => 'required|string|max:255',
             'category_id'          => 'required|exists:categories,id',
+            'brand_id'             => 'nullable|exists:brands,id',
             'short_description'    => 'nullable|string',
             'description'          => 'nullable|string',
             'meta_title'           => 'nullable|string|max:255',
@@ -182,6 +195,7 @@ class ProductController extends Controller
     private function processRequest(Request $request, array $validated): array
     {
         $validated['slug'] = Str::slug($validated['name']) . '-' . uniqid();
+        $validated['brand_id'] = !empty($validated['brand_id']) ? (int) $validated['brand_id'] : null;
 
         // Booleans sent as strings from FormData
         foreach (['is_new', 'is_featured', 'visible_individually', 'status', 'show_stock_level'] as $bool) {
@@ -198,6 +212,10 @@ class ProductController extends Controller
                 $validated['pos_base_unit_name'] = $syncedItem->base_unit_name;
                 $validated['pos_sync_status'] = 'synced';
                 $validated['last_pos_sync_at'] = now();
+
+                if (empty($validated['brand_id']) && (!empty($syncedItem->pos_brand_id) || !empty($syncedItem->pos_brand_name))) {
+                    $validated['brand_id'] = (new PosBrandResolver())->resolve($syncedItem->pos_brand_id, $syncedItem->pos_brand_name);
+                }
             }
         } else {
             $validated['inventory_source'] = 'ecommerce';
@@ -431,6 +449,9 @@ class ProductController extends Controller
                         ->first();
 
                     if ($standaloneProduct) {
+                        if (empty($product->brand_id) && !empty($standaloneProduct->brand_id)) {
+                            $product->updateQuietly(['brand_id' => $standaloneProduct->brand_id]);
+                        }
                         CartItem::where('product_id', $standaloneProduct->id)->delete();
                         $hasOrders = OrderItem::where('product_id', $standaloneProduct->id)->exists();
 
@@ -567,8 +588,9 @@ class ProductController extends Controller
         $validated = $request->validate([
             'ids'             => 'required|array|min:1',
             'ids.*'           => 'integer|exists:products,id',
-            'action'          => 'required|string|in:update_category,update_status,update_featured,update_new,update_prices,delete',
+            'action'          => 'required|string|in:update_category,update_brand,update_status,update_featured,update_new,update_prices,delete',
             'category_id'     => 'nullable|required_if:action,update_category|exists:categories,id',
+            'brand_id'        => 'nullable|exists:brands,id',
             'status'          => 'nullable|boolean',
             'is_featured'     => 'nullable|boolean',
             'is_new'          => 'nullable|boolean',
@@ -586,6 +608,14 @@ class ProductController extends Controller
                 $category = Category::find($validated['category_id']);
                 ActivityLogger::product("Bulk moved {$count} product(s) to category '{$category?->name}'", ['ids' => $ids]);
                 return back()->with('success', "Moved {$count} product(s) to {$category->name}.");
+
+            case 'update_brand':
+                $targetBrandId = !empty($validated['brand_id']) ? (int) $validated['brand_id'] : null;
+                Product::whereIn('id', $ids)->update(['brand_id' => $targetBrandId]);
+                $brand = $targetBrandId ? Brand::find($targetBrandId) : null;
+                $brandLabel = $brand ? $brand->name : 'No Brand (Cleared)';
+                ActivityLogger::product("Bulk updated brand for {$count} product(s) to '{$brandLabel}'", ['ids' => $ids, 'brand_id' => $targetBrandId]);
+                return back()->with('success', "Updated brand for {$count} product(s) to {$brandLabel}.");
 
             case 'update_status':
                 $status = filter_var($request->input('status', true), FILTER_VALIDATE_BOOLEAN);

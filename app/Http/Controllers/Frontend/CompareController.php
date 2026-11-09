@@ -18,9 +18,9 @@ class CompareController extends Controller
     {
         $compare = $this->getCompare($request);
         
-        // Eager load product category for comparison table
+        // Eager load product category and brand for comparison table
         if ($compare) {
-            $compare->load('items.product.category');
+            $compare->load(['items.product.category', 'items.product.brand:id,name,slug,logo']);
         }
 
         return Inertia::render('Frontend/Compare/Index', [

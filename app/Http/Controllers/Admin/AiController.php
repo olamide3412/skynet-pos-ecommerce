@@ -27,6 +27,7 @@ class AiController extends Controller
             'product_name'  => 'required|string|max:255',
             'type'          => 'required|string|in:short,full,seo',
             'category_name' => 'nullable|string|max:100',
+            'brand_name'    => 'nullable|string|max:120',
             'price'         => 'nullable|numeric|min:0',
             'keywords'      => 'nullable|string|max:500',
             'tone'          => 'nullable|string|max:50',

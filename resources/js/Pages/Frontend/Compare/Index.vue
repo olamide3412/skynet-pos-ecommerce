@@ -120,6 +120,18 @@ const addToCart = (product) => {
                             </td>
                         </tr>
 
+                        <!-- Brand Row -->
+                        <tr>
+                            <th class="p-4 sm:p-6 text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-50/50 dark:bg-gray-900/50 border-b border-r dark:border-gray-700">Brand</th>
+                            <td v-for="item in items" :key="'brand-'+item.id" class="p-4 sm:p-6 align-middle text-sm text-gray-700 dark:text-gray-200 border-b border-r dark:border-gray-700">
+                                <Link v-if="item.product.brand" :href="route('shop.brand', item.product.brand.slug)" class="inline-flex items-center gap-2 font-semibold text-primary hover:underline">
+                                    <img v-if="item.product.brand.logo_url" :src="item.product.brand.logo_url" :alt="item.product.brand.name" class="w-5 h-5 rounded object-contain bg-white border dark:border-gray-700" />
+                                    <span>{{ item.product.brand.name }}</span>
+                                </Link>
+                                <span v-else class="text-gray-400">—</span>
+                            </td>
+                        </tr>
+
                         <!-- Description Row -->
                         <tr>
                             <th class="p-4 sm:p-6 text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-50/50 dark:bg-gray-900/50 border-b border-r dark:border-gray-700">Description</th>

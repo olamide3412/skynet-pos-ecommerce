@@ -43,7 +43,8 @@ class PosIntegrationController extends Controller
             $query->where(function ($q) use ($search) {
                 $q->where('pos_item_name', 'like', "%{$search}%")
                     ->orWhere('barcode', 'like', "%{$search}%")
-                    ->orWhere('sku', 'like', "%{$search}%");
+                    ->orWhere('sku', 'like', "%{$search}%")
+                    ->orWhere('pos_brand_name', 'like', "%{$search}%");
             });
         }
 
@@ -53,6 +54,10 @@ class PosIntegrationController extends Controller
 
         if ($posCategory = $request->input('pos_category')) {
             $query->where('pos_category_name', $posCategory);
+        }
+
+        if ($posBrand = $request->input('pos_brand')) {
+            $query->where('pos_brand_name', $posBrand);
         }
 
         $perPageInput = $request->input('per_page', 25);
@@ -73,6 +78,7 @@ class PosIntegrationController extends Controller
             'mapped_variant'  => SyncedPosItem::where('mapping_status', 'mapped_variant')->count(),
             'unmapped'        => SyncedPosItem::where('mapping_status', 'unmapped')->count(),
             'missing_pos'     => Product::where('inventory_source', 'pos')->where('pos_sync_status', 'missing_pos_item')->count(),
+            'brands_synced'   => \App\Models\Brand::whereNotNull('pos_brand_id')->count(),
         ];
 
         $posCategories = SyncedPosItem::whereNotNull('pos_category_name')
@@ -81,21 +87,32 @@ class PosIntegrationController extends Controller
             ->orderBy('pos_category_name')
             ->pluck('pos_category_name');
 
+        $posBrands = SyncedPosItem::whereNotNull('pos_brand_name')
+            ->where('pos_brand_name', '!=', '')
+            ->distinct()
+            ->orderBy('pos_brand_name')
+            ->pluck('pos_brand_name');
+
         $ecommerceCategories = \App\Models\Category::with('children:id,name,parent_id')
             ->whereNull('parent_id')
             ->orderBy('name')
             ->get(['id', 'name', 'parent_id']);
+
+        $ecommerceBrands = \App\Models\Brand::ordered()
+            ->get(['id', 'name', 'slug', 'pos_brand_id']);
 
         return Inertia::render('Admin/PosIntegration/Index', [
             'connection'           => $connectionSummary,
             'items'                => $syncedItems,
             'logs'                 => $logs,
             'stats'                => $stats,
-            'filters'              => array_merge($request->only(['search', 'mapping_status', 'pos_category']), [
+            'filters'              => array_merge($request->only(['search', 'mapping_status', 'pos_category', 'pos_brand']), [
                 'per_page' => (string) $perPageInput,
             ]),
             'pos_categories'       => $posCategories,
+            'pos_brands'           => $posBrands,
             'ecommerce_categories' => $ecommerceCategories,
+            'ecommerce_brands'     => $ecommerceBrands,
         ]);
     }
 
@@ -191,12 +208,13 @@ class PosIntegrationController extends Controller
         $request->validate([
             'pos_item_id' => 'required|exists:synced_pos_items,pos_item_id',
             'category_id' => 'nullable|exists:categories,id',
+            'brand_id'    => 'nullable|exists:brands,id',
             'status'      => 'nullable|boolean',
             'is_active'   => 'nullable|boolean',
         ]);
 
         try {
-            $customFields = $request->only(['category_id', 'status', 'is_active']);
+            $customFields = $request->only(['category_id', 'brand_id', 'status', 'is_active']);
             $product = $this->catalogService->importAsSimpleProduct($request->pos_item_id, $customFields);
             $statusLabel = $product->status ? 'active' : 'draft';
             return back()->with('success', "Imported '{$product->name}' as {$statusLabel} product.");
@@ -221,11 +239,12 @@ class PosIntegrationController extends Controller
             'pos_item_ids'   => 'required|array',
             'pos_item_ids.*' => 'exists:synced_pos_items,pos_item_id',
             'category_id'    => 'nullable|exists:categories,id',
+            'brand_id'       => 'nullable|exists:brands,id',
             'status'         => 'nullable|boolean',
             'is_active'      => 'nullable|boolean',
         ]);
 
-        $customFields = $request->only(['category_id', 'status', 'is_active']);
+        $customFields = $request->only(['category_id', 'brand_id', 'status', 'is_active']);
         $result = $this->catalogService->bulkImportSimpleProducts($request->pos_item_ids, $customFields);
         $statusLabel = (!empty($customFields['status']) || !empty($customFields['is_active'])) ? 'active' : 'draft';
 
@@ -246,11 +265,12 @@ class PosIntegrationController extends Controller
 
         $request->validate([
             'category_id' => 'nullable|exists:categories,id',
+            'brand_id'    => 'nullable|exists:brands,id',
             'status'      => 'nullable|boolean',
             'is_active'   => 'nullable|boolean',
         ]);
 
-        $customFields = $request->only(['category_id', 'status', 'is_active']);
+        $customFields = $request->only(['category_id', 'brand_id', 'status', 'is_active']);
         $result = $this->catalogService->importAllEligible($customFields);
         $statusLabel = (!empty($customFields['status']) || !empty($customFields['is_active'])) ? 'active' : 'draft';
 

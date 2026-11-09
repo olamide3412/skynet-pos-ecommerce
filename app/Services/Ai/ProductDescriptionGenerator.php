@@ -20,6 +20,7 @@ class ProductDescriptionGenerator
 
         $productName = $data['product_name'] ?? 'Product';
         $category = $data['category_name'] ?? 'General';
+        $brand = $data['brand_name'] ?? '';
         $price = !empty($data['price']) ? '₦' . number_format((float)$data['price'], 2) : 'Affordable';
         $keywords = $data['keywords'] ?? '';
         $tone = $data['tone'] ?? 'conversion-focused and punchy';
@@ -34,7 +35,11 @@ Strict Constraints:
 4. Absolutely NO HTML tags or quotation marks wrapping the text.
 EOT;
 
-        $userPrompt = "Product Name: {$productName}\nCategory: {$category}\nPrice: {$price}\nTone: {$tone}";
+        $userPrompt = "Product Name: {$productName}\nCategory: {$category}";
+        if (!empty($brand)) {
+            $userPrompt .= "\nBrand: {$brand}";
+        }
+        $userPrompt .= "\nPrice: {$price}\nTone: {$tone}";
         if (!empty($keywords)) {
             $userPrompt .= "\nKey Highlights to Emphasize: {$keywords}";
         }
@@ -62,6 +67,7 @@ EOT;
 
         $productName = $data['product_name'] ?? 'Product';
         $category = $data['category_name'] ?? 'General';
+        $brand = $data['brand_name'] ?? '';
         $price = !empty($data['price']) ? '₦' . number_format((float)$data['price'], 2) : '';
         $keywords = $data['keywords'] ?? '';
         $tone = $data['tone'] ?? 'informative, engaging, and professional';
@@ -90,6 +96,9 @@ CRITICAL CONTENT INTEGRITY & NO-BLANK-HEADING RULES:
 EOT;
 
         $userPrompt = "Product Name: {$productName}\nCategory: {$category}";
+        if (!empty($brand)) {
+            $userPrompt .= "\nBrand: {$brand} (Include Brand: {$brand} in the Specifications section)";
+        }
         if (!empty($price)) {
             $userPrompt .= "\nPrice: {$price}";
         }
@@ -165,6 +174,7 @@ EOT;
 
         $productName = $data['product_name'] ?? 'Product';
         $category = $data['category_name'] ?? 'General';
+        $brand = $data['brand_name'] ?? '';
         $price = !empty($data['price']) ? '₦' . number_format((float)$data['price'], 2) : 'Affordable';
         $keywords = $data['keywords'] ?? '';
 
@@ -184,7 +194,11 @@ Strict Rules:
 3. Do NOT include markdown syntax or backticks in the response.
 EOT;
 
-        $userPrompt = "Product Name: {$productName}\nCategory: {$category}\nPrice: {$price}";
+        $userPrompt = "Product Name: {$productName}\nCategory: {$category}";
+        if (!empty($brand)) {
+            $userPrompt .= "\nBrand: {$brand}";
+        }
+        $userPrompt .= "\nPrice: {$price}";
         if (!empty($keywords)) {
             $userPrompt .= "\nKey Highlights to Include: {$keywords}";
         }
