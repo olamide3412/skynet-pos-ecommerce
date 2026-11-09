@@ -70,6 +70,7 @@ class HandleInertiaRequests extends Middleware
                 'location' => 'Delta State, Nigeria'
             ],
             'csrf_token' => csrf_token(),
+            'app_url' => StoreSetting::getBaseUrl() ?: url('/'),
             'turnstileSiteKey' => config('services.turnstile.site_key'),
             'cart' => fn() => $this->getCartData($request),
             'cart_count' => fn() => $this->getCartCount($request),

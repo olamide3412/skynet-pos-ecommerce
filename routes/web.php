@@ -172,8 +172,12 @@ Route::post('/reset-password', [\App\Http\Controllers\Frontend\CustomerPasswordR
     ->middleware('throttle:5,1')
     ->name('password.update');
 
-Route::get('/auth/{provider}/redirect', [\App\Http\Controllers\Frontend\SocialLoginController::class, 'redirect'])->name('social.redirect');
-Route::get('/auth/{provider}/callback', [\App\Http\Controllers\Frontend\SocialLoginController::class, 'callback'])->name('social.callback');
+Route::get('/auth/{provider}/redirect', [\App\Http\Controllers\Frontend\SocialLoginController::class, 'redirect'])
+    ->whereIn('provider', ['google', 'facebook'])
+    ->name('social.redirect');
+Route::get('/auth/{provider}/callback', [\App\Http\Controllers\Frontend\SocialLoginController::class, 'callback'])
+    ->whereIn('provider', ['google', 'facebook'])
+    ->name('social.callback');
 
 // Logout — requires authenticated customer
 Route::middleware('auth:customer')->group(function () {

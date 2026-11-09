@@ -19,7 +19,8 @@ class Customer extends Authenticatable
         'phone',
         'provider_name',
         'provider_id',
-        'provider_token'
+        'provider_token',
+        'email_verified_at',
     ];
 
     protected $hidden = [

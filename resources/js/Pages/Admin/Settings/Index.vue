@@ -90,8 +90,14 @@ const form = useForm({
     ai_claude_model:                props.settings.ai_claude_model || 'claude-3-5-haiku-20241022',
 });
 
+const logoPreview = ref(null);
+
 const handleLogoUpload = (e) => {
-    form.company_logo = e.target.files[0];
+    const file = e.target.files[0];
+    form.company_logo = file;
+    if (file) {
+        logoPreview.value = URL.createObjectURL(file);
+    }
 };
 
 const parsedStaffEmails = computed(() => {
@@ -112,6 +118,7 @@ const save = () => {
         onSuccess: () => {
             //toast.success('Settings saved successfully!');
             form.company_logo = null;
+            logoPreview.value = null;
         },
         onError: () => toast.error('Failed to save settings, please check the form.'),
     });
@@ -179,27 +186,75 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
             <form @submit.prevent="save" class="space-y-8">
 
                 <!-- ─── Company Branding ───────────────────────────────────── -->
-                <section class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <section class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-xs">
                     <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60">
-                        <h2 class="text-lg font-semibold">🏢 Company Profile</h2>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">Settings here dynamically replace all branding across the site.</p>
+                        <h2 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                            <span>🏢</span> Company Profile & Branding
+                        </h2>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Settings here dynamically replace all branding, contact information, and metadata across the storefront and emails.</p>
                     </div>
-                    <div class="p-6 grid grid-cols-1 gap-y-6 sm:grid-cols-2 sm:gap-x-6">
+
+                    <!-- Dedicated Compact Logo Banner -->
+                    <div class="px-6 py-5 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/20">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-5">
+                            <div class="flex items-center gap-4">
+                                <div class="w-32 h-20 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 flex items-center justify-center p-2 shrink-0 overflow-hidden shadow-2xs">
+                                    <img v-if="logoPreview" :src="logoPreview" class="max-h-full max-w-full object-contain" alt="Logo preview" />
+                                    <img v-else-if="props.settings.company_logo" :src="'/storage/' + props.settings.company_logo" class="max-h-full max-w-full object-contain" alt="Company Logo" />
+                                    <div v-else class="flex flex-col items-center justify-center text-gray-400 text-xs">
+                                        <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                                        <span>No Logo</span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <h3 class="text-sm font-bold text-gray-900 dark:text-white">Store Logo</h3>
+                                        <span v-if="logoPreview" class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200">
+                                            New File Selected
+                                        </span>
+                                        <span v-else-if="props.settings.company_logo" class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200">
+                                            Current Logo Active
+                                        </span>
+                                    </div>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Appears in header, mobile navbar, checkout, PDF invoices, and automated emails. PNG or JPG (recommended transparent PNG, max 2MB).</p>
+                                </div>
+                            </div>
+
+                            <div class="shrink-0 flex items-center">
+                                <label class="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition cursor-pointer shadow-2xs">
+                                    <svg class="w-4 h-4 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                                    <span>{{ props.settings.company_logo || logoPreview ? 'Change Logo' : 'Upload Logo' }}</span>
+                                    <input type="file" @change="handleLogoUpload" accept="image/*" class="sr-only" />
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Clean 2-Column Responsive Form Fields -->
+                    <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                         <!-- Left Column -->
                         <div class="space-y-4">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Company Name *</label>
-                                <input type="text" v-model="form.company_name" required class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2" />
+                                <input type="text" v-model="form.company_name" required class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm" />
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tagline / Slogan</label>
-                                <input type="text" v-model="form.company_tagline" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2" />
+                                <input type="text" v-model="form.company_tagline" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm" />
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Store Website / Live URL</label>
                                 <input type="url" v-model="form.site_url" placeholder="https://easypick.ng" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm" />
-                                <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Used for logo links, tracking links, and customer action buttons in all outgoing emails so they never default to localhost.</p>
+                                <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Used for logo links, tracking links, and customer action buttons in emails.</p>
                             </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Office Address</label>
+                                <textarea v-model="form.company_address" rows="3" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm"></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Right Column -->
+                        <div class="space-y-4">
                             <div class="grid grid-cols-2 gap-4">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Support Email</label>
@@ -211,35 +266,14 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                                 </div>
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Office Address</label>
-                                <textarea v-model="form.company_address" rows="2" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2"></textarea>
-                            </div>
-                            <div>
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">SEO Meta Description</label>
-                                <textarea v-model="form.meta_description" rows="2" placeholder="Brief summary of your store for Google search results..." class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm"></textarea>
+                                <textarea v-model="form.meta_description" rows="3" placeholder="Brief summary of your store for Google search results..." class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm"></textarea>
                                 <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Recommended: 150-160 characters describing your store.</p>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">SEO Meta Keywords</label>
                                 <input type="text" v-model="form.meta_keywords" placeholder="e.g. online store, electronics, gadgets, buy online" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm" />
                                 <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Comma-separated search keywords.</p>
-                            </div>
-                        </div>
-                        
-                        <!-- Right Column (Logo) -->
-                        <div class="flex flex-col">
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Company Logo</label>
-                            <div class="flex-1 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900/50 flex flex-col items-center justify-center p-6 text-center hover:bg-gray-100 dark:hover:bg-gray-800 transition">
-                                <template v-if="props.settings.company_logo && !form.company_logo">
-                                    <img :src="'/storage/' + props.settings.company_logo" class="h-20 object-contain mb-4" />
-                                    <p class="text-xs text-green-600 font-semibold">Current Logo Active</p>
-                                </template>
-                                <template v-else>
-                                    <svg class="w-10 h-10 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-                                    <p class="text-sm font-medium text-gray-900 dark:text-white mb-1">Upload a new logo</p>
-                                    <p class="text-xs text-gray-500 mb-3">PNG, JPG up to 2MB</p>
-                                </template>
-                                <input type="file" @change="handleLogoUpload" accept="image/*" class="text-sm text-gray-500 file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-gray-100 dark:file:bg-gray-700 file:text-primary cursor-pointer w-full max-w-[200px]" />
                             </div>
                         </div>
                     </div>

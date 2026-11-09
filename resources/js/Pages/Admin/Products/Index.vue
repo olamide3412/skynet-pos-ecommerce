@@ -152,6 +152,8 @@ const selectPosItem = (item) => {
     }
     posDropdownOpen.value = false;
     posSearchQuery.value = '';
+    openVariantDropdownIndex.value = null;
+    variantPosSearchQuery.value = '';
 };
 
 const clearPosItem = () => {
@@ -162,6 +164,10 @@ const clearPosItem = () => {
 const handleClickOutsidePosDropdown = (e) => {
     if (posDropdownOpen.value && posDropdownRef.value && !posDropdownRef.value.contains(e.target)) {
         posDropdownOpen.value = false;
+    }
+    if (openVariantDropdownIndex.value !== null && !e.target.closest('.variant-pos-dropdown-container')) {
+        openVariantDropdownIndex.value = null;
+        variantPosSearchQuery.value = '';
     }
 };
 
@@ -269,7 +275,58 @@ const addVariant = () => form.variants.push({
     pos_item_id: null,
     absorb_standalone: true,
 });
-const removeVariant = (i) => form.variants.splice(i, 1);
+const removeVariant = (i) => {
+    if (openVariantDropdownIndex.value === i) {
+        openVariantDropdownIndex.value = null;
+        variantPosSearchQuery.value = '';
+    }
+    form.variants.splice(i, 1);
+};
+
+const openVariantDropdownIndex = ref(null);
+const variantPosSearchQuery    = ref('');
+const variantPosSearchInputRef = ref(null);
+
+const filteredVariantPosItemsAll = computed(() => {
+    const q = variantPosSearchQuery.value.trim().toLowerCase();
+    if (!q) return props.synced_pos_items || [];
+    return (props.synced_pos_items || []).filter(item => {
+        const name = (item.pos_item_name || '').toLowerCase();
+        const sku  = (item.sku || '').toLowerCase();
+        const bar  = (item.barcode || '').toLowerCase();
+        const ref  = (item.item_reference || '').toLowerCase();
+        const cat  = (item.pos_category_name || '').toLowerCase();
+        const id   = String(item.pos_item_id || '');
+        return name.includes(q) || sku.includes(q) || bar.includes(q) || ref.includes(q) || cat.includes(q) || id.includes(q);
+    });
+});
+
+const filteredVariantPosItems = computed(() => filteredVariantPosItemsAll.value.slice(0, 25));
+
+const toggleVariantPosDropdown = (index) => {
+    if (openVariantDropdownIndex.value === index) {
+        openVariantDropdownIndex.value = null;
+        variantPosSearchQuery.value = '';
+    } else {
+        openVariantDropdownIndex.value = index;
+        variantPosSearchQuery.value = '';
+        nextTick(() => {
+            variantPosSearchInputRef.value?.focus();
+        });
+    }
+};
+
+const selectVariantPosItemOption = (v, item) => {
+    v.pos_item_id = item ? item.pos_item_id : null;
+    handleVariantPosItemSelect(v);
+    openVariantDropdownIndex.value = null;
+    variantPosSearchQuery.value = '';
+};
+
+const clearVariantPosItem = (v) => {
+    v.pos_item_id = null;
+    variantPosSearchQuery.value = '';
+};
 
 const isBasePosItemInVariants = computed(() => {
     if (form.inventory_source !== 'pos' || !form.pos_item_id) return true;
@@ -438,6 +495,8 @@ const resetFormState = () => {
     form.pos_item_id = null;
     posDropdownOpen.value = false;
     posSearchQuery.value = '';
+    openVariantDropdownIndex.value = null;
+    variantPosSearchQuery.value = '';
     editId.value = null; imagePreview.value = null; galleryPreviews.value = [];
     form.status = true; form.visible_individually = true; form.show_stock_level = true;
     form.compress_images = true;
@@ -1416,7 +1475,7 @@ const submitBulkDelete = () => {
                                 </div>
 
                                 <!-- POS Item Selector (if inventory_source === 'pos') -->
-                                <div v-if="v.inventory_source === 'pos'" class="p-3 bg-indigo-50/70 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg space-y-2">
+                                <div v-if="v.inventory_source === 'pos'" class="p-3 bg-indigo-50/70 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg space-y-2 relative variant-pos-dropdown-container">
                                     <div class="flex items-center justify-between">
                                         <label class="block text-xs font-bold text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5">
                                             <span>🏬</span> Linked POS Inventory Item
@@ -1425,19 +1484,132 @@ const submitBulkDelete = () => {
                                             Branch Stock: {{ getPosItemDetails(v.pos_item_id).effective_availability }} {{ getPosItemDetails(v.pos_item_id).base_unit_name || 'Units' }}
                                         </span>
                                     </div>
-                                    <select
-                                        v-model="v.pos_item_id"
-                                        @change="handleVariantPosItemSelect(v)"
-                                        class="w-full text-sm rounded-lg border-indigo-300 dark:border-indigo-700 dark:bg-gray-800 focus:ring-indigo-500">
-                                        <option :value="null">-- Select POS Item to link --</option>
-                                        <option
-                                            v-for="item in props.synced_pos_items"
-                                            :key="item.pos_item_id"
-                                            :value="item.pos_item_id"
-                                        >
-                                            {{ formatVariantPosOptionLabel(item) }}
-                                        </option>
-                                    </select>
+
+                                    <!-- Searchable Trigger Button -->
+                                    <div
+                                        @click="toggleVariantPosDropdown(i)"
+                                        class="w-full text-sm py-2 px-3 border rounded-lg bg-white dark:bg-gray-800 cursor-pointer flex items-center justify-between gap-2 transition shadow-2xs"
+                                        :class="openVariantDropdownIndex === i ? 'border-indigo-500 ring-2 ring-indigo-500/20' : 'border-indigo-300 dark:border-indigo-700 hover:border-indigo-400 dark:hover:border-indigo-500'"
+                                    >
+                                        <div v-if="getPosItemDetails(v.pos_item_id)" class="flex-1 min-w-0 flex flex-wrap items-center gap-2">
+                                            <span class="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-300 shrink-0">
+                                                #{{ getPosItemDetails(v.pos_item_id).pos_item_id }}
+                                            </span>
+                                            <span class="font-semibold text-gray-900 dark:text-white truncate">
+                                                {{ getPosItemDetails(v.pos_item_id).pos_item_name }}
+                                            </span>
+                                            <span class="text-xs text-gray-500 dark:text-gray-400 shrink-0">
+                                                (Stock: {{ Math.round(Number(getPosItemDetails(v.pos_item_id).effective_availability || 0)) }} {{ getPosItemDetails(v.pos_item_id).base_unit_name || 'Units' }} | ₦{{ Number(getPosItemDetails(v.pos_item_id).standard_price || 0).toLocaleString() }})
+                                            </span>
+                                        </div>
+                                        <span v-else-if="v.pos_item_id" class="text-gray-700 dark:text-gray-200 font-medium text-xs">
+                                            POS Item #{{ v.pos_item_id }}
+                                        </span>
+                                        <span v-else class="text-gray-400 dark:text-gray-500 text-xs">
+                                            -- Search or select POS Item to link --
+                                        </span>
+
+                                        <div class="flex items-center gap-1.5 shrink-0">
+                                            <button
+                                                v-if="v.pos_item_id"
+                                                type="button"
+                                                @click.stop="clearVariantPosItem(v)"
+                                                class="p-1 rounded-md text-gray-400 hover:text-rose-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                                                title="Clear selected POS item"
+                                            >
+                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                            </button>
+                                            <svg class="w-4 h-4 text-indigo-400 transition-transform duration-150" :class="openVariantDropdownIndex === i ? 'rotate-180 text-indigo-600' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                            </svg>
+                                        </div>
+                                    </div>
+
+                                    <!-- Searchable Dropdown Popup -->
+                                    <div
+                                        v-if="openVariantDropdownIndex === i"
+                                        class="absolute left-0 right-0 z-50 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl overflow-hidden"
+                                    >
+                                        <!-- Search Input Header -->
+                                        <div class="p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/50">
+                                            <div class="relative">
+                                                <input
+                                                    ref="variantPosSearchInputRef"
+                                                    v-model="variantPosSearchQuery"
+                                                    type="text"
+                                                    placeholder="Search by name, barcode, SKU, category, or POS #ID..."
+                                                    @keydown.escape.stop="openVariantDropdownIndex = null"
+                                                    class="w-full text-xs pl-8 pr-8 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500"
+                                                />
+                                                <svg class="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-2.5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                                                </svg>
+                                                <button
+                                                    v-if="variantPosSearchQuery"
+                                                    type="button"
+                                                    @click="variantPosSearchQuery = ''; variantPosSearchInputRef?.focus()"
+                                                    class="absolute right-2.5 top-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                                                >
+                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                                </button>
+                                            </div>
+                                            <div class="flex items-center justify-between mt-1 px-1 text-[11px] text-gray-500 dark:text-gray-400">
+                                                <span>{{ filteredVariantPosItemsAll.length.toLocaleString() }} matching item(s)</span>
+                                                <span v-if="filteredVariantPosItemsAll.length > 25">Showing first 25 — type to refine</span>
+                                            </div>
+                                        </div>
+
+                                        <!-- Options List -->
+                                        <div class="max-h-60 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700/60">
+                                            <div
+                                                v-if="filteredVariantPosItems.length === 0"
+                                                class="p-4 text-center text-xs text-gray-400 dark:text-gray-500"
+                                            >
+                                                No POS items found matching "{{ variantPosSearchQuery }}".
+                                            </div>
+                                            <button
+                                                v-for="item in filteredVariantPosItems"
+                                                :key="item.pos_item_id"
+                                                type="button"
+                                                @click="selectVariantPosItemOption(v, item)"
+                                                class="w-full text-left p-2.5 hover:bg-indigo-50/70 dark:hover:bg-indigo-900/30 transition flex items-center justify-between gap-3 text-xs"
+                                                :class="Number(v.pos_item_id) === Number(item.pos_item_id) ? 'bg-indigo-50 dark:bg-indigo-950/40 font-bold' : ''"
+                                            >
+                                                <div class="min-w-0 flex-1 space-y-0.5">
+                                                    <div class="flex items-center gap-1.5 flex-wrap">
+                                                        <span class="font-mono text-[10px] font-bold px-1.5 py-0.2 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                                                            #{{ item.pos_item_id }}
+                                                        </span>
+                                                        <span class="font-semibold text-gray-900 dark:text-white truncate">
+                                                            {{ item.pos_item_name }}
+                                                        </span>
+                                                        <span v-if="form.pos_item_id && Number(item.pos_item_id) === Number(form.pos_item_id)" class="text-[10px] px-1.5 py-0.2 rounded font-bold bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200">
+                                                            Base Item
+                                                        </span>
+                                                        <span v-else-if="item.mapped_product && (!editId || Number(item.mapped_product.id) !== Number(editId))" class="text-[10px] px-1.5 py-0.2 rounded font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
+                                                            Active Standalone
+                                                        </span>
+                                                        <span v-else-if="item.mapped_variant && (!editId || Number(item.mapped_variant.product_id) !== Number(editId))" class="text-[10px] px-1.5 py-0.2 rounded font-bold bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-200">
+                                                            Variant
+                                                        </span>
+                                                    </div>
+                                                    <div class="text-[11px] text-gray-500 dark:text-gray-400 flex flex-wrap items-center gap-2">
+                                                        <span v-if="item.sku">SKU: <code class="font-mono">{{ item.sku }}</code></span>
+                                                        <span v-if="item.barcode">Barcode: <code class="font-mono">{{ item.barcode }}</code></span>
+                                                        <span v-if="item.pos_category_name">Cat: {{ item.pos_category_name }}</span>
+                                                    </div>
+                                                </div>
+                                                <div class="text-right shrink-0">
+                                                    <div class="font-bold text-gray-900 dark:text-white">
+                                                        ₦{{ Number(item.standard_price || 0).toLocaleString() }}
+                                                    </div>
+                                                    <div class="text-[11px]" :class="Number(item.effective_availability || 0) > 0 ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-rose-500'">
+                                                        Stock: {{ Math.round(Number(item.effective_availability || 0)) }} {{ item.base_unit_name || 'Units' }}
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        </div>
+                                    </div>
 
                                     <!-- Safeguard Prompt when selecting a POS item that is already an active standalone product -->
                                     <div
