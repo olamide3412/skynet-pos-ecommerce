@@ -35,10 +35,11 @@ const parentRows = computed(() => props.categories?.data?.filter(c => !c.parent_
 const subRows    = computed(() => props.categories?.data?.filter(c =>  c.parent_id) ?? []);
 
 // ── Form state ─────────────────────────────────────────────────
-const isEditing    = ref(false);
-const editId       = ref(null);
-const imagePreview = ref(null);
-const formRef      = ref(null);
+const isEditing             = ref(false);
+const editId                = ref(null);
+const imagePreview          = ref(null);
+const formRef               = ref(null);
+const categoryImageInputRef = ref(null);
 
 const form = useForm({
     _method:         'POST',
@@ -47,6 +48,7 @@ const form = useForm({
     description:     '',
     parent_id:       null,
     image:           null,
+    compress_images: true,
     remove_image:    false,
     visible_in_menu: true,
     menu_position:   0,
@@ -79,6 +81,7 @@ const openNewForm = () => {
     if (activeTab.value === 'subcategories') {
         form.parent_id = props.parent_categories?.[0]?.id ?? null;
     }
+    form.compress_images = true;
     showForm.value = true;
 };
 
@@ -92,11 +95,15 @@ const editMode = (category) => {
     form.description  = category.description || '';
     form.parent_id    = category.parent_id ?? null;
     form.image        = null;
+    form.compress_images = true;
     form.remove_image = false;
     imagePreview.value= category.image ? '/storage/' + category.image : null;
     form.visible_in_menu = category.visible_in_menu;
     form.menu_position   = category.menu_position;
     form.attribute_ids   = category.attributes?.map(a => a.id) ?? [];
+    if (categoryImageInputRef.value) {
+        categoryImageInputRef.value.value = '';
+    }
     form.clearErrors();
     showForm.value = true;
 };
@@ -110,11 +117,15 @@ const resetForm = () => {
     form._method         = 'POST';
     slugChangedManually.value = false;
     form.image           = null;
+    form.compress_images = true;
     form.remove_image    = false;
     form.parent_id       = null;
     form.visible_in_menu = true;
     form.menu_position   = 0;
     form.attribute_ids   = [];
+    if (categoryImageInputRef.value) {
+        categoryImageInputRef.value.value = '';
+    }
 };
 
 const cancelForm = () => {
@@ -129,16 +140,32 @@ const switchTab = (tab) => {
 };
 
 const handleImageUpload = (e) => {
-    form.image = e.target.files[0];
-    if (form.image) {
-        imagePreview.value = URL.createObjectURL(form.image);
-        form.remove_image = false;
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Check max upload size: 1MB = 1024 * 1024 bytes (1,048,576 bytes)
+    const maxSizeBytes = 1024 * 1024;
+    if (file.size > maxSizeBytes) {
+        const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+        toast.error(`The image file is too large (${sizeMb} MB). Maximum allowed upload size is 1MB.`);
+        e.target.value = '';
+        form.image = null;
+        imagePreview.value = null;
+        return;
     }
+
+    form.image = file;
+    imagePreview.value = URL.createObjectURL(file);
+    form.remove_image = false;
 };
+
 const removeImage = () => {
     form.image = null;
     imagePreview.value = null;
     form.remove_image = true;
+    if (categoryImageInputRef.value) {
+        categoryImageInputRef.value.value = '';
+    }
 };
 
 const toggleAttr = (id) => {
@@ -542,31 +569,68 @@ const toggleVisibility = (cat) => {
                         <p v-if="form.errors.description" class="text-red-500 text-xs mt-1">{{ form.errors.description }}</p>
                     </div>
 
-                    <!-- Image Upload -->
-                    <div>
-                        <label class="block text-[11px] font-bold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-1">
-                            Category Thumbnail
-                        </label>
+                    <!-- Image Upload & Compression -->
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between">
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+                                Category Thumbnail
+                                <span class="font-normal text-gray-400 ml-1">(Max 1MB)</span>
+                            </label>
+                            <span class="text-[10px] text-gray-400">JPG, PNG, WebP up to 1MB</span>
+                        </div>
+
+                        <!-- Image Compression Toggle (On by Default) -->
+                        <div class="p-2.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-800/40 flex items-center justify-between gap-3">
+                            <div class="flex items-start gap-2">
+                                <span class="text-emerald-600 dark:text-emerald-400 text-xs mt-0.5">⚡</span>
+                                <div>
+                                    <p class="text-xs font-bold text-gray-800 dark:text-gray-200 leading-tight">
+                                        Compress & Optimize Image
+                                    </p>
+                                    <p class="text-[10px] text-gray-500 dark:text-gray-400 leading-tight mt-0.5">
+                                        Auto-scales and converts to modern WebP format for faster store loading.
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                @click="form.compress_images = !form.compress_images"
+                                class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition cursor-pointer"
+                                :class="form.compress_images ? 'bg-emerald-600' : 'bg-gray-200 dark:bg-gray-600'"
+                                :title="form.compress_images ? 'Image compression enabled' : 'Image compression disabled'"
+                            >
+                                <span
+                                    class="inline-block h-3.5 w-3.5 transform rounded-full bg-white transition shadow"
+                                    :class="form.compress_images ? 'translate-x-4' : 'translate-x-0.5'"
+                                />
+                            </button>
+                        </div>
+
                         <div class="flex items-center gap-3 p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30">
-                            <div v-if="imagePreview" class="relative w-11 h-11 rounded-lg overflow-hidden border dark:border-gray-600 flex-shrink-0">
+                            <div v-if="imagePreview" class="relative w-12 h-12 rounded-lg overflow-hidden border dark:border-gray-600 flex-shrink-0">
                                 <img :src="imagePreview" class="w-full h-full object-cover"/>
                                 <button
                                     type="button"
                                     @click="removeImage"
                                     class="absolute top-0 right-0 bg-red-500 text-white w-4 h-4 text-[10px] flex items-center justify-center rounded-bl-md cursor-pointer"
+                                    title="Remove image"
                                 >
                                     ✕
                                 </button>
                             </div>
-                            <div v-else class="w-11 h-11 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center text-gray-400 flex-shrink-0 text-base">
+                            <div v-else class="w-12 h-12 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center text-gray-400 flex-shrink-0 text-base">
                                 📷
                             </div>
-                            <input
-                                type="file"
-                                accept="image/*"
-                                @change="handleImageUpload"
-                                class="text-xs text-gray-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-gray-100 dark:file:bg-gray-700 file:text-primary flex-1 cursor-pointer"
-                            />
+                            <div class="flex-1 min-w-0">
+                                <input
+                                    ref="categoryImageInputRef"
+                                    type="file"
+                                    accept="image/*"
+                                    @change="handleImageUpload"
+                                    class="text-xs text-gray-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-gray-100 dark:file:bg-gray-700 file:text-primary cursor-pointer w-full"
+                                />
+                                <p v-if="form.errors.image" class="text-red-500 text-xs mt-1 font-semibold">{{ form.errors.image }}</p>
+                            </div>
                         </div>
                     </div>
 

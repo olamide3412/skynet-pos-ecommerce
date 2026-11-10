@@ -39,7 +39,7 @@ class ProductController extends Controller
 
     public function index(Request $request)
     {
-        $query = Product::with(['category', 'brand', 'posUnits', 'syncedPosItem', 'variantMappings.syncedPosItem'])->latest();
+        $query = Product::with(['category', 'brand', 'posUnits', 'syncedPosItem', 'variantMappings.syncedPosItem']);
 
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {
@@ -69,6 +69,18 @@ class ProductController extends Controller
         if ($invSource = $request->input('inventory_source')) {
             $query->where('inventory_source', $invSource);
         }
+
+        $sort = $request->input('sort', 'latest');
+        match ($sort) {
+            'name_asc'   => $query->orderBy('name', 'asc'),
+            'name_desc'  => $query->orderBy('name', 'desc'),
+            'qty_desc', 'stock_desc' => $query->orderBy('stock', 'desc'),
+            'qty_asc', 'stock_asc'   => $query->orderBy('stock', 'asc'),
+            'price_desc' => $query->orderBy('price', 'desc'),
+            'price_asc'  => $query->orderBy('price', 'asc'),
+            'oldest'     => $query->oldest(),
+            default      => $query->latest(),
+        };
 
         // List synced POS items for selection in the product creation modal
         $syncedItems = SyncedPosItem::where('is_active', true)
@@ -123,7 +135,7 @@ class ProductController extends Controller
             'brands' => Brand::ordered()->get(['id', 'name', 'slug', 'logo', 'is_active', 'pos_brand_id']),
             'synced_pos_items' => $syncedItems,
             'store_settings' => \App\Models\StoreSetting::allAsArray(),
-            'filters' => array_merge($request->only(['search', 'category_id', 'brand_id', 'status', 'inventory_source']), [
+            'filters' => array_merge($request->only(['search', 'category_id', 'brand_id', 'status', 'inventory_source', 'sort']), [
                 'per_page' => (string) $perPageInput,
             ]),
         ]);
@@ -134,14 +146,21 @@ class ProductController extends Controller
     {
         $q = trim($request->get('q', ''));
         $exclude = (int) $request->get('exclude', 0);
+        $categoryId = (int) $request->get('category_id', 0);
 
-        $query = Product::orderBy('name')->select('id', 'name', 'image', 'url_key');
-        if ($q)
+        $query = Product::select('id', 'name', 'image', 'url_key', 'category_id');
+        if ($q) {
             $query->where('name', 'like', '%' . $q . '%');
-        if ($exclude)
+        }
+        if ($exclude) {
             $query->where('id', '!=', $exclude);
+        }
+        if ($categoryId) {
+            $query->orderByRaw("CASE WHEN category_id = ? THEN 0 ELSE 1 END", [$categoryId]);
+        }
+        $query->orderBy('name');
 
-        return response()->json($query->limit(15)->get());
+        return response()->json($query->limit(20)->get());
     }
 
     /** Return minimal product data for pre-selected IDs (used when editing) */
@@ -184,8 +203,8 @@ class ProductController extends Controller
             'show_stock_level'     => 'boolean',
             'related_products'     => 'nullable|array',
             'related_products.*'   => 'exists:products,id',
-            'variants'             => 'nullable|string',
-            'attributes'           => 'nullable|string',
+            'variants'             => 'nullable',
+            'attributes'           => 'nullable',
             'image'                => 'nullable|image|max:10240',
             'images'               => 'nullable|array|max:10',
             'images.*'             => 'image|max:10240',
@@ -230,11 +249,13 @@ class ProductController extends Controller
         }
 
         if ($request->has('variants') && $request->input('variants')) {
-            $validated['variants'] = json_decode($request->input('variants'), true);
+            $inputVariants = $request->input('variants');
+            $validated['variants'] = is_array($inputVariants) ? $inputVariants : (json_decode($inputVariants, true) ?: []);
         }
 
         if ($request->has('attributes') && $request->input('attributes')) {
-            $validated['attributes'] = json_decode($request->input('attributes'), true);
+            $inputAttrs = $request->input('attributes');
+            $validated['attributes'] = is_array($inputAttrs) ? $inputAttrs : (json_decode($inputAttrs, true) ?: []);
         }
 
         $shouldCompress = filter_var($request->input('compress_images', true), FILTER_VALIDATE_BOOLEAN);
@@ -724,6 +745,18 @@ class ProductController extends Controller
         if ($status = $request->input('status')) {
             $query->where('status', $status === 'active' ? 1 : 0);
         }
+
+        $sort = $request->input('sort', 'latest');
+        match ($sort) {
+            'name_asc'   => $query->orderBy('name', 'asc'),
+            'name_desc'  => $query->orderBy('name', 'desc'),
+            'qty_desc', 'stock_desc' => $query->orderBy('stock', 'desc'),
+            'qty_asc', 'stock_asc'   => $query->orderBy('stock', 'asc'),
+            'price_desc' => $query->orderBy('price', 'desc'),
+            'price_asc'  => $query->orderBy('price', 'asc'),
+            'oldest'     => $query->oldest(),
+            default      => $query->latest(),
+        };
 
         $sourceLabel = match ($source) {
             'ecommerce' => 'ecommerce_only',

@@ -5,12 +5,18 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Attribute;
 use App\Models\Category;
+use App\Services\ImageOptimizer;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class CategoryController extends Controller
 {
+    public function __construct(
+        protected ImageOptimizer $imageOptimizer
+    ) {}
+
     public function index()
     {
         return Inertia::render('Admin/Categories/Index', [
@@ -35,11 +41,17 @@ class CategoryController extends Controller
             'menu_position'    => 'nullable|integer|min:0',
             'attribute_ids'    => 'nullable|array',
             'attribute_ids.*'  => 'exists:attributes,id',
-            'image'            => 'nullable|image|max:2048',
+            'image'            => 'nullable|image|max:1024',
+            'compress_images'  => 'nullable',
+        ], [
+            'image.max' => 'The category image must not be larger than 1MB.',
         ]);
 
         $attributeIds = $validated['attribute_ids'] ?? [];
         unset($validated['attribute_ids']);
+
+        $shouldCompress = filter_var($request->input('compress_images', true), FILTER_VALIDATE_BOOLEAN);
+        unset($validated['compress_images']);
 
         // ensure slug is sanitized if any spaces slipped in
         $validated['slug'] = Str::slug($validated['slug']);
@@ -48,7 +60,15 @@ class CategoryController extends Controller
         $validated['parent_id']       = $validated['parent_id'] ?? null;
 
         if ($request->hasFile('image')) {
-            $validated['image'] = $request->file('image')->store('categories', 'public');
+            $validated['image'] = $this->imageOptimizer->store(
+                file: $request->file('image'),
+                directory: 'categories',
+                compress: $shouldCompress,
+                slug: $validated['slug'],
+                maxWidth: 1000,
+                maxHeight: 1000,
+                quality: 82
+            );
         }
 
         $category = Category::create($validated);
@@ -68,12 +88,18 @@ class CategoryController extends Controller
             'menu_position'    => 'nullable|integer|min:0',
             'attribute_ids'    => 'nullable|array',
             'attribute_ids.*'  => 'exists:attributes,id',
-            'image'            => 'nullable|image|max:2048',
+            'image'            => 'nullable|image|max:1024',
+            'compress_images'  => 'nullable',
             'remove_image'     => 'nullable|boolean',
+        ], [
+            'image.max' => 'The category image must not be larger than 1MB.',
         ]);
 
         $attributeIds = $validated['attribute_ids'] ?? [];
         unset($validated['attribute_ids']);
+
+        $shouldCompress = filter_var($request->input('compress_images', true), FILTER_VALIDATE_BOOLEAN);
+        unset($validated['compress_images']);
 
         $validated['slug'] = Str::slug($validated['slug']);
         $validated['parent_id'] = $validated['parent_id'] ?? null;
@@ -82,12 +108,20 @@ class CategoryController extends Controller
 
         if ($request->hasFile('image')) {
             if ($category->image) {
-                \Illuminate\Support\Facades\Storage::disk('public')->delete($category->image);
+                Storage::disk('public')->delete($category->image);
             }
-            $validated['image'] = $request->file('image')->store('categories', 'public');
+            $validated['image'] = $this->imageOptimizer->store(
+                file: $request->file('image'),
+                directory: 'categories',
+                compress: $shouldCompress,
+                slug: $validated['slug'],
+                maxWidth: 1000,
+                maxHeight: 1000,
+                quality: 82
+            );
         } elseif ($request->boolean('remove_image')) {
             if ($category->image) {
-                \Illuminate\Support\Facades\Storage::disk('public')->delete($category->image);
+                Storage::disk('public')->delete($category->image);
             }
             $validated['image'] = null;
         } else {
@@ -106,7 +140,7 @@ class CategoryController extends Controller
     public function destroy(Category $category)
     {
         if ($category->image) {
-            \Illuminate\Support\Facades\Storage::disk('public')->delete($category->image);
+            Storage::disk('public')->delete($category->image);
         }
         $category->attributes()->detach();
         $category->delete();

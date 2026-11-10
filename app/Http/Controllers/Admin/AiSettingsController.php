@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\StoreSetting;
 use App\Services\ActivityLogger;
+use App\Services\Ai\ProductDescriptionGenerator;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -25,18 +26,32 @@ class AiSettingsController extends Controller
     public function index(): Response
     {
         $this->authorizeSuperAdmin();
+
+        $savedShortPrompt   = StoreSetting::get('ai_prompt_short_description');
+        $savedFullPrompt    = StoreSetting::get('ai_prompt_full_description');
+        $savedRelatedPrompt = StoreSetting::get('ai_prompt_related_products');
+
         return Inertia::render('Admin/AiSettings/Index', [
             'ai_settings' => [
-                'ai_enabled'         => StoreSetting::get('ai_enabled', '0') === '1',
-                'ai_active_provider' => StoreSetting::get('ai_active_provider', 'gemini'),
-                'ai_gemini_key'      => StoreSetting::get('ai_gemini_key', ''),
-                'ai_gemini_model'    => StoreSetting::get('ai_gemini_model', 'gemini-2.5-flash'),
-                'ai_openai_key'      => StoreSetting::get('ai_openai_key', ''),
-                'ai_openai_model'    => StoreSetting::get('ai_openai_model', 'gpt-4o-mini'),
-                'ai_deepseek_key'    => StoreSetting::get('ai_deepseek_key', ''),
-                'ai_deepseek_model'  => StoreSetting::get('ai_deepseek_model', 'deepseek-chat'),
-                'ai_claude_key'      => StoreSetting::get('ai_claude_key', ''),
-                'ai_claude_model'    => StoreSetting::get('ai_claude_model', 'claude-3-5-haiku-20241022'),
+                'ai_enabled'                   => StoreSetting::get('ai_enabled', '0') === '1',
+                'ai_active_provider'           => StoreSetting::get('ai_active_provider', 'gemini'),
+                'ai_gemini_key'                => StoreSetting::get('ai_gemini_key', ''),
+                'ai_gemini_model'              => StoreSetting::get('ai_gemini_model', 'gemini-2.5-flash'),
+                'ai_openai_key'                => StoreSetting::get('ai_openai_key', ''),
+                'ai_openai_model'              => StoreSetting::get('ai_openai_model', 'gpt-4o-mini'),
+                'ai_deepseek_key'              => StoreSetting::get('ai_deepseek_key', ''),
+                'ai_deepseek_model'            => StoreSetting::get('ai_deepseek_model', 'deepseek-chat'),
+                'ai_claude_key'                => StoreSetting::get('ai_claude_key', ''),
+                'ai_claude_model'              => StoreSetting::get('ai_claude_model', 'claude-3-5-haiku-20241022'),
+                'ai_prompt_short_description'  => !is_null($savedShortPrompt) ? $savedShortPrompt : ProductDescriptionGenerator::DEFAULT_SHORT_SYSTEM_INSTRUCTION,
+                'ai_prompt_full_description'   => !is_null($savedFullPrompt) ? $savedFullPrompt : ProductDescriptionGenerator::DEFAULT_FULL_SYSTEM_INSTRUCTION,
+                'ai_prompt_related_products'   => !is_null($savedRelatedPrompt) ? $savedRelatedPrompt : ProductDescriptionGenerator::DEFAULT_RELATED_SYSTEM_INSTRUCTION,
+                'ai_related_strategy'          => StoreSetting::get('ai_related_strategy', 'hybrid'),
+            ],
+            'default_prompts' => [
+                'short'   => ProductDescriptionGenerator::DEFAULT_SHORT_SYSTEM_INSTRUCTION,
+                'full'    => ProductDescriptionGenerator::DEFAULT_FULL_SYSTEM_INSTRUCTION,
+                'related' => ProductDescriptionGenerator::DEFAULT_RELATED_SYSTEM_INSTRUCTION,
             ],
         ]);
     }
@@ -49,16 +64,20 @@ class AiSettingsController extends Controller
         $this->authorizeSuperAdmin();
 
         $validated = $request->validate([
-            'ai_enabled'         => 'boolean',
-            'ai_active_provider' => 'nullable|string|in:gemini,openai,deepseek,claude',
-            'ai_gemini_key'      => 'nullable|string|max:500',
-            'ai_gemini_model'    => 'nullable|string|max:100',
-            'ai_openai_key'      => 'nullable|string|max:500',
-            'ai_openai_model'    => 'nullable|string|max:100',
-            'ai_deepseek_key'    => 'nullable|string|max:500',
-            'ai_deepseek_model'  => 'nullable|string|max:100',
-            'ai_claude_key'      => 'nullable|string|max:500',
-            'ai_claude_model'    => 'nullable|string|max:100',
+            'ai_enabled'                  => 'boolean',
+            'ai_active_provider'          => 'nullable|string|in:gemini,openai,deepseek,claude',
+            'ai_gemini_key'               => 'nullable|string|max:500',
+            'ai_gemini_model'             => 'nullable|string|max:100',
+            'ai_openai_key'               => 'nullable|string|max:500',
+            'ai_openai_model'             => 'nullable|string|max:100',
+            'ai_deepseek_key'             => 'nullable|string|max:500',
+            'ai_deepseek_model'           => 'nullable|string|max:100',
+            'ai_claude_key'               => 'nullable|string|max:500',
+            'ai_claude_model'             => 'nullable|string|max:100',
+            'ai_prompt_short_description' => 'nullable|string|max:10000',
+            'ai_prompt_full_description'  => 'nullable|string|max:10000',
+            'ai_prompt_related_products'  => 'nullable|string|max:10000',
+            'ai_related_strategy'         => 'nullable|string|in:hybrid,category_only,ai_only',
         ]);
 
         foreach ($validated as $key => $value) {

@@ -693,9 +693,32 @@ const structuredData = computed(() => {
 <style>
 @import '@vueup/vue-quill/dist/vue-quill.snow.css';
 
-/* Remove default quill editor padding to align perfectly in the wrapper */
+/* Remove default quill editor padding and paragraph margins to align tightly */
 .ql-editor {
     padding: 0 !important;
+}
+.ql-editor p {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+.ql-editor h3 {
+    font-size: 1.15em !important;
+    font-weight: 700 !important;
+    margin-top: 0.75rem !important;
+    margin-bottom: 0.35rem !important;
+    line-height: 1.4 !important;
+}
+.ql-editor ul,
+.ql-editor ol {
+    margin-top: 0.25rem !important;
+    margin-bottom: 0.5rem !important;
+}
+.ql-editor li {
+    margin-top: 0.15rem !important;
+    margin-bottom: 0.15rem !important;
+}
+.ql-editor strong {
+    font-weight: 700 !important;
 }
 
 /* Remove default number input spinner arrows */

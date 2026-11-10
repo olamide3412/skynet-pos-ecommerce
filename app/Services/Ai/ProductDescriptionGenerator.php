@@ -2,11 +2,95 @@
 
 namespace App\Services\Ai;
 
+use App\Models\StoreSetting;
+
 class ProductDescriptionGenerator
 {
+    public const DEFAULT_SHORT_SYSTEM_INSTRUCTION = <<<EOT
+You are an expert e-commerce copywriter.
+Write a short description of the product with current trend tags and not more than 2 sentences.
+
+Strict Constraints:
+1. Maximum 2 sentences. Persuasive, engaging, and highlights product value.
+2. Naturally include current trend tags / search keywords.
+3. Do NOT include or mention any price, currency, or numerical price tag (prices fluctuate and change over time).
+4. Return strictly PLAIN TEXT.
+5. Absolutely NO markdown (no asterisks, no bullets, no bold tags).
+6. Absolutely NO HTML tags or quotation marks wrapping the text.
+EOT;
+
+    public const DEFAULT_FULL_SYSTEM_INSTRUCTION = <<<EOT
+A product description and product details for ecommerce upload.
+example:
+<p>24K Pure Gold opens with sweet praline and creamy vanilla. Rose and strawberry give it a soft floral and fruity scent, while amber and musk add warmth as it settles. It suits everyday wear, evenings out, and special occasions.</p>
+<h3><strong>Product Details:</strong></h3>
+<ul>
+<li><strong>Brand:</strong> Lonkoom</li>
+<li><strong>Fragrance type:</strong> Eau de Parfum</li>
+<li><strong>Size:</strong> 100 ml</li>
+<li><strong>For:</strong> Women</li>
+<li><strong>Fragrance family:</strong> Floral and fruity</li>
+<li><strong>Top notes:</strong> Praline and vanilla</li>
+<li><strong>Heart notes:</strong> Rose and strawberry</li>
+<li><strong>Base notes:</strong> Musk, amber, and vanilla</li>
+</ul>
+
+Strict Rules:
+1. Start with a 2-3 sentence product description inside a <p> tag (do NOT include a "Description:" heading).
+2. Follow with <h3><strong>Product Details:</strong></h3> and a <ul> bullet list.
+3. Every <li> item under Product Details: MUST have the label in <strong> tags WITH a colon followed by the value (e.g. <li><strong>Brand:</strong> Surwin</li>).
+4. Dynamically select attribute labels under Product Details: that fit the specific product and category (e.g. Fragrance notes for perfumes, Beverage type/Flavor/Size for drinks, Model/Material for stationery or electronics, Key ingredients/Skin type for beauty). Never include irrelevant labels like "Beverage type" or "Fragrance family" if the product is not a beverage or fragrance.
+5. Do NOT include product price.
+EOT;
+
+    public const DEFAULT_RELATED_SYSTEM_INSTRUCTION = <<<EOT
+You are an expert e-commerce merchandising and cross-selling AI assistant.
+Your task is to analyze a Target Product and select the most logical, complementary, and enticing Related Products from a candidate catalog list.
+
+Selection Rules:
+1. Pick complementary accessories, logical add-ons, or close alternatives that a customer would realistically buy alongside or instead of the target product.
+2. Prioritize items that genuinely complement or belong to the product's category and usage context.
+3. Select up to {limit} products from the candidates list.
+4. Return ONLY a valid JSON array of objects with the selected product "id" (integer) and a brief 1-phrase "reason" (string).
+Format:
+[
+  {"id": 12, "reason": "Complementary accessory"},
+  {"id": 34, "reason": "Frequently bought together"}
+]
+Strictly return valid JSON. Do not write markdown, code blocks, or explanations outside the JSON array.
+EOT;
+
     public function __construct(
         protected AiManager $aiManager
     ) {}
+
+    /**
+     * Get effective system instruction for short description.
+     */
+    public function getShortSystemInstruction(): string
+    {
+        $custom = StoreSetting::get('ai_prompt_short_description');
+        return !empty(trim((string)$custom)) ? trim($custom) : self::DEFAULT_SHORT_SYSTEM_INSTRUCTION;
+    }
+
+    /**
+     * Get effective system instruction for full description.
+     */
+    public function getFullSystemInstruction(): string
+    {
+        $custom = StoreSetting::get('ai_prompt_full_description');
+        return !empty(trim((string)$custom)) ? trim($custom) : self::DEFAULT_FULL_SYSTEM_INSTRUCTION;
+    }
+
+    /**
+     * Get effective system instruction for related products suggestions.
+     */
+    public function getRelatedSystemInstruction(int $limit = 5): string
+    {
+        $custom = StoreSetting::get('ai_prompt_related_products');
+        $template = !empty(trim((string)$custom)) ? trim($custom) : self::DEFAULT_RELATED_SYSTEM_INSTRUCTION;
+        return str_replace('{limit}', (string)$limit, $template);
+    }
 
     /**
      * Generate a concise, conversion-optimized short description in plain text.
@@ -21,25 +105,16 @@ class ProductDescriptionGenerator
         $productName = $data['product_name'] ?? 'Product';
         $category = $data['category_name'] ?? 'General';
         $brand = $data['brand_name'] ?? '';
-        $price = !empty($data['price']) ? '₦' . number_format((float)$data['price'], 2) : 'Affordable';
         $keywords = $data['keywords'] ?? '';
         $tone = $data['tone'] ?? 'conversion-focused and punchy';
 
-        $systemInstruction = <<<EOT
-You are an expert e-commerce copywriter.
-Write a compelling, high-converting Short Description for an online retail store product.
-Strict Constraints:
-1. Exactly 1 to 2 engaging, persuasive sentences.
-2. Return strictly PLAIN TEXT.
-3. Absolutely NO markdown (no asterisks, no bullets, no bold tags).
-4. Absolutely NO HTML tags or quotation marks wrapping the text.
-EOT;
+        $systemInstruction = $this->getShortSystemInstruction();
 
         $userPrompt = "Product Name: {$productName}\nCategory: {$category}";
         if (!empty($brand)) {
             $userPrompt .= "\nBrand: {$brand}";
         }
-        $userPrompt .= "\nPrice: {$price}\nTone: {$tone}";
+        $userPrompt .= "\nTone: {$tone}";
         if (!empty($keywords)) {
             $userPrompt .= "\nKey Highlights to Emphasize: {$keywords}";
         }
@@ -68,45 +143,18 @@ EOT;
         $productName = $data['product_name'] ?? 'Product';
         $category = $data['category_name'] ?? 'General';
         $brand = $data['brand_name'] ?? '';
-        $price = !empty($data['price']) ? '₦' . number_format((float)$data['price'], 2) : '';
         $keywords = $data['keywords'] ?? '';
-        $tone = $data['tone'] ?? 'informative, engaging, and professional';
 
-        $systemInstruction = <<<EOT
-You are an elite e-commerce product copywriter and retail merchandiser.
-Generate a complete, conversion-driven, and richly structured Full Product Description formatted in clean semantic HTML designed for a Quill/WYSIWYG editor.
-
-HTML Formatting Rules:
-1. Use <h3> for section headers.
-2. Use <p> for introductory paragraphs and descriptive write-ups.
-3. Use <ul> and <li> for feature highlights and specifications.
-4. Use <strong> to emphasize key specs, feature titles, or notable advantages (e.g. <li><strong>Rich Nutrition:</strong> Fortified with vitamins...</li>).
-5. Do NOT include <html>, <head>, or <body> wrapper tags.
-6. Do NOT wrap output in markdown code blocks like ```html or ```. Output raw HTML tags directly.
-
-CRITICAL CONTENT INTEGRITY & NO-BLANK-HEADING RULES:
-1. NEVER output a heading without content directly underneath it. EVERY heading MUST be followed by at least 1 rich <p> paragraph or a <ul> list with multiple <li> items.
-2. If you do not have write-up or details for a section, DO NOT output that heading at all.
-3. For any product (groceries, electronics, fashion, beauty, home):
-   - Always include an engaging <h3>Overview</h3> with 1–2 descriptive paragraphs.
-   - Always include <h3>Key Features & Benefits</h3> with 4–6 bullet points (<ul><li><strong>Feature:</strong> Benefit description...</li></ul>). Even for everyday items like milk or beverages, highlight freshness, packaging, taste, nutritional value, and daily utility.
-   - Only include <h3>Specifications</h3> if you can provide at least 3 concrete, realistic specs (e.g. Brand, Net Weight/Volume, Packaging Type, Usage/Storage) formatted as <ul><li><strong>Item:</strong> Value</li></ul>. NEVER leave Specifications empty.
-   - End with <h3>Why Choose [Product Name]?</h3> or <h3>Usage & Recommendations</h3> with a persuasive closing paragraph.
-4. Absolutely NO empty tags: no <h3></h3>, no <p></p>, no <ul></ul>, no consecutive headings with empty space between them.
-EOT;
+        $systemInstruction = $this->getFullSystemInstruction();
 
         $userPrompt = "Product Name: {$productName}\nCategory: {$category}";
         if (!empty($brand)) {
-            $userPrompt .= "\nBrand: {$brand} (Include Brand: {$brand} in the Specifications section)";
+            $userPrompt .= "\nBrand: {$brand}";
         }
-        if (!empty($price)) {
-            $userPrompt .= "\nPrice: {$price}";
-        }
-        $userPrompt .= "\nTone: {$tone}";
         if (!empty($keywords)) {
-            $userPrompt .= "\nKey Highlights / Must-Include Features: {$keywords}\n(Incorporate these specific highlights naturally into the description write-up and bullet points)";
+            $userPrompt .= "\nKey Highlights: {$keywords}";
         }
-        $userPrompt .= "\nGenerate the complete structured HTML product description. Remember: no empty headings without write-up.";
+        $userPrompt .= "\n\nStrictly follow the HTML structure from the system instruction example: a <p> description paragraph (no 'Description:' label), followed by <h3><strong>Product Details:</strong></h3> and a <ul> list where every item is formatted as <li><strong>Label:</strong> Value</li> using attributes tailored specifically to this product type. Do not include price.";
 
         $html = $provider->chat([
             ['role' => 'user', 'content' => $userPrompt]
@@ -133,10 +181,60 @@ EOT;
         $cleaned = trim($html);
 
         // 1. Remove markdown code blocks if provider added them
-        $cleaned = preg_replace('/^```(?:html)?\s*/i', '', $cleaned);
+        $cleaned = preg_replace('/^```(?:html|text|markdown)?\s*/i', '', $cleaned);
         $cleaned = preg_replace('/\s*```$/', '', $cleaned);
+        $cleaned = trim($cleaned);
 
-        // 2. Iteratively strip empty tags, whitespace-only tags, and headings with no write-up
+        // 2. If the AI returned plain text, simple <p>/<br> lines, or "Product Details" without a <ul>/<ol> list,
+        //    convert into <p> description + <h3><strong>Product Details:</strong></h3> + <ul><li><strong>Label:</strong> Value</li></ul>
+        if (
+            !preg_match('/<(?:h[1-6]|ul|ol|li|div|table)\b/i', $cleaned) ||
+            (preg_match('/Product\s+details/i', $cleaned) && !preg_match('/<(?:ul|ol|li)\b/i', $cleaned))
+        ) {
+            $text = preg_replace('/<\/(?:p|h[1-6]|div)>|<br\s*\/?>/i', "\n", $cleaned);
+            $text = strip_tags($text);
+            $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            $text = str_replace(['**', '__', '`'], '', $text);
+
+            $lines = preg_split('/\r\n|\r|\n/', trim($text));
+            $htmlParts = [];
+            $inDetails = false;
+            $detailItems = [];
+
+            foreach ($lines as $line) {
+                $trimmedLine = trim($line);
+                $trimmedLine = preg_replace('/^[-•*]\s*/u', '', $trimmedLine);
+                if ($trimmedLine === '' || preg_match('/^(?:Product\s+)?Description\s*:?$/i', $trimmedLine)) {
+                    continue;
+                }
+
+                if (preg_match('/^Product\s+details\s*:?$/i', $trimmedLine)) {
+                    $inDetails = true;
+                    continue;
+                }
+
+                if (!$inDetails) {
+                    $trimmedLine = preg_replace('/^(?:Product\s+)?Description\s*:\s*/i', '', $trimmedLine);
+                    $htmlParts[] = '<p>' . htmlspecialchars($trimmedLine, ENT_NOQUOTES, 'UTF-8') . '</p>';
+                } else {
+                    if (str_contains($trimmedLine, ':')) {
+                        [$label, $val] = explode(':', $trimmedLine, 2);
+                        $detailItems[] = '<li><strong>' . htmlspecialchars(trim($label), ENT_NOQUOTES, 'UTF-8') . ':</strong> ' . htmlspecialchars(trim($val), ENT_NOQUOTES, 'UTF-8') . '</li>';
+                    } else {
+                        $detailItems[] = '<li>' . htmlspecialchars($trimmedLine, ENT_NOQUOTES, 'UTF-8') . '</li>';
+                    }
+                }
+            }
+
+            if (!empty($detailItems)) {
+                $htmlParts[] = '<h3><strong>Product Details:</strong></h3>';
+                $htmlParts[] = '<ul>' . implode('', $detailItems) . '</ul>';
+            }
+
+            return implode('', $htmlParts);
+        }
+
+        // 3. Iteratively strip empty tags, whitespace-only tags, and headings with no write-up
         do {
             $before = $cleaned;
 
@@ -153,11 +251,22 @@ EOT;
             $cleaned = preg_replace('/<h([1-6])[^>]*>(?:(?!<\/h\1>).)*?<\/h\1>\s*(?=<h[1-6][^>]*>)/iu', '', $cleaned);
         } while ($before !== $cleaned);
 
-        // 3. Strip any orphan heading at the very end of the content with no text following it
+        // 4. Strip any orphan heading at the very end of the content with no text following it
         $cleaned = preg_replace('/<h([1-6])[^>]*>(?:(?!<\/h\1>).)*?<\/h\1>\s*$/iu', '', $cleaned);
 
-        // 4. Normalize multiple consecutive line breaks
-        $cleaned = preg_replace('/\n{3,}/', "\n\n", $cleaned);
+        // 5. Strip any "Description:" or "Product Description:" heading/label (storefront already displays "Product Description")
+        $cleaned = preg_replace('/<(?:p|h[1-6])[^>]*>\s*(?:<(?:strong|b)>)?\s*(?:Product\s+)?Description\s*:?\s*(?:<\/(?:strong|b)>)?\s*<\/(?:p|h[1-6])>\s*/iu', '', $cleaned);
+        $cleaned = preg_replace('/<p([^>]*)>\s*(?:<(?:strong|b)>)?\s*(?:Product\s+)?Description\s*:\s*(?:<\/(?:strong|b)>)?\s*:?\s*/iu', '<p$1>', $cleaned);
+
+        // 6. Normalize "Product details" / "Product Details:" heading to bold Heading 3: <h3><strong>Product Details:</strong></h3>
+        $cleaned = preg_replace('/<(?:p|h[1-6])[^>]*>\s*(?:<(?:strong|b)>)?\s*Product\s+details\s*:?\s*(?:<\/(?:strong|b)>)?\s*:?\s*<\/(?:p|h[1-6])>/iu', '<h3><strong>Product Details:</strong></h3>', $cleaned);
+
+        // 7. Ensure bold labels inside <li> items always include a colon (e.g. <li><strong>Brand</strong> Surwin</li> -> <li><strong>Brand:</strong> Surwin</li>)
+        $cleaned = preg_replace('/<li>\s*<strong>([^<:]+?):?<\/strong>\s*:?\s+(?=\S)/iu', '<li><strong>$1:</strong> ', $cleaned);
+        $cleaned = preg_replace('/<li>\s*([^<:\n]{1,35}):\s+/u', '<li><strong>$1:</strong> ', $cleaned);
+
+        // 8. Collapse whitespace/newlines between block tags so Quill does not insert extra empty lines or crash List blot build
+        $cleaned = preg_replace('/>\s+</', '><', $cleaned);
 
         return trim($cleaned);
     }
@@ -295,21 +404,7 @@ EOT;
 
         $candidatesJson = json_encode($candidateSummaries, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
-        $systemInstruction = <<<EOT
-You are an expert e-commerce merchandising and cross-selling AI assistant.
-Your task is to analyze a Target Product and select the most logical, complementary, and enticing Related Products from a candidate catalog list.
-
-Selection Rules:
-1. Pick complementary accessories, logical add-ons, or close alternatives that a customer would realistically buy alongside or instead of the target product.
-2. Select between 2 and {$limit} products from the candidates list.
-3. Return ONLY a valid JSON array of objects with the selected product "id" (integer) and a brief 1-phrase "reason" (string).
-Format:
-[
-  {"id": 12, "reason": "Complementary protective case"},
-  {"id": 34, "reason": "Frequently bought together"}
-]
-Strictly return valid JSON. Do not write markdown, code blocks, or explanations outside the JSON array.
-EOT;
+        $systemInstruction = $this->getRelatedSystemInstruction($limit);
 
         $userPrompt = "Target Product:\nName: {$productName}\nCategory: {$categoryName}";
         if (!empty($description)) {

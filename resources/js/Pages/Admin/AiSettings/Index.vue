@@ -9,22 +9,40 @@ const toast = useToast();
 
 const props = defineProps({
     ai_settings: Object,
+    default_prompts: Object,
 });
 
 const form = useForm({
-    ai_enabled:         props.ai_settings?.ai_enabled ?? false,
-    ai_active_provider: props.ai_settings?.ai_active_provider || 'gemini',
-    ai_gemini_key:      props.ai_settings?.ai_gemini_key || '',
-    ai_gemini_model:    props.ai_settings?.ai_gemini_model || 'gemini-2.5-flash',
-    ai_openai_key:      props.ai_settings?.ai_openai_key || '',
-    ai_openai_model:    props.ai_settings?.ai_openai_model || 'gpt-4o-mini',
-    ai_deepseek_key:    props.ai_settings?.ai_deepseek_key || '',
-    ai_deepseek_model:  props.ai_settings?.ai_deepseek_model || 'deepseek-chat',
-    ai_claude_key:      props.ai_settings?.ai_claude_key || '',
-    ai_claude_model:    props.ai_settings?.ai_claude_model || 'claude-3-5-haiku-20241022',
+    ai_enabled:                  props.ai_settings?.ai_enabled ?? false,
+    ai_active_provider:          props.ai_settings?.ai_active_provider || 'gemini',
+    ai_gemini_key:               props.ai_settings?.ai_gemini_key || '',
+    ai_gemini_model:             props.ai_settings?.ai_gemini_model || 'gemini-2.5-flash',
+    ai_openai_key:               props.ai_settings?.ai_openai_key || '',
+    ai_openai_model:             props.ai_settings?.ai_openai_model || 'gpt-4o-mini',
+    ai_deepseek_key:             props.ai_settings?.ai_deepseek_key || '',
+    ai_deepseek_model:           props.ai_settings?.ai_deepseek_model || 'deepseek-chat',
+    ai_claude_key:               props.ai_settings?.ai_claude_key || '',
+    ai_claude_model:             props.ai_settings?.ai_claude_model || 'claude-3-5-haiku-20241022',
+    ai_prompt_short_description: props.ai_settings?.ai_prompt_short_description ?? (props.default_prompts?.short || ''),
+    ai_prompt_full_description:  props.ai_settings?.ai_prompt_full_description ?? (props.default_prompts?.full || ''),
+    ai_prompt_related_products:  props.ai_settings?.ai_prompt_related_products ?? (props.default_prompts?.related || ''),
+    ai_related_strategy:         props.ai_settings?.ai_related_strategy || 'hybrid',
 });
 
 const activeAiTab = ref(form.ai_active_provider || 'gemini');
+
+const resetPrompt = (type) => {
+    if (type === 'short') {
+        form.ai_prompt_short_description = props.default_prompts?.short || '';
+        toast.info('Short Description prompt reset to default recommendation.');
+    } else if (type === 'full') {
+        form.ai_prompt_full_description = props.default_prompts?.full || '';
+        toast.info('Full Description prompt reset to default recommendation.');
+    } else if (type === 'related') {
+        form.ai_prompt_related_products = props.default_prompts?.related || '';
+        toast.info('Related Products prompt reset to default recommendation.');
+    }
+};
 
 const showApiKey = ref({
     gemini: false,
@@ -414,6 +432,209 @@ const save = () => {
                         <span v-if="aiTestResult.latency_ms" class="font-mono text-[11px] font-semibold bg-white/70 dark:bg-black/30 px-2 py-0.5 rounded">
                             {{ aiTestResult.latency_ms }}ms
                         </span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ── 3. Custom System Instructions & Prompt Engineering ── -->
+            <section class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                        <h2 class="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                            <span>📝</span>
+                            <span>3. Custom AI System Instructions & Prompts</span>
+                        </h2>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            Tailor the system instructions ($systemInstruction) used when generating Short and Full Descriptions in the Product Editor.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="p-6 space-y-6">
+                    <!-- General Guidance Banner -->
+                    <div class="p-4 rounded-xl border border-blue-200 dark:border-blue-900/60 bg-blue-50/50 dark:bg-blue-950/20 text-xs text-blue-900 dark:text-blue-200 space-y-2">
+                        <div class="font-bold flex items-center gap-1.5 text-sm">
+                            <span>💡</span> How Prompt Customization Works & Guidelines
+                        </div>
+                        <p class="leading-relaxed text-blue-800 dark:text-blue-300">
+                            The system instructions below act as the baseline persona and formatting guardrails for the AI model. 
+                            When an admin clicks <strong>"AI Generate"</strong>, the backend passes your system instruction along with product context (<code class="bg-blue-100 dark:bg-blue-900/40 px-1 py-0.5 rounded font-mono">Product Name</code>, <code class="bg-blue-100 dark:bg-blue-900/40 px-1 py-0.5 rounded font-mono">Category</code>, <code class="bg-blue-100 dark:bg-blue-900/40 px-1 py-0.5 rounded font-mono">Brand</code>).
+                        </p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                            <div class="bg-white/80 dark:bg-gray-900/60 p-2.5 rounded-lg border border-blue-100 dark:border-blue-900/40">
+                                <span class="font-semibold text-blue-950 dark:text-blue-100 block mb-0.5">Short Description Rules:</span>
+                                <span>Strictly plain text (not more than 2 sentences) with current trend tags and no price tag.</span>
+                            </div>
+                            <div class="bg-white/80 dark:bg-gray-900/60 p-2.5 rounded-lg border border-blue-100 dark:border-blue-900/40">
+                                <span class="font-semibold text-blue-950 dark:text-blue-100 block mb-0.5">Full Description Rules:</span>
+                                <span>Follows the exact two-part <code class="font-mono">Description:</code> and <code class="font-mono">Product details:</code> format shown in the default example.</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 1. Short Description Prompt -->
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-xl p-5 space-y-3 bg-gray-50/50 dark:bg-gray-900/20">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <h3 class="font-bold text-sm text-gray-900 dark:text-white">Short Description System Instruction</h3>
+                                    <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                                        Plain Text
+                                    </span>
+                                </div>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                    Guides the 1–2 sentence summary generated for the "Short Description (optional)" field.
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                @click="resetPrompt('short')"
+                                class="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 transition shrink-0"
+                                title="Reset Short Description system prompt back to recommended default"
+                            >
+                                <span>↺</span>
+                                <span>Reset to Default</span>
+                            </button>
+                        </div>
+
+                        <textarea
+                            v-model="form.ai_prompt_short_description"
+                            rows="7"
+                            placeholder="Enter system prompt for short description generation..."
+                            class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 font-mono text-xs leading-relaxed focus:ring-primary focus:border-primary p-3 shadow-inner resize-y"
+                        ></textarea>
+                        <p v-if="form.errors.ai_prompt_short_description" class="text-red-500 text-xs">{{ form.errors.ai_prompt_short_description }}</p>
+                    </div>
+
+                    <!-- 2. Full Description Prompt -->
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-xl p-5 space-y-3 bg-gray-50/50 dark:bg-gray-900/20">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <h3 class="font-bold text-sm text-gray-900 dark:text-white">Full Description System Instruction</h3>
+                                    <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                                        Semantic HTML (Quill)
+                                    </span>
+                                </div>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                    Guides the rich HTML content generated for the "Full Description" Quill editor.
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                @click="resetPrompt('full')"
+                                class="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 transition shrink-0"
+                                title="Reset Full Description system prompt back to recommended default"
+                            >
+                                <span>↺</span>
+                                <span>Reset to Default</span>
+                            </button>
+                        </div>
+
+                        <textarea
+                            v-model="form.ai_prompt_full_description"
+                            rows="14"
+                            placeholder="Enter system prompt for full description generation..."
+                            class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 font-mono text-xs leading-relaxed focus:ring-primary focus:border-primary p-3 shadow-inner resize-y"
+                        ></textarea>
+                        <p v-if="form.errors.ai_prompt_full_description" class="text-red-500 text-xs">{{ form.errors.ai_prompt_full_description }}</p>
+                    </div>
+
+                    <!-- 3. Related Products Strategy & Prompt -->
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-xl p-5 space-y-4 bg-gray-50/50 dark:bg-gray-900/20">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h3 class="font-bold text-sm text-gray-900 dark:text-white">Related Products Recommendation Mode</h3>
+                                <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                                    Cross-Selling Strategy
+                                </span>
+                            </div>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                Configure how the "✨ AI Suggest Related" button in the Product Editor picks up to 10 products for the "You may also like" section.
+                            </p>
+                        </div>
+
+                        <!-- Strategy Selector -->
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <label
+                                :class="[
+                                    'p-3.5 rounded-xl border cursor-pointer transition flex flex-col justify-between text-xs',
+                                    form.ai_related_strategy === 'hybrid'
+                                        ? 'border-primary bg-primary-soft text-primary ring-1 ring-primary'
+                                        : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600 text-gray-700 dark:text-gray-300'
+                                ]"
+                            >
+                                <div class="flex items-center justify-between mb-1.5">
+                                    <span class="font-bold">Hybrid (Recommended)</span>
+                                    <input type="radio" v-model="form.ai_related_strategy" value="hybrid" class="text-primary focus:ring-primary" />
+                                </div>
+                                <span class="text-[11px] text-gray-500 dark:text-gray-400">
+                                    5 products from the same category + 5 AI smart cross-sell complements (up to 10 total).
+                                </span>
+                            </label>
+
+                            <label
+                                :class="[
+                                    'p-3.5 rounded-xl border cursor-pointer transition flex flex-col justify-between text-xs',
+                                    form.ai_related_strategy === 'category_only'
+                                        ? 'border-primary bg-primary-soft text-primary ring-1 ring-primary'
+                                        : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600 text-gray-700 dark:text-gray-300'
+                                ]"
+                            >
+                                <div class="flex items-center justify-between mb-1.5">
+                                    <span class="font-bold">Same Category Only</span>
+                                    <input type="radio" v-model="form.ai_related_strategy" value="category_only" class="text-primary focus:ring-primary" />
+                                </div>
+                                <span class="text-[11px] text-gray-500 dark:text-gray-400">
+                                    Strictly up to 10 products belonging to the exact same category as the target product.
+                                </span>
+                            </label>
+
+                            <label
+                                :class="[
+                                    'p-3.5 rounded-xl border cursor-pointer transition flex flex-col justify-between text-xs',
+                                    form.ai_related_strategy === 'ai_only'
+                                        ? 'border-primary bg-primary-soft text-primary ring-1 ring-primary'
+                                        : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600 text-gray-700 dark:text-gray-300'
+                                ]"
+                            >
+                                <div class="flex items-center justify-between mb-1.5">
+                                    <span class="font-bold">AI Intelligent Match</span>
+                                    <input type="radio" v-model="form.ai_related_strategy" value="ai_only" class="text-primary focus:ring-primary" />
+                                </div>
+                                <span class="text-[11px] text-gray-500 dark:text-gray-400">
+                                    AI evaluates the entire active catalog and picks the top 10 best accessories and complements.
+                                </span>
+                            </label>
+                        </div>
+
+                        <!-- System Instruction Textarea -->
+                        <div class="pt-2 border-t border-gray-200 dark:border-gray-700 space-y-2">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <label class="block text-xs font-bold text-gray-700 dark:text-gray-300">
+                                    Related Products System Instruction
+                                </label>
+                                <button
+                                    type="button"
+                                    @click="resetPrompt('related')"
+                                    class="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 transition shrink-0"
+                                    title="Reset Related Products system prompt back to recommended default"
+                                >
+                                    <span>↺</span>
+                                    <span>Reset to Default</span>
+                                </button>
+                            </div>
+                            <p class="text-[11px] text-gray-500 dark:text-gray-400">
+                                Note: You may use <code class="font-mono bg-gray-200 dark:bg-gray-700 px-1 py-0.5 rounded">{limit}</code> as a placeholder for the count of items requested.
+                            </p>
+                            <textarea
+                                v-model="form.ai_prompt_related_products"
+                                rows="8"
+                                placeholder="Enter system prompt for related products generation..."
+                                class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 font-mono text-xs leading-relaxed focus:ring-primary focus:border-primary p-3 shadow-inner resize-y"
+                            ></textarea>
+                            <p v-if="form.errors.ai_prompt_related_products" class="text-red-500 text-xs">{{ form.errors.ai_prompt_related_products }}</p>
+                        </div>
                     </div>
                 </div>
             </section>

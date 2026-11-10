@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Product;
+use App\Models\StoreSetting;
 use App\Services\ActivityLogger;
 use App\Services\Ai\AiManager;
 use App\Services\Ai\ProductDescriptionGenerator;
@@ -78,88 +79,178 @@ class AiController extends Controller
             'category_name'       => 'nullable|string|max:255',
             'current_product_id'  => 'nullable|integer',
             'description'         => 'nullable|string',
-            'limit'               => 'nullable|integer|min:1|max:10',
+            'limit'               => 'nullable|integer|min:1|max:20',
         ]);
 
-        $limit = $validated['limit'] ?? 5;
+        $limit = $validated['limit'] ?? 10;
         $currentId = $validated['current_product_id'] ?? null;
         $categoryId = $validated['category_id'] ?? null;
-
-        $query = Product::where('status', true);
-        if ($currentId) {
-            $query->where('id', '!=', $currentId);
-        }
-
-        $candidates = $query
-            ->with('category:id,name')
-            ->select('id', 'name', 'category_id', 'price', 'image')
-            ->when($categoryId, function ($q) use ($categoryId) {
-                $q->orderByRaw("CASE WHEN category_id = ? THEN 0 ELSE 1 END", [$categoryId]);
-            })
-            ->latest('id')
-            ->limit(40)
-            ->get();
-
-        if ($candidates->isEmpty()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No other active products available in your store catalog to relate.',
-                'products' => [],
-            ], 422);
-        }
-
-        $candidatePayload = $candidates->map(fn($p) => [
-            'id'            => $p->id,
-            'name'          => $p->name,
-            'category_name' => $p->category?->name ?? 'General',
-            'price'         => $p->price,
-        ])->toArray();
+        $strategy = StoreSetting::get('ai_related_strategy', 'hybrid'); // hybrid, category_only, ai_only
 
         try {
-            $suggestions = $this->descriptionGenerator->suggestRelatedProducts([
-                'name'          => $validated['product_name'],
-                'category_name' => $validated['category_name'] ?? ($candidates->firstWhere('category_id', $categoryId)?->category?->name ?? ''),
-                'description'   => $validated['description'] ?? '',
-            ], $candidatePayload, $limit);
-
-            $selectedIds = array_column($suggestions, 'id');
-
-            // Collect the matching product models in order
             $matchedProducts = [];
-            $reasonMap = [];
-            foreach ($suggestions as $s) {
-                if (!empty($s['id'])) {
-                    $reasonMap[$s['id']] = $s['reason'] ?? 'Recommended complement';
-                }
-            }
+            $selectedIds = [];
 
-            foreach ($selectedIds as $sid) {
-                $item = $candidates->firstWhere('id', $sid);
-                if ($item) {
-                    $arr = $item->toArray();
-                    $arr['ai_reason'] = $reasonMap[$sid] ?? null;
-                    $matchedProducts[] = $arr;
-                }
-            }
+            // 1. Category-Only Strategy
+            if ($strategy === 'category_only') {
+                if ($categoryId) {
+                    $catProducts = Product::where('status', true)
+                        ->where('category_id', $categoryId)
+                        ->when($currentId, fn($q) => $q->where('id', '!=', $currentId))
+                        ->with('category:id,name')
+                        ->select('id', 'name', 'category_id', 'price', 'image')
+                        ->latest('id')
+                        ->limit($limit)
+                        ->get();
 
-            // Fallback: If AI selected fewer than 2 items but candidates exist, supplement from same category
-            if (count($matchedProducts) < min(3, $candidates->count())) {
-                foreach ($candidates as $cand) {
-                    if (!in_array($cand->id, $selectedIds, true)) {
-                        $arr = $cand->toArray();
-                        $arr['ai_reason'] = 'Category complement';
+                    foreach ($catProducts as $cp) {
+                        $arr = $cp->toArray();
+                        $arr['ai_reason'] = 'Same category companion';
                         $matchedProducts[] = $arr;
-                        $selectedIds[] = $cand->id;
-                        if (count($matchedProducts) >= $limit) {
-                            break;
+                        $selectedIds[] = $cp->id;
+                    }
+                }
+            }
+            // 2. Hybrid Strategy: 5 from Same Category + 5 AI smart cross-sell suggestions (up to 10 total)
+            elseif ($strategy === 'hybrid') {
+                $categoryTarget = 5;
+                if ($categoryId) {
+                    $catProducts = Product::where('status', true)
+                        ->where('category_id', $categoryId)
+                        ->when($currentId, fn($q) => $q->where('id', '!=', $currentId))
+                        ->with('category:id,name')
+                        ->select('id', 'name', 'category_id', 'price', 'image')
+                        ->latest('id')
+                        ->limit($categoryTarget)
+                        ->get();
+
+                    foreach ($catProducts as $cp) {
+                        $arr = $cp->toArray();
+                        $arr['ai_reason'] = 'Same category companion';
+                        $matchedProducts[] = $arr;
+                        $selectedIds[] = $cp->id;
+                    }
+                }
+
+                $aiNeeded = max(5, $limit - count($matchedProducts));
+                $excludedIds = array_filter(array_merge([$currentId], $selectedIds));
+
+                $aiCandidates = Product::where('status', true)
+                    ->whereNotIn('id', $excludedIds)
+                    ->with('category:id,name')
+                    ->select('id', 'name', 'category_id', 'price', 'image')
+                    ->latest('id')
+                    ->limit(40)
+                    ->get();
+
+                if ($aiCandidates->isNotEmpty()) {
+                    $candidatePayload = $aiCandidates->map(fn($p) => [
+                        'id'            => $p->id,
+                        'name'          => $p->name,
+                        'category_name' => $p->category?->name ?? 'General',
+                        'price'         => $p->price,
+                    ])->toArray();
+
+                    $suggestions = $this->descriptionGenerator->suggestRelatedProducts([
+                        'name'          => $validated['product_name'],
+                        'category_name' => $validated['category_name'] ?? '',
+                        'description'   => $validated['description'] ?? '',
+                    ], $candidatePayload, $aiNeeded);
+
+                    $reasonMap = [];
+                    foreach ($suggestions as $s) {
+                        if (!empty($s['id'])) {
+                            $reasonMap[$s['id']] = $s['reason'] ?? 'Recommended complement';
+                        }
+                    }
+
+                    foreach (array_column($suggestions, 'id') as $sid) {
+                        $cand = $aiCandidates->firstWhere('id', $sid);
+                        if ($cand && !in_array($cand->id, $selectedIds, true)) {
+                            $arr = $cand->toArray();
+                            $arr['ai_reason'] = $reasonMap[$sid] ?? 'Recommended complement';
+                            $matchedProducts[] = $arr;
+                            $selectedIds[] = $cand->id;
+                        }
+                    }
+                }
+
+                // If still under desired limit and more candidates exist, supplement
+                if (count($matchedProducts) < $limit) {
+                    $fallbackCandidates = Product::where('status', true)
+                        ->whereNotIn('id', array_filter(array_merge([$currentId], $selectedIds)))
+                        ->with('category:id,name')
+                        ->select('id', 'name', 'category_id', 'price', 'image')
+                        ->latest('id')
+                        ->limit($limit - count($matchedProducts))
+                        ->get();
+
+                    foreach ($fallbackCandidates as $fc) {
+                        $arr = $fc->toArray();
+                        $arr['ai_reason'] = 'Catalog complement';
+                        $matchedProducts[] = $arr;
+                        $selectedIds[] = $fc->id;
+                    }
+                }
+            }
+            // 3. AI-Only Strategy
+            else {
+                $candidates = Product::where('status', true)
+                    ->when($currentId, fn($q) => $q->where('id', '!=', $currentId))
+                    ->with('category:id,name')
+                    ->select('id', 'name', 'category_id', 'price', 'image')
+                    ->when($categoryId, function ($q) use ($categoryId) {
+                        $q->orderByRaw("CASE WHEN category_id = ? THEN 0 ELSE 1 END", [$categoryId]);
+                    })
+                    ->latest('id')
+                    ->limit(40)
+                    ->get();
+
+                if ($candidates->isNotEmpty()) {
+                    $candidatePayload = $candidates->map(fn($p) => [
+                        'id'            => $p->id,
+                        'name'          => $p->name,
+                        'category_name' => $p->category?->name ?? 'General',
+                        'price'         => $p->price,
+                    ])->toArray();
+
+                    $suggestions = $this->descriptionGenerator->suggestRelatedProducts([
+                        'name'          => $validated['product_name'],
+                        'category_name' => $validated['category_name'] ?? '',
+                        'description'   => $validated['description'] ?? '',
+                    ], $candidatePayload, $limit);
+
+                    $reasonMap = [];
+                    foreach ($suggestions as $s) {
+                        if (!empty($s['id'])) {
+                            $reasonMap[$s['id']] = $s['reason'] ?? 'Recommended complement';
+                        }
+                    }
+
+                    foreach (array_column($suggestions, 'id') as $sid) {
+                        $item = $candidates->firstWhere('id', $sid);
+                        if ($item) {
+                            $arr = $item->toArray();
+                            $arr['ai_reason'] = $reasonMap[$sid] ?? null;
+                            $matchedProducts[] = $arr;
+                            $selectedIds[] = $item->id;
                         }
                     }
                 }
             }
 
+            if (empty($matchedProducts)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No other active products available in your store catalog to relate.',
+                    'products' => [],
+                ], 422);
+            }
+
             ActivityLogger::product("AI suggested " . count($matchedProducts) . " related products for '{$validated['product_name']}'", [
                 'target_product' => $validated['product_name'],
                 'suggested_ids'  => $selectedIds,
+                'strategy'       => $strategy,
                 'provider'       => $this->aiManager->getActiveProviderName(),
             ]);
 

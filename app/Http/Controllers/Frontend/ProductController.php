@@ -258,7 +258,7 @@ class ProductController extends Controller
                 ->whereIn('id', $product->related_products)
                 ->where('status', true)
                 ->where('id', '!=', $product->id)
-                ->take(8)
+                ->take(12)
                 ->get();
             if ($related->isNotEmpty()) return $related;
         }
@@ -267,7 +267,7 @@ class ProductController extends Controller
             ->where('category_id', $product->category_id)
             ->where('id', '!=', $product->id)
             ->where('status', true)
-            ->take(4)
+            ->take(10)
             ->get();
     }
 }

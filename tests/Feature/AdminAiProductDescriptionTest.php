@@ -317,10 +317,12 @@ class AdminAiProductDescriptionTest extends TestCase
     public function test_admin_can_update_ai_settings_via_dedicated_endpoint(): void
     {
         $payload = [
-            'ai_enabled'         => true,
-            'ai_active_provider' => 'deepseek',
-            'ai_deepseek_key'    => 'sk-deepseek-live-key',
-            'ai_deepseek_model'  => 'deepseek-chat',
+            'ai_enabled'                  => true,
+            'ai_active_provider'          => 'deepseek',
+            'ai_deepseek_key'             => 'sk-deepseek-live-key',
+            'ai_deepseek_model'           => 'deepseek-chat',
+            'ai_prompt_short_description' => 'Custom Short Instruction: Write exactly one catchy sentence.',
+            'ai_prompt_full_description'  => 'Custom Full Instruction: Generate bulleted specs in HTML.',
         ];
 
         $response = $this->actingAs($this->admin, 'web')
@@ -331,6 +333,88 @@ class AdminAiProductDescriptionTest extends TestCase
         $this->assertEquals('deepseek', StoreSetting::get('ai_active_provider'));
         $this->assertEquals('sk-deepseek-live-key', StoreSetting::get('ai_deepseek_key'));
         $this->assertEquals('deepseek-chat', StoreSetting::get('ai_deepseek_model'));
+        $this->assertEquals('Custom Short Instruction: Write exactly one catchy sentence.', StoreSetting::get('ai_prompt_short_description'));
+        $this->assertEquals('Custom Full Instruction: Generate bulleted specs in HTML.', StoreSetting::get('ai_prompt_full_description'));
+    }
+
+    public function test_it_uses_custom_system_instruction_for_short_and_full_descriptions(): void
+    {
+        StoreSetting::set('ai_enabled', '1');
+        StoreSetting::set('ai_active_provider', 'gemini');
+        StoreSetting::set('ai_gemini_key', 'test-gemini-key');
+        StoreSetting::set('ai_gemini_model', 'gemini-2.5-flash');
+        StoreSetting::set('ai_prompt_short_description', 'CUSTOM_SHORT_INSTRUCTION_FOR_STORE');
+        StoreSetting::set('ai_prompt_full_description', 'CUSTOM_FULL_INSTRUCTION_FOR_STORE');
+
+        Http::fake([
+            'https://generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [
+                    [
+                        'content' => [
+                            'parts' => [
+                                ['text' => '<p>Generated content</p>']
+                            ]
+                        ]
+                    ]
+                ]
+            ], 200),
+        ]);
+
+        // 1. Short description test
+        $this->actingAs($this->admin, 'web')
+            ->postJson(route('admin.ai.generate-product-description'), [
+                'type' => 'short',
+                'product_name' => 'Custom Test Product',
+            ])->assertOk();
+
+        Http::assertSent(function ($request) {
+            return str_contains($request->body(), 'CUSTOM_SHORT_INSTRUCTION_FOR_STORE');
+        });
+
+        // 2. Full description test
+        $this->actingAs($this->admin, 'web')
+            ->postJson(route('admin.ai.generate-product-description'), [
+                'type' => 'full',
+                'product_name' => 'Custom Test Product',
+            ])->assertOk();
+
+        Http::assertSent(function ($request) {
+            return str_contains($request->body(), 'CUSTOM_FULL_INSTRUCTION_FOR_STORE');
+        });
+    }
+
+    public function test_it_falls_back_to_default_system_instruction_when_custom_prompt_is_empty(): void
+    {
+        StoreSetting::set('ai_enabled', '1');
+        StoreSetting::set('ai_active_provider', 'gemini');
+        StoreSetting::set('ai_gemini_key', 'test-gemini-key');
+        StoreSetting::set('ai_gemini_model', 'gemini-2.5-flash');
+        StoreSetting::set('ai_prompt_short_description', '');
+        StoreSetting::set('ai_prompt_full_description', '   ');
+
+        Http::fake([
+            'https://generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [
+                    [
+                        'content' => [
+                            'parts' => [
+                                ['text' => '<p>Generated default content</p>']
+                            ]
+                        ]
+                    ]
+                ]
+            ], 200),
+        ]);
+
+        $this->actingAs($this->admin, 'web')
+            ->postJson(route('admin.ai.generate-product-description'), [
+                'type' => 'short',
+                'product_name' => 'Default Fallback Test',
+            ])->assertOk();
+
+        Http::assertSent(function ($request) {
+            return str_contains($request->body(), 'You are an expert e-commerce copywriter');
+        });
     }
 
     public function test_it_generates_seo_metadata_with_ai_provider(): void
@@ -423,6 +507,7 @@ class AdminAiProductDescriptionTest extends TestCase
         $updateResponse = $this->actingAs($this->admin, 'web')
             ->put(route('admin.products.update', $product->id), $updatePayload);
 
+        $updateResponse->assertSessionHasNoErrors();
         $updateResponse->assertRedirect();
         $this->assertDatabaseHas('products', [
             'id' => $product->id,
@@ -438,6 +523,7 @@ class AdminAiProductDescriptionTest extends TestCase
         StoreSetting::set('ai_active_provider', 'gemini');
         StoreSetting::set('ai_gemini_key', 'test-gemini-key');
         StoreSetting::set('ai_gemini_model', 'gemini-2.5-flash');
+        StoreSetting::set('ai_related_strategy', 'ai_only');
 
         $category = \App\Models\Category::create(['name' => 'Phones & Accessories', 'slug' => 'phones-accessories']);
 
@@ -499,6 +585,93 @@ class AdminAiProductDescriptionTest extends TestCase
 
         $this->assertCount(2, $response->json('products'));
         $this->assertEquals('Protective case specifically for this phone model', $response->json('products.0.ai_reason'));
+    }
+
+    public function test_it_suggests_hybrid_related_products_with_category_and_ai(): void
+    {
+        StoreSetting::set('ai_enabled', '1');
+        StoreSetting::set('ai_active_provider', 'gemini');
+        StoreSetting::set('ai_gemini_key', 'test-gemini-key');
+        StoreSetting::set('ai_gemini_model', 'gemini-2.5-flash');
+        StoreSetting::set('ai_related_strategy', 'hybrid');
+
+        $phoneCategory = \App\Models\Category::create(['name' => 'Phones', 'slug' => 'phones']);
+        $accCategory   = \App\Models\Category::create(['name' => 'Accessories', 'slug' => 'accessories']);
+
+        // 5 products in phoneCategory
+        $catProducts = [];
+        for ($i = 1; $i <= 5; $i++) {
+            $catProducts[] = \App\Models\Product::create([
+                'name' => "Phone Model {$i}",
+                'inventory_source' => 'ecommerce',
+                'url_key' => "phone-model-{$i}",
+                'category_id' => $phoneCategory->id,
+                'price' => 100000 + $i,
+                'stock' => 10,
+                'status' => true,
+                'slug' => "phone-model-{$i}",
+            ]);
+        }
+
+        // 5 accessory products outside phoneCategory
+        $accProducts = [];
+        for ($i = 1; $i <= 5; $i++) {
+            $accProducts[] = \App\Models\Product::create([
+                'name' => "Accessory {$i}",
+                'inventory_source' => 'ecommerce',
+                'url_key' => "accessory-item-{$i}",
+                'category_id' => $accCategory->id,
+                'price' => 5000 + $i,
+                'stock' => 20,
+                'status' => true,
+                'slug' => "accessory-item-{$i}",
+            ]);
+        }
+
+        $mockJson = json_encode(array_map(fn($p) => [
+            'id' => $p->id,
+            'reason' => 'Complementary accessory from AI'
+        ], $accProducts));
+
+        Http::fake([
+            'https://generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [
+                    [
+                        'content' => [
+                            'parts' => [
+                                ['text' => "```json\n" . $mockJson . "\n```"]
+                            ]
+                        ]
+                    ]
+                ]
+            ], 200),
+        ]);
+
+        $response = $this->actingAs($this->admin, 'web')
+            ->postJson(route('admin.ai.suggest-related-products'), [
+                'product_name' => 'iPhone 15 Flagship',
+                'category_id' => $phoneCategory->id,
+                'category_name' => 'Phones',
+                'limit' => 10,
+            ]);
+
+        $response->assertStatus(200);
+        $products = $response->json('products');
+
+        // Should return 10 products: 5 from same category + 5 from AI cross-sell
+        $this->assertCount(10, $products);
+
+        // First 5 are category companions
+        for ($i = 0; $i < 5; $i++) {
+            $this->assertEquals('Same category companion', $products[$i]['ai_reason']);
+            $this->assertEquals($phoneCategory->id, $products[$i]['category_id']);
+        }
+
+        // Remaining 5 are from AI suggestions
+        for ($i = 5; $i < 10; $i++) {
+            $this->assertEquals('Complementary accessory from AI', $products[$i]['ai_reason']);
+            $this->assertEquals($accCategory->id, $products[$i]['category_id']);
+        }
     }
 }
 

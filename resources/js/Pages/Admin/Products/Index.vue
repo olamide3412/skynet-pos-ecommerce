@@ -39,6 +39,7 @@ const search = ref(props.filters?.search || '');
 const filterCategory = ref(props.filters?.category_id || '');
 const filterBrand = ref(props.filters?.brand_id || '');
 const filterStatus = ref(props.filters?.status || '');
+const filterSort = ref(props.filters?.sort || 'latest');
 const perPage = ref(props.filters?.per_page || '25');
 
 const applyFilters = debounce(() => {
@@ -47,18 +48,30 @@ const applyFilters = debounce(() => {
         category_id: filterCategory.value || undefined,
         brand_id: filterBrand.value || undefined,
         status: filterStatus.value || undefined,
+        sort: filterSort.value !== 'latest' ? filterSort.value : undefined,
         per_page: perPage.value !== '25' ? perPage.value : undefined,
     }, { preserveState: true, replace: true });
 }, 300);
 
-watch([search, filterCategory, filterBrand, filterStatus, perPage], applyFilters);
+watch([search, filterCategory, filterBrand, filterStatus, filterSort, perPage], applyFilters);
 
 const clearFilters = () => {
     search.value = '';
     filterCategory.value = '';
     filterBrand.value = '';
     filterStatus.value = '';
+    filterSort.value = 'latest';
     perPage.value = '25';
+};
+
+const toggleSort = (field) => {
+    if (field === 'name') {
+        filterSort.value = filterSort.value === 'name_asc' ? 'name_desc' : 'name_asc';
+    } else if (field === 'price') {
+        filterSort.value = filterSort.value === 'price_asc' ? 'price_desc' : 'price_asc';
+    } else if (field === 'stock') {
+        filterSort.value = filterSort.value === 'qty_desc' ? 'qty_asc' : 'qty_desc';
+    }
 };
 
 // ── Export Dropdown State ─────────────────────────────────────
@@ -76,6 +89,7 @@ const getExportUrl = (source) => {
     if (filterCategory.value) params.append('category_id', filterCategory.value);
     if (filterBrand.value) params.append('brand_id', filterBrand.value);
     if (filterStatus.value) params.append('status', filterStatus.value);
+    if (filterSort.value && filterSort.value !== 'latest') params.append('sort', filterSort.value);
 
     const qs = params.toString();
     return route('admin.products.export') + (qs ? `?${qs}` : '');
@@ -365,7 +379,11 @@ const searchRelated = () => {
     relatedDebounce = setTimeout(async () => {
         relatedLoading.value = true;
         try {
-            const params = new URLSearchParams({ q: relatedSearch.value, exclude: editId.value || 0 });
+            const params = new URLSearchParams({
+                q: relatedSearch.value,
+                exclude: editId.value || 0,
+                category_id: form.category_id || 0,
+            });
             const res = await fetch(`/admin/products/search-related?${params}`, {
                 headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
             });
@@ -380,7 +398,11 @@ const initRelatedSearch = async () => {
     relatedSearch.value = '';
     relatedLoading.value = true;
     try {
-        const params = new URLSearchParams({ q: '', exclude: editId.value || 0 });
+        const params = new URLSearchParams({
+            q: '',
+            exclude: editId.value || 0,
+            category_id: form.category_id || 0,
+        });
         const res = await fetch(`/admin/products/search-related?${params}`, {
             headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
         });
@@ -576,6 +598,8 @@ const save = () => {
         });
 };
 
+const fullDescQuillRef = ref(null);
+
 const openCreateForm = () => {
     resetFormState();
     form._method = 'POST';
@@ -584,6 +608,11 @@ const openCreateForm = () => {
     form.compress_images = true;
     isFormVisible.value = true;
     initRelatedSearch();
+    nextTick(() => {
+        if (fullDescQuillRef.value) {
+            fullDescQuillRef.value.pasteHTML('');
+        }
+    });
 };
 
 const openEditForm = (p) => {
@@ -601,6 +630,11 @@ const openEditForm = (p) => {
     form.sku               = p.sku || '';
     form.short_description = p.short_description || '';
     form.description       = p.description || '';
+    nextTick(() => {
+        if (fullDescQuillRef.value) {
+            fullDescQuillRef.value.pasteHTML(p.description || '');
+        }
+    });
     form.meta_title        = p.meta_title || '';
     form.meta_description  = p.meta_description || '';
     form.meta_keywords     = p.meta_keywords || '';
@@ -672,7 +706,6 @@ const resetFormState = () => {
     selectedRelatedProducts.value = [];
     relatedResults.value = [];
     relatedSearch.value = '';
-    aiKeywords.value = '';
     aiSuggestingRelated.value = false;
 };
 
@@ -685,7 +718,6 @@ const storeUrlDomain = computed(() => {
     return typeof window !== 'undefined' ? (window.location.host || 'yourstore.com') : 'yourstore.com';
 });
 
-const aiKeywords = ref('');
 const aiGenerating = ref({
     short: false,
     full: false,
@@ -717,8 +749,8 @@ const generateAiDescription = async (type = 'short') => {
             product_name: form.name.trim(),
             category_name: getSelectedCategoryName(),
             brand_name: getSelectedBrandName() || undefined,
-            price: form.price ? Number(form.price) : null,
-            keywords: (type === 'seo' && form.meta_keywords) ? form.meta_keywords : (aiKeywords.value ? aiKeywords.value.trim() : undefined),
+            price: type === 'short' ? undefined : (form.price ? Number(form.price) : null),
+            keywords: (type === 'seo' && form.meta_keywords) ? form.meta_keywords : undefined,
         });
 
         if (res.data.success) {
@@ -727,6 +759,11 @@ const generateAiDescription = async (type = 'short') => {
                 toast.success('Generated short description successfully!');
             } else if (type === 'full') {
                 form.description = res.data.content;
+                nextTick(() => {
+                    if (fullDescQuillRef.value) {
+                        fullDescQuillRef.value.pasteHTML(res.data.content || '');
+                    }
+                });
                 toast.success('Generated rich full description successfully!');
             } else if (type === 'seo') {
                 if (res.data.seo) {
@@ -763,7 +800,7 @@ const suggestAiRelatedProducts = async () => {
             category_name: getSelectedCategoryName(),
             current_product_id: editId.value || undefined,
             description: form.short_description || undefined,
-            limit: 5,
+            limit: 10,
         });
 
         if (res.data.success && res.data.products && res.data.products.length > 0) {
@@ -782,7 +819,7 @@ const suggestAiRelatedProducts = async () => {
             });
 
             if (addedCount > 0) {
-                toast.success(`✨ AI selected ${addedCount} related products!`);
+                toast.success(`✨ Added ${addedCount} related products (category & smart cross-sells)!`);
             } else {
                 toast.info('AI analyzed catalog; suggested products were already selected.');
             }
@@ -1063,6 +1100,21 @@ const submitBulkDelete = () => {
                     </select>
                 </div>
 
+                <div class="w-full sm:w-auto min-w-[170px]">
+                    <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Sort By</label>
+                    <select v-model="filterSort" 
+                        class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary focus:border-primary">
+                        <option value="latest">Newest First</option>
+                        <option value="oldest">Oldest First</option>
+                        <option value="name_asc">Name: A to Z</option>
+                        <option value="name_desc">Name: Z to A</option>
+                        <option value="qty_desc">Stock: High to Low</option>
+                        <option value="qty_asc">Stock: Low to High</option>
+                        <option value="price_asc">Price: Low to High</option>
+                        <option value="price_desc">Price: High to Low</option>
+                    </select>
+                </div>
+
                 <div class="w-full sm:w-auto min-w-[130px]">
                     <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Per Page</label>
                     <select v-model="perPage" 
@@ -1074,7 +1126,7 @@ const submitBulkDelete = () => {
                     </select>
                 </div>
 
-                <div v-if="search || filterCategory || filterBrand || filterStatus || perPage !== '25'">
+                <div v-if="search || filterCategory || filterBrand || filterStatus || filterSort !== 'latest' || perPage !== '25'">
                     <button @click="clearFilters" class="px-4 py-2 text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition h-[38px]">
                         Clear
                     </button>
@@ -1214,11 +1266,38 @@ const submitBulkDelete = () => {
                                         title="Select all products on this page"
                                     />
                                 </th>
-                                <th class="px-5 py-3 font-semibold">Product</th>
+                                <th class="px-5 py-3 font-semibold">
+                                    <button type="button" @click="toggleSort('name')" class="group inline-flex items-center gap-1.5 uppercase hover:text-gray-900 dark:hover:text-white focus:outline-none transition">
+                                        <span :class="{'text-primary font-bold': filterSort === 'name_asc' || filterSort === 'name_desc'}">Product</span>
+                                        <span class="text-xs">
+                                            <span v-if="filterSort === 'name_asc'" class="text-primary font-bold">▲</span>
+                                            <span v-else-if="filterSort === 'name_desc'" class="text-primary font-bold">▼</span>
+                                            <span v-else class="text-gray-300 dark:text-gray-600 group-hover:text-gray-400">⇅</span>
+                                        </span>
+                                    </button>
+                                </th>
                                 <th class="px-5 py-3 font-semibold">Category</th>
                                 <th class="px-5 py-3 font-semibold">Brand</th>
-                                <th class="px-5 py-3 font-semibold">Pricing</th>
-                                <th class="px-5 py-3 font-semibold">Stock</th>
+                                <th class="px-5 py-3 font-semibold">
+                                    <button type="button" @click="toggleSort('price')" class="group inline-flex items-center gap-1.5 uppercase hover:text-gray-900 dark:hover:text-white focus:outline-none transition">
+                                        <span :class="{'text-primary font-bold': filterSort === 'price_asc' || filterSort === 'price_desc'}">Pricing</span>
+                                        <span class="text-xs">
+                                            <span v-if="filterSort === 'price_asc'" class="text-primary font-bold">▲</span>
+                                            <span v-else-if="filterSort === 'price_desc'" class="text-primary font-bold">▼</span>
+                                            <span v-else class="text-gray-300 dark:text-gray-600 group-hover:text-gray-400">⇅</span>
+                                        </span>
+                                    </button>
+                                </th>
+                                <th class="px-5 py-3 font-semibold">
+                                    <button type="button" @click="toggleSort('stock')" class="group inline-flex items-center gap-1.5 uppercase hover:text-gray-900 dark:hover:text-white focus:outline-none transition">
+                                        <span :class="{'text-primary font-bold': filterSort === 'qty_desc' || filterSort === 'qty_asc'}">Stock</span>
+                                        <span class="text-xs">
+                                            <span v-if="filterSort === 'qty_desc'" class="text-primary font-bold">▼</span>
+                                            <span v-else-if="filterSort === 'qty_asc'" class="text-primary font-bold">▲</span>
+                                            <span v-else class="text-gray-300 dark:text-gray-600 group-hover:text-gray-400">⇅</span>
+                                        </span>
+                                    </button>
+                                </th>
                                 <th class="px-5 py-3 font-semibold">Flags</th>
                                 <th class="px-5 py-3 font-semibold text-right">Actions</th>
                             </tr>
@@ -1505,26 +1584,6 @@ const submitBulkDelete = () => {
                                 </div>
                             </div>
 
-                            <!-- Optional AI Prompt Keywords / Highlights (only visible when AI Assistant is enabled) -->
-                            <div v-if="isAiEnabled" class="rounded-xl border border-purple-200 dark:border-purple-900/60 bg-purple-50/40 dark:bg-purple-950/20 p-3.5 space-y-1.5">
-                                <div class="flex items-center justify-between">
-                                    <label class="block text-xs font-bold text-purple-900 dark:text-purple-300 flex items-center gap-1.5">
-                                        <span>✨ AI Keywords / Key Selling Points</span>
-                                        <span class="font-normal text-gray-500 dark:text-gray-400 text-[11px]">(Optional)</span>
-                                    </label>
-                                    <span class="text-[11px] text-purple-600 dark:text-purple-400 font-medium">Used by AI Generate buttons below</span>
-                                </div>
-                                <input
-                                    v-model="aiKeywords"
-                                    type="text"
-                                    placeholder="e.g. 100% full cream, 28 servings, fortified with vitamin A & D, resealable lid"
-                                    class="w-full rounded-lg border-purple-200 dark:border-purple-800 dark:bg-gray-800 focus:ring-purple-500 focus:border-purple-500 shadow-sm text-sm placeholder:text-gray-400"
-                                />
-                                <p class="text-[11px] text-gray-500 dark:text-gray-400">
-                                    Enter specific features, specs, ingredients, or angles you want the AI to include. Leave blank to let AI auto-generate.
-                                </p>
-                            </div>
-
                             <div>
                                 <div class="flex items-center justify-between mb-1">
                                     <label class="block text-sm font-semibold">Short Description <span class="font-normal text-gray-400">(optional)</span></label>
@@ -1562,7 +1621,7 @@ const submitBulkDelete = () => {
                                     </button>
                                 </div>
                                 <div class="bg-white dark:bg-gray-700 rounded-lg overflow-hidden border border-gray-300 dark:border-gray-600">
-                                    <QuillEditor v-model:content="form.description" contentType="html" theme="snow" class="min-h-[200px]" />
+                                    <QuillEditor ref="fullDescQuillRef" v-model:content="form.description" contentType="html" theme="snow" class="min-h-[200px]" />
                                 </div>
                             </div>
                         </div>
@@ -2801,7 +2860,8 @@ const submitBulkDelete = () => {
     color: inherit;
 }
 :deep(.ql-editor p) {
-    margin-bottom: 0.75rem;
+    margin-top: 0;
+    margin-bottom: 0;
 }
 :deep(.ql-editor ul) {
     list-style-type: disc !important;
