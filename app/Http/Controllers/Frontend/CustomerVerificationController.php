@@ -116,8 +116,11 @@ class CustomerVerificationController extends Controller
             abort(403, 'Invalid verification signature hash.');
         }
 
+        $isNewlyVerified = false;
+
         if (!$customer->hasVerifiedEmail()) {
             $customer->markEmailAsVerified();
+            $isNewlyVerified = true;
 
             try {
                 Mail::to($customer->email)->queue(new CustomerWelcomeMail($customer));
@@ -135,7 +138,13 @@ class CustomerVerificationController extends Controller
 
         $request->session()->forget('pending_verification_email');
 
-        return redirect()->route('login')->with('success', 'Email verified successfully! You can now sign in to your account.');
+        return Inertia::render('Frontend/Auth/VerifySuccess', [
+            'customer' => [
+                'name'  => $customer->name,
+                'email' => $customer->email,
+            ],
+            'alreadyVerified' => !$isNewlyVerified,
+        ]);
     }
 }
 

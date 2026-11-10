@@ -34,12 +34,12 @@ class CustomerEmailVerificationTest extends TestCase
         $category = Category::create(['name' => 'Accessories', 'slug' => 'accessories']);
         $product = Product::create([
             'category_id' => $category->id,
-            'name'        => 'Wireless Earbuds',
-            'slug'        => 'wireless-earbuds',
-            'url_key'     => 'wireless-earbuds',
-            'price'       => 15000,
-            'stock'       => 10,
-            'status'      => true,
+            'name' => 'Wireless Earbuds',
+            'slug' => 'wireless-earbuds',
+            'url_key' => 'wireless-earbuds',
+            'price' => 15000,
+            'stock' => 10,
+            'status' => true,
         ]);
 
         // 2. Customer registers
@@ -93,7 +93,7 @@ class CustomerEmailVerificationTest extends TestCase
         $this->assertEquals(1, $customerCart->items()->count());
         $this->assertEquals(2, $customerCart->items()->first()->quantity);
 
-        // Upon verified login: guest cart is cleanly cleaned up and customer keeps items
+        // Upon verified login: guest cart is cleaned up and customer keeps items
         $tester->testMerge($guestSessionId, $customer);
         $this->assertDatabaseMissing('carts', ['session_id' => $guestSessionId]);
         $this->assertEquals(2, $customerCart->fresh()->items()->first()->quantity);
@@ -104,14 +104,14 @@ class CustomerEmailVerificationTest extends TestCase
         Mail::fake();
 
         $customer = Customer::create([
-            'name'              => 'John Doe',
-            'email'             => 'john@example.com',
-            'password'          => Hash::make('Password123!'),
+            'name' => 'John Doe',
+            'email' => 'john@example.com',
+            'password' => Hash::make('Password123!'),
             'email_verified_at' => null,
         ]);
 
         $response = $this->post(route('customer.login.submit'), [
-            'email'    => 'john@example.com',
+            'email' => 'john@example.com',
             'password' => 'Password123!',
         ]);
 
@@ -128,9 +128,9 @@ class CustomerEmailVerificationTest extends TestCase
         Mail::fake();
 
         $customer = Customer::create([
-            'name'              => 'Chidi Eze',
-            'email'             => 'chidi@example.com',
-            'password'          => Hash::make('Password123!'),
+            'name' => 'Chidi Eze',
+            'email' => 'chidi@example.com',
+            'password' => Hash::make('Password123!'),
             'email_verified_at' => null,
         ]);
 
@@ -156,9 +156,9 @@ class CustomerEmailVerificationTest extends TestCase
     public function test_clicking_signed_verification_url_verifies_email_and_enables_login(): void
     {
         $customer = Customer::create([
-            'name'              => 'Kemi Adebayo',
-            'email'             => 'kemi@example.com',
-            'password'          => Hash::make('Password123!'),
+            'name' => 'Kemi Adebayo',
+            'email' => 'kemi@example.com',
+            'password' => Hash::make('Password123!'),
             'email_verified_at' => null,
         ]);
 
@@ -166,14 +166,18 @@ class CustomerEmailVerificationTest extends TestCase
             'verification.verify',
             now()->addMinutes(60),
             [
-                'id'   => $customer->id,
+                'id' => $customer->id,
                 'hash' => sha1($customer->getEmailForVerification()),
             ]
         );
 
         $response = $this->get($signedUrl);
-        $response->assertRedirect(route('login'));
-        $response->assertSessionHas('success');
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->component('Frontend/Auth/VerifySuccess')
+            ->where('customer.email', 'kemi@example.com')
+            ->where('alreadyVerified', false)
+        );
 
         $customer->refresh();
         $this->assertNotNull($customer->email_verified_at);
@@ -181,7 +185,7 @@ class CustomerEmailVerificationTest extends TestCase
 
         // Now login succeeds
         $loginRes = $this->post(route('customer.login.submit'), [
-            'email'    => 'kemi@example.com',
+            'email' => 'kemi@example.com',
             'password' => 'Password123!',
         ]);
 
@@ -193,15 +197,15 @@ class CustomerEmailVerificationTest extends TestCase
     public function test_customer_profile_update_ignores_email_change_leaving_it_readonly(): void
     {
         $customer = Customer::create([
-            'name'              => 'Verified User',
-            'email'             => 'verified@example.com',
-            'password'          => Hash::make('Password123!'),
-            'phone'             => '+2348000000000',
+            'name' => 'Verified User',
+            'email' => 'verified@example.com',
+            'password' => Hash::make('Password123!'),
+            'phone' => '+2348000000000',
             'email_verified_at' => now(),
         ]);
 
         $response = $this->actingAs($customer, 'customer')->put(route('customer.profile.update'), [
-            'name'  => 'Updated Name',
+            'name' => 'Updated Name',
             'email' => 'attempted_new_email@example.com',
             'phone' => '+2348111111111',
         ]);
@@ -214,4 +218,3 @@ class CustomerEmailVerificationTest extends TestCase
         $this->assertEquals('verified@example.com', $customer->email, 'Customer email must remain unchanged and read-only!');
     }
 }
-

@@ -9,8 +9,13 @@ const toast = useToast();
 const page = usePage();
 const flashMsg = page.props.flash.message;
 const isTurnstileEnabled = computed(() => page.props.store_settings?.turnstile_enabled !== '0');
+
+const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+const isVerifiedParam = ref(searchParams?.get('verified') === '1');
+const emailFromQuery = searchParams?.get('email');
+
 const form = useForm({
-  email: '',
+  email: emailFromQuery || '',
   password: '',
   remember: false,
   cf_turnstile_response: '',
@@ -122,6 +127,34 @@ const handleLogin = () => {
                     <h2 class="text-3xl font-bold text-gray-800 dark:text-gray-100">Customer Login</h2>
                     <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">Welcome back! Access your orders and cart.</p>
                 </div>
+
+                <!-- Prominent Success Banner if verified or flash success -->
+                <div v-if="isVerifiedParam || $page.props.flash?.success" class="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-left flex items-start gap-3">
+                    <div class="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0 font-black text-sm shadow-xs">
+                        ✓
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <h4 class="text-sm font-bold text-emerald-900 dark:text-emerald-200">
+                            Email Verified Successfully!
+                        </h4>
+                        <p class="text-xs text-emerald-700 dark:text-emerald-300 mt-0.5 leading-relaxed">
+                            {{ $page.props.flash?.success || 'Your email has been confirmed and your account is active. Enter your password to sign in.' }}
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Warning Alert -->
+                <div v-if="$page.props.flash?.warning" class="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-left flex items-start gap-3">
+                    <div class="w-8 h-8 rounded-full bg-amber-500 text-white flex items-center justify-center shrink-0 font-bold text-sm shadow-xs">
+                        ⚠️
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-xs font-semibold text-amber-900 dark:text-amber-200 leading-relaxed">
+                            {{ $page.props.flash.warning }}
+                        </p>
+                    </div>
+                </div>
+
                 <form @submit.prevent="handleLogin" class="mt-6 space-y-6">
                     <TextInput name="email" label="Email Address" v-model="form.email" type="email" placeholder="you@example.com" autofocus autocomplete="username" :required="true"/>
                     <TextInput name="password" label="Password" type="password" v-model="form.password" placeholder="••••••••" :required="true" autocomplete="current-password"/>
