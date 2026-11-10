@@ -1,7 +1,8 @@
 <script setup>
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, usePage, router, useForm } from '@inertiajs/vue3';
 import Layout from '@/Layouts/Layout.vue';
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
+import { useToast } from 'vue-toastification';
 import Footer from '@/Components/Footer.vue';
 import PromoPopupModal from '@/Components/PromoPopupModal.vue';
 import { useCart } from '@/Composables/useCart';
@@ -33,8 +34,40 @@ const props = defineProps({
     sliders: {
         type: Array,
         default: () => []
+    },
+    wishlist_ids: {
+        type: Array,
+        default: () => []
     }
 });
+
+const page = usePage();
+const toast = useToast();
+const wishlistIds = ref(props.wishlist_ids ?? []);
+const togglingWishlist = reactive({});
+const wishlistEnabled = computed(() => page.props.store_settings?.wishlist_enabled === '1');
+
+const isWishlisted = (id) => wishlistIds.value.includes(id);
+
+const toggleWishlist = (product) => {
+    if (!page.props.auth.customer) {
+        router.visit(route('login'));
+        return;
+    }
+    togglingWishlist[product.id] = true;
+    useForm({ product_id: product.id }).post(route('wishlist.toggle'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            if (isWishlisted(product.id)) {
+                wishlistIds.value = wishlistIds.value.filter(id => id !== product.id);
+            } else {
+                wishlistIds.value.push(product.id);
+            }
+        },
+        onError: () => toast.error('Could not update wishlist.'),
+        onFinish: () => { togglingWishlist[product.id] = false; },
+    });
+};
 
 const showAllMobileHomeCats = ref(false);
 
@@ -398,6 +431,22 @@ onUnmounted(() => {
                                     </span>
                                     <span v-else>DEAL</span>
                                 </div>
+
+                                <!-- Wishlist Heart Button -->
+                                <button
+                                    v-if="wishlistEnabled"
+                                    @click.prevent="toggleWishlist(product)"
+                                    :disabled="togglingWishlist[product.id]"
+                                    :title="isWishlisted(product.id) ? 'Remove from wishlist' : 'Save to wishlist'"
+                                    class="absolute top-1.5 right-1.5 z-10 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white/90 dark:bg-gray-700/90 backdrop-blur-xs shadow-xs flex items-center justify-center border border-gray-200/80 dark:border-gray-600 hover:scale-110 transition-transform disabled:opacity-60 cursor-pointer"
+                                >
+                                    <svg class="w-3 h-3 sm:w-4 sm:h-4 transition-colors"
+                                        :class="isWishlisted(product.id) ? 'text-red-500 fill-red-500' : 'text-gray-400 dark:text-gray-300 fill-none'"
+                                        stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+                                    </svg>
+                                </button>
                             </div>
 
                             <!-- Content -->
@@ -569,6 +618,22 @@ onUnmounted(() => {
                                 <div v-else-if="product.discount_price" class="absolute top-1.5 left-1.5 z-10 bg-red-500 text-white text-[8px] sm:text-[9px] font-bold px-1.5 py-0.5 rounded shadow-xs">
                                     SALE
                                 </div>
+
+                                <!-- Wishlist Heart Button -->
+                                <button
+                                    v-if="wishlistEnabled"
+                                    @click.prevent="toggleWishlist(product)"
+                                    :disabled="togglingWishlist[product.id]"
+                                    :title="isWishlisted(product.id) ? 'Remove from wishlist' : 'Save to wishlist'"
+                                    class="absolute top-1.5 right-1.5 z-10 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white/90 dark:bg-gray-700/90 backdrop-blur-xs shadow-xs flex items-center justify-center border border-gray-200/80 dark:border-gray-600 hover:scale-110 transition-transform disabled:opacity-60 cursor-pointer"
+                                >
+                                    <svg class="w-3 h-3 sm:w-4 sm:h-4 transition-colors"
+                                        :class="isWishlisted(product.id) ? 'text-red-500 fill-red-500' : 'text-gray-400 dark:text-gray-300 fill-none'"
+                                        stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+                                    </svg>
+                                </button>
                             </div>
 
                             <!-- Content -->
@@ -743,6 +808,22 @@ onUnmounted(() => {
                                 <div v-else class="absolute top-1.5 left-1.5 z-10 bg-emerald-500 text-white text-[8px] sm:text-[9px] font-bold px-1.5 py-0.5 rounded shadow-xs">
                                     ✨ NEW
                                 </div>
+
+                                <!-- Wishlist Heart Button -->
+                                <button
+                                    v-if="wishlistEnabled"
+                                    @click.prevent="toggleWishlist(product)"
+                                    :disabled="togglingWishlist[product.id]"
+                                    :title="isWishlisted(product.id) ? 'Remove from wishlist' : 'Save to wishlist'"
+                                    class="absolute top-1.5 right-1.5 z-10 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white/90 dark:bg-gray-700/90 backdrop-blur-xs shadow-xs flex items-center justify-center border border-gray-200/80 dark:border-gray-600 hover:scale-110 transition-transform disabled:opacity-60 cursor-pointer"
+                                >
+                                    <svg class="w-3 h-3 sm:w-4 sm:h-4 transition-colors"
+                                        :class="isWishlisted(product.id) ? 'text-red-500 fill-red-500' : 'text-gray-400 dark:text-gray-300 fill-none'"
+                                        stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+                                    </svg>
+                                </button>
                             </div>
 
                             <!-- Content -->
@@ -917,6 +998,22 @@ onUnmounted(() => {
                                 <div v-else class="absolute top-1.5 left-1.5 z-10 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[8px] sm:text-[9px] font-extrabold px-1.5 py-0.5 rounded shadow-xs">
                                     🔥 HOT
                                 </div>
+
+                                <!-- Wishlist Heart Button -->
+                                <button
+                                    v-if="wishlistEnabled"
+                                    @click.prevent="toggleWishlist(product)"
+                                    :disabled="togglingWishlist[product.id]"
+                                    :title="isWishlisted(product.id) ? 'Remove from wishlist' : 'Save to wishlist'"
+                                    class="absolute top-1.5 right-1.5 z-10 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white/90 dark:bg-gray-700/90 backdrop-blur-xs shadow-xs flex items-center justify-center border border-gray-200/80 dark:border-gray-600 hover:scale-110 transition-transform disabled:opacity-60 cursor-pointer"
+                                >
+                                    <svg class="w-3 h-3 sm:w-4 sm:h-4 transition-colors"
+                                        :class="isWishlisted(product.id) ? 'text-red-500 fill-red-500' : 'text-gray-400 dark:text-gray-300 fill-none'"
+                                        stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+                                    </svg>
+                                </button>
                             </div>
 
                             <!-- Content -->
@@ -1185,6 +1282,22 @@ onUnmounted(() => {
                                 <div v-else class="absolute top-1.5 left-1.5 z-10 bg-blue-500 text-white text-[8px] sm:text-[9px] font-extrabold px-1.5 py-0.5 rounded shadow-xs">
                                     🔍 POPULAR
                                 </div>
+
+                                <!-- Wishlist Heart Button -->
+                                <button
+                                    v-if="wishlistEnabled"
+                                    @click.prevent="toggleWishlist(product)"
+                                    :disabled="togglingWishlist[product.id]"
+                                    :title="isWishlisted(product.id) ? 'Remove from wishlist' : 'Save to wishlist'"
+                                    class="absolute top-1.5 right-1.5 z-10 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white/90 dark:bg-gray-700/90 backdrop-blur-xs shadow-xs flex items-center justify-center border border-gray-200/80 dark:border-gray-600 hover:scale-110 transition-transform disabled:opacity-60 cursor-pointer"
+                                >
+                                    <svg class="w-3 h-3 sm:w-4 sm:h-4 transition-colors"
+                                        :class="isWishlisted(product.id) ? 'text-red-500 fill-red-500' : 'text-gray-400 dark:text-gray-300 fill-none'"
+                                        stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+                                    </svg>
+                                </button>
                             </div>
 
                             <!-- Content -->

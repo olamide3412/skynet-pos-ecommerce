@@ -7,6 +7,7 @@ use App\Models\Brand;
 use App\Models\Product;
 use App\Models\Category;
 use App\Models\OrderItem;
+use App\Models\Wishlist;
 use Inertia\Inertia;
 
 class HomeController extends Controller
@@ -124,6 +125,13 @@ class HomeController extends Controller
             ->take(12)
             ->get(['id', 'name', 'slug', 'logo', 'is_featured']);
 
+        $wishlistIds = [];
+        if (auth('customer')->check()) {
+            $wishlistIds = Wishlist::where('customer_id', auth('customer')->id())
+                ->pluck('product_id')
+                ->toArray();
+        }
+
         return Inertia::render('Home', [
             'flash_sales' => $flashSales,
             'flash_sale_end' => $flashSaleEndTime ? $flashSaleEndTime->toIso8601String() : null,
@@ -140,6 +148,7 @@ class HomeController extends Controller
                 ->take(8)
                 ->get(['id', 'name', 'slug', 'image']),
             'featured_brands' => $featuredBrands,
+            'wishlist_ids' => $wishlistIds,
         ]);
     }
 }

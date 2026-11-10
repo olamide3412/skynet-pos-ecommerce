@@ -217,6 +217,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             });
             Route::post('sliders/settings', [SliderController::class, 'updateSettings'])->name('sliders.settings.update');
             Route::resource('sliders', SliderController::class)->except(['create', 'edit', 'show']);
+            Route::get('products/export', [AdminProductController::class, 'export'])->name('products.export');
+            Route::post('products/import', [AdminProductController::class, 'import'])->name('products.import');
             Route::post('products/bulk-action', [AdminProductController::class , 'bulkAction'])->name('products.bulk-action');
             Route::resource('products', AdminProductController::class)->except(['create', 'edit', 'show']);
             Route::get('products/search-related', [AdminProductController::class , 'searchRelated'])->name('products.search-related');

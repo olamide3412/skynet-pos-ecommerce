@@ -19,6 +19,7 @@ use App\Services\PosIntegration\PosCatalogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ProductController extends Controller
 {
@@ -679,5 +680,420 @@ class ProductController extends Controller
         }
 
         return back()->with('error', 'No action performed.');
+    }
+
+    /**
+     * Export products to CSV (Ecommerce Items Only, POS Items Only, or Both).
+     */
+    public function export(Request $request): StreamedResponse
+    {
+        $source = strtolower($request->input('source', 'both'));
+        if (!in_array($source, ['both', 'all', 'ecommerce', 'pos'])) {
+            $source = 'both';
+        }
+
+        $query = Product::with(['category', 'brand', 'syncedPosItem', 'variantMappings.syncedPosItem'])->latest();
+
+        if ($source === 'ecommerce') {
+            $query->where('inventory_source', 'ecommerce');
+        } elseif ($source === 'pos') {
+            $query->where('inventory_source', 'pos');
+        }
+
+        if ($search = $request->input('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('sku', 'like', "%{$search}%")
+                    ->orWhere('url_key', 'like', "%{$search}%")
+                    ->orWhereHas('brand', fn ($bq) => $bq->where('name', 'like', "%{$search}%"));
+            });
+        }
+
+        if ($catId = $request->input('category_id')) {
+            $query->where('category_id', $catId);
+        }
+
+        if ($brandId = $request->input('brand_id')) {
+            if ($brandId === 'none') {
+                $query->whereNull('brand_id');
+            } else {
+                $query->where('brand_id', $brandId);
+            }
+        }
+
+        if ($status = $request->input('status')) {
+            $query->where('status', $status === 'active' ? 1 : 0);
+        }
+
+        $sourceLabel = match ($source) {
+            'ecommerce' => 'ecommerce_only',
+            'pos' => 'pos_only',
+            default => 'all',
+        };
+
+        $filename = "products_export_{$sourceLabel}_" . date('Y-m-d_His') . '.csv';
+
+        $headers = [
+            'Content-Type'        => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+            'Pragma'              => 'no-cache',
+            'Cache-Control'       => 'must-revalidate, post-check=0, pre-check=0',
+            'Expires'             => '0',
+        ];
+
+        ActivityLogger::product("Exported products to CSV (source: {$source})", [
+            'source' => $source,
+        ]);
+
+        return response()->stream(function () use ($query) {
+            $handle = fopen('php://output', 'w');
+
+            // BOM for Excel UTF-8 display compatibility
+            fputs($handle, "\xEF\xBB\xBF");
+
+            fputcsv($handle, [
+                'ID',
+                'Name',
+                'SKU',
+                'URL Key',
+                'Inventory Source',
+                'POS Item ID',
+                'Synced POS Item Name',
+                'Category',
+                'Brand',
+                'Price (NGN)',
+                'Cost Price (NGN)',
+                'Special Price (NGN)',
+                'Stock',
+                'Status',
+                'Is Featured',
+                'Variants Count',
+                'Variant Details',
+                'Created At',
+            ]);
+
+            $query->chunk(200, function ($products) use ($handle) {
+                foreach ($products as $p) {
+                    $invSourceLabel = $p->inventory_source === 'pos' ? 'Physical POS Branch Item' : 'Online Warehouse (Ecommerce Only)';
+                    $statusLabel = $p->status ? 'Active' : 'Inactive';
+                    $featuredLabel = $p->is_featured ? 'Yes' : 'No';
+                    $posName = $p->syncedPosItem ? $p->syncedPosItem->pos_item_name : ($p->pos_item_name_snapshot ?? '');
+
+                    $variantSummary = '';
+                    if ($p->variantMappings && $p->variantMappings->isNotEmpty()) {
+                        $variantSummary = $p->variantMappings->map(function ($v) {
+                            $src = $v->inventory_source === 'pos' ? "POS #{$v->pos_item_id}" : "Ecommerce";
+                            $price = $v->local_price ? "₦" . number_format((float) $v->local_price, 2) : "Standard";
+                            return "{$v->variant_label} [{$src}, {$price}, Stock: {$v->local_stock}]";
+                        })->join('; ');
+                    }
+
+                    fputcsv($handle, [
+                        $p->id,
+                        $p->name,
+                        $p->sku ?? '',
+                        $p->url_key ?? '',
+                        $invSourceLabel,
+                        $p->pos_item_id ?? '',
+                        $posName,
+                        $p->category?->name ?? 'Uncategorized',
+                        $p->brand?->name ?? 'No Brand',
+                        number_format((float) ($p->price ?? 0), 2, '.', ''),
+                        $p->cost_price !== null ? number_format((float) $p->cost_price, 2, '.', '') : '',
+                        $p->special_price !== null ? number_format((float) $p->special_price, 2, '.', '') : '',
+                        $p->stock ?? 0,
+                        $statusLabel,
+                        $featuredLabel,
+                        $p->variantMappings?->count() ?? 0,
+                        $variantSummary,
+                        $p->created_at?->format('Y-m-d H:i:s') ?? '',
+                    ]);
+                }
+            });
+
+            fclose($handle);
+        }, 200, $headers);
+    }
+
+    /**
+     * Import products from CSV (Both, Ecommerce Only, or POS Only).
+     * Missing or unverified POS items are skipped with clear feedback.
+     */
+    public function import(Request $request)
+    {
+        $request->validate([
+            'file'        => 'required|file|mimes:csv,txt|max:10240',
+            'import_mode' => 'nullable|string|in:both,ecommerce,pos',
+        ]);
+
+        $mode = strtolower($request->input('import_mode', 'both'));
+        $file = $request->file('file');
+
+        $path = $file->getRealPath();
+        $handle = fopen($path, 'r');
+        if (!$handle) {
+            return back()->with('error', 'Could not open uploaded CSV file.');
+        }
+
+        // Strip UTF-8 BOM if present
+        $bom = fread($handle, 3);
+        if ($bom !== "\xEF\xBB\xBF") {
+            rewind($handle);
+        }
+
+        // Read header
+        $headerRow = fgetcsv($handle);
+        if (!$headerRow) {
+            fclose($handle);
+            return back()->with('error', 'The uploaded CSV file is empty.');
+        }
+
+        // Normalize header keys
+        $headerMap = [];
+        foreach ($headerRow as $index => $col) {
+            $normalized = strtolower(trim(preg_replace('/[^a-zA-Z0-9_]/', '', str_replace([' ', '-', '/'], '_', $col))));
+            $headerMap[$normalized] = $index;
+        }
+
+        // Helper to get column value from row
+        $getVal = function ($row, array $possibleKeys) use ($headerMap) {
+            foreach ($possibleKeys as $key) {
+                if (isset($headerMap[$key]) && isset($row[$headerMap[$key]])) {
+                    $v = trim($row[$headerMap[$key]]);
+                    if ($v !== '') return $v;
+                }
+            }
+            return null;
+        };
+
+        // Cache categories and brands for high-speed resolution
+        $categoriesByName = Category::all()->keyBy(fn ($c) => strtolower(trim($c->name)));
+        $categoriesById   = Category::all()->keyBy('id');
+        $brandsByName     = Brand::all()->keyBy(fn ($b) => strtolower(trim($b->name)));
+        $brandsById       = Brand::all()->keyBy('id');
+
+        $defaultCategory = Category::first();
+        if (!$defaultCategory) {
+            $defaultCategory = Category::create([
+                'name' => 'General',
+                'slug' => 'general',
+            ]);
+        }
+
+        $importedCount = 0;
+        $updatedCount  = 0;
+        $skippedPosCount = 0;
+        $skippedPosItems = [];
+        $skippedOtherCount = 0;
+
+        while (($row = fgetcsv($handle)) !== false) {
+            // Skip entirely blank rows
+            if (empty(array_filter($row, fn ($val) => trim($val) !== ''))) {
+                continue;
+            }
+
+            $name = $getVal($row, ['name', 'product_name', 'title']);
+            if (!$name) {
+                $skippedOtherCount++;
+                continue;
+            }
+
+            $rawSource = strtolower($getVal($row, ['inventory_source', 'source', 'source_type', 'type']) ?? '');
+            $rawPosItemId = $getVal($row, ['pos_item_id', 'pos_id', 'positemid']);
+            $posItemId = ($rawPosItemId !== null && is_numeric($rawPosItemId) && (int) $rawPosItemId > 0)
+                ? (int) $rawPosItemId
+                : null;
+
+            // Determine effective source based on mode and row
+            if ($mode === 'ecommerce') {
+                $targetSource = 'ecommerce';
+                $posItemId = null; // Do not link to POS in Ecommerce-only mode
+            } elseif ($mode === 'pos') {
+                $targetSource = 'pos';
+            } else { // 'both'
+                if ($posItemId || str_contains($rawSource, 'pos') || str_contains($rawSource, 'branch')) {
+                    $targetSource = 'pos';
+                } else {
+                    $targetSource = 'ecommerce';
+                }
+            }
+
+            // POS ITEM AVAILABILITY CHECK & SKIP LOGIC
+            if ($targetSource === 'pos') {
+                if (!$posItemId) {
+                    $skippedPosCount++;
+                    $skippedPosItems[] = "{$name} (missing POS Item ID)";
+                    continue;
+                }
+
+                $syncedItem = SyncedPosItem::where('pos_item_id', $posItemId)->first();
+                if (!$syncedItem) {
+                    // POS item is not found or not available in the connected branch
+                    $skippedPosCount++;
+                    $skippedPosItems[] = "{$name} (POS #{$posItemId} not found in branch)";
+                    continue;
+                }
+            } else {
+                $syncedItem = null;
+            }
+
+            // Category Resolution
+            $catVal = $getVal($row, ['category', 'category_id', 'category_name']);
+            $category = null;
+            if ($catVal) {
+                if (is_numeric($catVal) && isset($categoriesById[(int) $catVal])) {
+                    $category = $categoriesById[(int) $catVal];
+                } else {
+                    $lowerCat = strtolower($catVal);
+                    $category = $categoriesByName[$lowerCat] ?? null;
+                }
+            }
+            if (!$category) {
+                $category = $defaultCategory;
+            }
+
+            // Brand Resolution
+            $brandVal = $getVal($row, ['brand', 'brand_id', 'brand_name']);
+            $brand = null;
+            if ($brandVal && strtolower($brandVal) !== 'no brand' && strtolower($brandVal) !== 'none') {
+                if (is_numeric($brandVal) && isset($brandsById[(int) $brandVal])) {
+                    $brand = $brandsById[(int) $brandVal];
+                } else {
+                    $lowerBrand = strtolower($brandVal);
+                    $brand = $brandsByName[$lowerBrand] ?? null;
+                }
+            }
+
+            // Price & Stock
+            $rawPrice = $getVal($row, ['price_ngn', 'price', 'standard_price', 'regular_price']);
+            $price = ($rawPrice !== null && is_numeric(str_replace(',', '', $rawPrice)))
+                ? (float) str_replace(',', '', $rawPrice)
+                : ($syncedItem ? (float) $syncedItem->standard_price : 0.0);
+
+            $rawCostPrice = $getVal($row, ['cost_price_ngn', 'cost_price', 'buying_price']);
+            $costPrice = ($rawCostPrice !== null && is_numeric(str_replace(',', '', $rawCostPrice)))
+                ? (float) str_replace(',', '', $rawCostPrice)
+                : ($syncedItem && $syncedItem->buying_price !== null ? (float) $syncedItem->buying_price : null);
+
+            $rawSpecialPrice = $getVal($row, ['special_price_ngn', 'special_price', 'discount_price', 'sale_price']);
+            $specialPrice = ($rawSpecialPrice !== null && is_numeric(str_replace(',', '', $rawSpecialPrice)))
+                ? (float) str_replace(',', '', $rawSpecialPrice)
+                : null;
+
+            $rawStock = $getVal($row, ['stock', 'quantity', 'qty']);
+            $stock = ($rawStock !== null && is_numeric($rawStock))
+                ? (int) $rawStock
+                : ($syncedItem ? (int) floor($syncedItem->effective_availability) : 0);
+
+            // Status & Featured
+            $rawStatus = strtolower($getVal($row, ['status', 'active', 'is_active']) ?? 'active');
+            $status = !in_array($rawStatus, ['0', 'inactive', 'false', 'draft', 'no']);
+
+            $rawFeatured = strtolower($getVal($row, ['is_featured', 'featured']) ?? 'no');
+            $isFeatured = in_array($rawFeatured, ['1', 'yes', 'true', 'featured']);
+
+            $sku = $getVal($row, ['sku', 'product_sku']);
+            $productNumber = $getVal($row, ['product_number', 'item_code']);
+            $rowUrlKey = $getVal($row, ['url_key', 'url', 'slug']);
+            $existingId = $getVal($row, ['id', 'product_id']);
+
+            // Locate existing product if any
+            $product = null;
+            if ($existingId && is_numeric($existingId)) {
+                $product = Product::find((int) $existingId);
+            }
+            if (!$product && $targetSource === 'pos' && $posItemId) {
+                $product = Product::where('pos_item_id', $posItemId)->first();
+            }
+            if (!$product && $sku) {
+                $product = Product::where('sku', $sku)->first();
+            }
+
+            if ($product) {
+                // Update product
+                $product->name = $name;
+                $product->category_id = $category->id;
+                if ($brand) $product->brand_id = $brand->id;
+                $product->price = $price;
+                if ($costPrice !== null) $product->cost_price = $costPrice;
+                if ($specialPrice !== null) $product->special_price = $specialPrice;
+                $product->stock = $stock;
+                $product->status = $status;
+                $product->is_featured = $isFeatured;
+                $product->inventory_source = $targetSource;
+                if ($targetSource === 'pos') {
+                    $product->pos_item_id = $posItemId;
+                    $product->pos_item_name_snapshot = $syncedItem->pos_item_name;
+                    $product->pos_sync_status = 'synced';
+                    $syncedItem->update(['mapping_status' => 'mapped']);
+                }
+                if ($sku && empty($product->sku)) $product->sku = $sku;
+                $product->save();
+                $updatedCount++;
+            } else {
+                // Generate unique url_key & slug
+                $baseKey = !empty($rowUrlKey) ? Str::slug($rowUrlKey) : Str::slug($name);
+                if (empty($baseKey)) $baseKey = 'product-' . uniqid();
+                $urlKey = $baseKey;
+                $k = 1;
+                while (Product::where('url_key', $urlKey)->exists()) {
+                    $urlKey = $baseKey . '-' . $k++;
+                }
+
+                $newProduct = Product::create([
+                    'name'                   => $name,
+                    'slug'                   => $urlKey,
+                    'url_key'                => $urlKey,
+                    'sku'                    => $sku,
+                    'product_number'         => $productNumber,
+                    'category_id'            => $category->id,
+                    'brand_id'               => $brand?->id,
+                    'price'                  => $price,
+                    'cost_price'             => $costPrice,
+                    'special_price'          => $specialPrice,
+                    'stock'                  => $stock,
+                    'status'                 => $status,
+                    'is_featured'            => $isFeatured,
+                    'inventory_source'       => $targetSource,
+                    'pos_item_id'            => $targetSource === 'pos' ? $posItemId : null,
+                    'pos_item_name_snapshot' => $syncedItem?->pos_item_name,
+                    'pos_sync_status'        => $targetSource === 'pos' ? 'synced' : 'synced',
+                ]);
+
+                if ($targetSource === 'pos' && $syncedItem) {
+                    $syncedItem->update(['mapping_status' => 'mapped']);
+                }
+
+                $importedCount++;
+            }
+        }
+
+        fclose($handle);
+
+        ActivityLogger::product("Imported products via CSV (mode: {$mode}). Created: {$importedCount}, Updated: {$updatedCount}, Skipped POS: {$skippedPosCount}", [
+            'mode'            => $mode,
+            'imported_count'  => $importedCount,
+            'updated_count'   => $updatedCount,
+            'skipped_pos'     => $skippedPosCount,
+        ]);
+
+        $summaryParts = [];
+        if ($importedCount > 0) $summaryParts[] = "{$importedCount} product(s) created";
+        if ($updatedCount > 0) $summaryParts[] = "{$updatedCount} product(s) updated";
+        $successMsg = !empty($summaryParts)
+            ? implode(' and ', $summaryParts) . ' successfully.'
+            : 'Product import completed.';
+
+        $warningMsg = null;
+        if ($skippedPosCount > 0) {
+            $preview = count($skippedPosItems) <= 3
+                ? implode(', ', $skippedPosItems)
+                : implode(', ', array_slice($skippedPosItems, 0, 3)) . " and " . ($skippedPosCount - 3) . " more";
+            $warningMsg = "{$skippedPosCount} POS item(s) skipped (not found in connected POS branch): {$preview}.";
+        }
+
+        return back()
+            ->with('success', $successMsg)
+            ->with('warning', $warningMsg);
     }
 }

@@ -61,6 +61,58 @@ const clearFilters = () => {
     perPage.value = '25';
 };
 
+// ── Export Dropdown State ─────────────────────────────────────
+const showExportMenu = ref(false);
+const exportDropdownRef = ref(null);
+
+const getExportUrl = (source) => {
+    const params = new URLSearchParams();
+    if (source && source !== 'both') {
+        params.append('source', source);
+    } else {
+        params.append('source', 'both');
+    }
+    if (search.value) params.append('search', search.value);
+    if (filterCategory.value) params.append('category_id', filterCategory.value);
+    if (filterBrand.value) params.append('brand_id', filterBrand.value);
+    if (filterStatus.value) params.append('status', filterStatus.value);
+
+    const qs = params.toString();
+    return route('admin.products.export') + (qs ? `?${qs}` : '');
+};
+
+// ── Import Modal State ────────────────────────────────────────
+const showImportModal = ref(false);
+const importFileRef   = ref(null);
+const importForm      = useForm({
+    file: null,
+    import_mode: 'both', // 'both', 'ecommerce', 'pos'
+});
+
+const handleImportFileChange = (e) => {
+    const file = e.target.files?.[0];
+    importForm.file = file || null;
+};
+
+const submitImport = () => {
+    if (!importForm.file) {
+        toast.warning('Please select a CSV file to import.');
+        return;
+    }
+    importForm.post(route('admin.products.import'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            showImportModal.value = false;
+            importForm.reset();
+            if (importFileRef.value) importFileRef.value.value = '';
+        },
+        onError: (errors) => {
+            const firstErr = Object.values(errors)[0];
+            if (firstErr) toast.error(firstErr);
+        }
+    });
+};
+
 const isFormVisible = ref(false);
 const isEditing     = ref(false);
 const editId        = ref(null);
@@ -262,6 +314,9 @@ const createQuickBrand = async () => {
 };
 
 const handleClickOutsidePosDropdown = (e) => {
+    if (showExportMenu.value && exportDropdownRef.value && !exportDropdownRef.value.contains(e.target)) {
+        showExportMenu.value = false;
+    }
     if (posDropdownOpen.value && posDropdownRef.value && !posDropdownRef.value.contains(e.target)) {
         posDropdownOpen.value = false;
     }
@@ -867,10 +922,101 @@ const submitBulkDelete = () => {
                             Save Product
                         </button>
                     </template>
-                    <button v-else @click="openCreateForm" class="bg-primary hover:bg-primary-dark text-white font-bold py-2 px-5 rounded-lg shadow flex items-center gap-2 text-sm">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                        Add Product
-                    </button>
+                    <template v-else>
+                        <!-- Export Dropdown -->
+                        <div ref="exportDropdownRef" class="relative">
+                            <button
+                                @click="showExportMenu = !showExportMenu"
+                                type="button"
+                                class="border border-gray-300 dark:border-gray-600 font-semibold py-2 px-4 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition text-sm flex items-center gap-2 text-gray-700 dark:text-gray-200 shadow-xs cursor-pointer"
+                                title="Export products to CSV"
+                            >
+                                <svg class="w-4 h-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                <span>Export</span>
+                                <svg class="w-3.5 h-3.5 text-gray-400 transition-transform duration-150" :class="showExportMenu ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                </svg>
+                            </button>
+
+                            <!-- Dropdown Menu -->
+                            <transition
+                                enter-active-class="transition duration-100 ease-out"
+                                enter-from-class="transform scale-95 opacity-0"
+                                enter-to-class="transform scale-100 opacity-100"
+                                leave-active-class="transition duration-75 ease-in"
+                                leave-from-class="transform scale-100 opacity-100"
+                                leave-to-class="transform scale-95 opacity-0"
+                            >
+                                <div
+                                    v-if="showExportMenu"
+                                    class="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 py-1.5 z-50 text-left"
+                                >
+                                    <div class="px-3.5 py-2 text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                                        <span>Export Options</span>
+                                        <span class="text-[10px] text-emerald-600 font-mono font-bold">.csv</span>
+                                    </div>
+                                    <div class="p-1 space-y-0.5">
+                                        <a
+                                            :href="getExportUrl('both')"
+                                            target="_blank"
+                                            @click="showExportMenu = false"
+                                            class="flex items-start gap-2.5 px-3 py-2 rounded-lg text-sm hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition group cursor-pointer"
+                                        >
+                                            <span class="text-base mt-0.5">📦</span>
+                                            <div>
+                                                <div class="font-semibold text-gray-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400">All Items (Both)</div>
+                                                <div class="text-[11px] text-gray-500 dark:text-gray-400">Export both Ecommerce & POS products</div>
+                                            </div>
+                                        </a>
+                                        <a
+                                            :href="getExportUrl('ecommerce')"
+                                            target="_blank"
+                                            @click="showExportMenu = false"
+                                            class="flex items-start gap-2.5 px-3 py-2 rounded-lg text-sm hover:bg-blue-50 dark:hover:bg-blue-950/30 transition group cursor-pointer"
+                                        >
+                                            <span class="text-base mt-0.5">🌐</span>
+                                            <div>
+                                                <div class="font-semibold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400">Ecommerce Items Only</div>
+                                                <div class="text-[11px] text-gray-500 dark:text-gray-400">Online warehouse products only</div>
+                                            </div>
+                                        </a>
+                                        <a
+                                            :href="getExportUrl('pos')"
+                                            target="_blank"
+                                            @click="showExportMenu = false"
+                                            class="flex items-start gap-2.5 px-3 py-2 rounded-lg text-sm hover:bg-purple-50 dark:hover:bg-purple-950/30 transition group cursor-pointer"
+                                        >
+                                            <span class="text-base mt-0.5">🏬</span>
+                                            <div>
+                                                <div class="font-semibold text-gray-900 dark:text-white group-hover:text-primary dark:group-hover:text-primary">POS Items Only</div>
+                                                <div class="text-[11px] text-gray-500 dark:text-gray-400">Products linked to POS branch inventory</div>
+                                            </div>
+                                        </a>
+                                    </div>
+                                </div>
+                            </transition>
+                        </div>
+
+                        <!-- Import Button -->
+                        <button
+                            @click="showImportModal = true"
+                            type="button"
+                            class="border border-gray-300 dark:border-gray-600 font-semibold py-2 px-4 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition text-sm flex items-center gap-2 text-gray-700 dark:text-gray-200 shadow-xs cursor-pointer"
+                            title="Import products from CSV"
+                        >
+                            <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                            </svg>
+                            <span>Import</span>
+                        </button>
+
+                        <button @click="openCreateForm" class="bg-primary hover:bg-primary-dark text-white font-bold py-2 px-5 rounded-lg shadow flex items-center gap-2 text-sm cursor-pointer">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                            Add Product
+                        </button>
+                    </template>
                 </div>
             </div>
 
@@ -1187,22 +1333,29 @@ const submitBulkDelete = () => {
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label class="block text-sm font-semibold mb-1">Category *</label>
-                                    <select v-model="form.category_id" required
-                                        class="w-full h-11 px-3.5 py-2.5 text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 focus:ring-primary focus:border-primary shadow-sm">
-                                        <option value="" disabled>— Select a category —</option>
-                                        <template v-for="parent in categories" :key="parent.id">
-                                            <!-- If parent has subcategories, use optgroup -->
-                                            <optgroup v-if="parent.children?.length" :label="'📁 ' + parent.name">
-                                                <!-- Parent itself is selectable (products with no specific subcat) -->
-                                                <option :value="parent.id">{{ parent.name }} (General)</option>
-                                                <option v-for="sub in parent.children" :key="sub.id" :value="sub.id">
-                                                    ↳ {{ sub.name }}
-                                                </option>
-                                            </optgroup>
-                                            <!-- Parent with no subcategories: just a plain option -->
-                                            <option v-else :value="parent.id">📁 {{ parent.name }}</option>
-                                        </template>
-                                    </select>
+                                    <div class="relative">
+                                        <select v-model="form.category_id" required
+                                            class="w-full h-11 appearance-none pl-3.5 pr-10 py-2.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary focus:border-primary shadow-xs cursor-pointer">
+                                            <option value="" disabled>— Select a category —</option>
+                                            <template v-for="parent in categories" :key="parent.id">
+                                                <!-- If parent has subcategories, use optgroup -->
+                                                <optgroup v-if="parent.children?.length" :label="'📁 ' + parent.name">
+                                                    <!-- Parent itself is selectable (products with no specific subcat) -->
+                                                    <option :value="parent.id">{{ parent.name }} (General)</option>
+                                                    <option v-for="sub in parent.children" :key="sub.id" :value="sub.id">
+                                                        ↳ {{ sub.name }}
+                                                    </option>
+                                                </optgroup>
+                                                <!-- Parent with no subcategories: just a plain option -->
+                                                <option v-else :value="parent.id">📁 {{ parent.name }}</option>
+                                            </template>
+                                        </select>
+                                        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                            </svg>
+                                        </div>
+                                    </div>
                                     <p v-if="form.errors.category_id" class="text-red-500 text-xs mt-1">{{ form.errors.category_id }}</p>
                                 </div>
                                 <div>
@@ -1426,11 +1579,18 @@ const submitBulkDelete = () => {
                                 <label class="block text-sm font-semibold mb-1">{{ attr.name }}</label>
                                 
                                 <!-- Select / Dropdown -->
-                                <select v-if="attr.type === 'select'" v-model="form.attributes[attr.id]"
-                                    class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-yellow-500 shadow-sm text-sm">
-                                    <option value="">Choose an option...</option>
-                                    <option v-for="opt in attr.options" :key="opt" :value="opt">{{ opt }}</option>
-                                </select>
+                                <div v-if="attr.type === 'select'" class="relative">
+                                    <select v-model="form.attributes[attr.id]"
+                                        class="w-full h-10 appearance-none pl-3 pr-9 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-yellow-500 shadow-xs text-sm cursor-pointer">
+                                        <option value="">Choose an option...</option>
+                                        <option v-for="opt in attr.options" :key="opt" :value="opt">{{ opt }}</option>
+                                    </select>
+                                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                        </svg>
+                                    </div>
+                                </div>
                                 
                                 <!-- Color Picker (Swatches) -->
                                 <div v-else-if="attr.type === 'color'" class="flex flex-wrap gap-2">
@@ -1735,13 +1895,20 @@ const submitBulkDelete = () => {
                                     </div>
                                     <div class="md:col-span-6">
                                         <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Inventory Source</label>
-                                        <select
-                                            v-model="v.inventory_source"
-                                            @change="handleVariantSourceChange(v)"
-                                            class="w-full h-10 px-3 py-2 text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 font-medium focus:ring-primary shadow-xs">
-                                            <option value="ecommerce">Online Warehouse (Ecommerce Only)</option>
-                                            <option value="pos">Physical POS Branch Item</option>
-                                        </select>
+                                        <div class="relative">
+                                            <select
+                                                v-model="v.inventory_source"
+                                                @change="handleVariantSourceChange(v)"
+                                                class="w-full h-10 appearance-none pl-3 pr-9 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 font-medium focus:ring-2 focus:ring-primary focus:border-primary shadow-xs cursor-pointer">
+                                                <option value="ecommerce">Online Warehouse (Ecommerce Only)</option>
+                                                <option value="pos">Physical POS Branch Item</option>
+                                            </select>
+                                            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                                </svg>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -2491,6 +2658,121 @@ const submitBulkDelete = () => {
                             Yes, Delete {{ selectedIds.length }} Product(s)
                         </button>
                     </div>
+                </div>
+            </div>
+
+            <!-- ── CSV Import Modal ──────────────────────────────────────── -->
+            <div v-if="showImportModal" class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs">
+                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-lg w-full max-h-[88vh] flex flex-col border border-gray-200 dark:border-gray-700 overflow-hidden animate-in fade-in zoom-in duration-150">
+                    <!-- Modal Header (Fixed) -->
+                    <div class="p-4 sm:px-5 sm:py-3.5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between shrink-0 bg-gray-50/70 dark:bg-gray-800/80">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center text-base">
+                                📥
+                            </div>
+                            <div>
+                                <h3 class="text-base font-bold text-gray-900 dark:text-white leading-tight">Import Products (CSV)</h3>
+                                <p class="text-[11px] text-gray-500 dark:text-gray-400">Upload CSV to create or bulk-update catalog items</p>
+                            </div>
+                        </div>
+                        <button @click="showImportModal = false" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-lg font-bold p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition cursor-pointer leading-none">
+                            ✕
+                        </button>
+                    </div>
+
+                    <!-- Modal Body (Scrollable if height constrained) -->
+                    <form @submit.prevent="submitImport" class="flex flex-col flex-1 min-h-0 overflow-hidden">
+                        <div class="p-4 sm:p-5 overflow-y-auto space-y-3.5 flex-1 text-left">
+                            <!-- Mode Selection -->
+                            <div>
+                                <label class="block text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1.5">Import Target Source</label>
+                                <div class="grid grid-cols-3 gap-2">
+                                    <label
+                                        class="flex flex-col items-center justify-center p-2 rounded-xl border text-center cursor-pointer transition select-none"
+                                        :class="importForm.import_mode === 'both' ? 'border-primary bg-primary-soft text-primary ring-2 ring-primary/20' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'"
+                                    >
+                                        <input type="radio" value="both" v-model="importForm.import_mode" class="sr-only" />
+                                        <span class="text-base mb-0.5">📦</span>
+                                        <span class="text-xs font-bold leading-tight">Both (All)</span>
+                                        <span class="text-[10px] text-gray-400 leading-tight">Auto-detect</span>
+                                    </label>
+
+                                    <label
+                                        class="flex flex-col items-center justify-center p-2 rounded-xl border text-center cursor-pointer transition select-none"
+                                        :class="importForm.import_mode === 'ecommerce' ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 ring-2 ring-blue-500/20' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'"
+                                    >
+                                        <input type="radio" value="ecommerce" v-model="importForm.import_mode" class="sr-only" />
+                                        <span class="text-base mb-0.5">🌐</span>
+                                        <span class="text-xs font-bold leading-tight">Ecommerce Only</span>
+                                        <span class="text-[10px] text-gray-400 leading-tight">Online items</span>
+                                    </label>
+
+                                    <label
+                                        class="flex flex-col items-center justify-center p-2 rounded-xl border text-center cursor-pointer transition select-none"
+                                        :class="importForm.import_mode === 'pos' ? 'border-purple-500 bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400 ring-2 ring-purple-500/20' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'"
+                                    >
+                                        <input type="radio" value="pos" v-model="importForm.import_mode" class="sr-only" />
+                                        <span class="text-base mb-0.5">🏬</span>
+                                        <span class="text-xs font-bold leading-tight">POS Only</span>
+                                        <span class="text-[10px] text-gray-400 leading-tight">Branch items</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Notice on POS Availability -->
+                            <div class="p-2.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 rounded-xl text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+                                <span class="text-sm shrink-0 mt-0.5">ℹ️</span>
+                                <div class="text-[11px] leading-relaxed">
+                                    <strong>POS items availability:</strong> Any POS product whose <code class="font-mono bg-amber-100 dark:bg-amber-900/50 px-1 py-0.5 rounded text-[10px]">POS Item ID</code> is missing or not found in the connected POS branch will be <strong>safely skipped</strong> and reported in the notification summary.
+                                </div>
+                            </div>
+
+                            <!-- File Upload Area (Compact) -->
+                            <div>
+                                <label class="block text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">Select CSV File *</label>
+                                <div class="p-4 border-2 border-gray-300 dark:border-gray-600 border-dashed rounded-xl hover:border-primary dark:hover:border-primary transition bg-gray-50/60 dark:bg-gray-900/30 text-center">
+                                    <svg class="mx-auto h-7 w-7 text-gray-400 mb-1" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                                        <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                    </svg>
+                                    <div class="flex text-xs text-gray-600 dark:text-gray-400 justify-center items-center gap-1">
+                                        <label class="relative cursor-pointer rounded font-bold text-primary hover:opacity-80">
+                                            <span>Click to choose CSV</span>
+                                            <input ref="importFileRef" type="file" accept=".csv,text/csv,text/plain" @change="handleImportFileChange" class="sr-only" required />
+                                        </label>
+                                        <span>or drag & drop</span>
+                                    </div>
+                                    <p class="text-xs text-emerald-600 dark:text-emerald-400 font-mono font-bold mt-1.5 truncate max-w-sm mx-auto" v-if="importForm.file">
+                                        ✓ {{ importForm.file.name }} ({{ Math.round(importForm.file.size / 1024) }} KB)
+                                    </p>
+                                    <p class="text-[11px] text-gray-400 mt-1" v-else>Supports standard UTF-8 CSV up to 10MB</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Modal Footer (Fixed at bottom) -->
+                        <div class="px-4 py-3 sm:px-5 bg-gray-50/80 dark:bg-gray-800/90 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between shrink-0 gap-2">
+                            <a :href="getExportUrl('both')" target="_blank" class="text-xs text-primary hover:underline flex items-center gap-1 font-medium">
+                                <span>⬇️ Sample CSV</span>
+                            </a>
+
+                            <div class="flex items-center gap-2">
+                                <button type="button" @click="showImportModal = false" class="px-3.5 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-xs font-semibold hover:bg-gray-100 dark:hover:bg-gray-700 transition cursor-pointer">
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    :disabled="!importForm.file || importForm.processing"
+                                    class="px-4 py-1.5 bg-primary hover:bg-primary-dark text-white rounded-lg text-xs font-bold shadow transition disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                                >
+                                    <svg v-if="importForm.processing" class="animate-spin -ml-0.5 mr-1.5 h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                                    </svg>
+                                    <span>{{ importForm.processing ? 'Importing...' : 'Upload & Import' }}</span>
+                                </button>
+                            </div>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
