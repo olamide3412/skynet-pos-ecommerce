@@ -140,6 +140,18 @@ const formatCurrency = (amount) => {
                                 >
                                     Email Account
                                 </span>
+                                <span
+                                    v-if="customer.email_verified_at"
+                                    class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 uppercase"
+                                >
+                                    ✓ Verified
+                                </span>
+                                <span
+                                    v-else
+                                    class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 uppercase"
+                                >
+                                    Unverified
+                                </span>
                             </div>
                             <div class="flex flex-wrap items-center gap-4 text-xs text-gray-500 dark:text-gray-400 mt-1">
                                 <span>📧 {{ customer.email }}</span>

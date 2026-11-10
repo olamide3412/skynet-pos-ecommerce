@@ -40,9 +40,9 @@ class CustomerProfileController extends Controller
         /** @var Customer $customer */
         $customer = Auth::guard('customer')->user();
 
+        // Customer email address is strictly read-only after verification to protect account integrity
         $validated = $request->validate([
             'name'  => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', Rule::unique('customers')->ignore($customer->id)],
             'phone' => ['nullable', 'string', 'max:20'],
         ]);
 

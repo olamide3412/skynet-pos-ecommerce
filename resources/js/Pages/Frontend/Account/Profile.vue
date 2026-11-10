@@ -9,7 +9,6 @@ const props = defineProps({
 
 const profileForm = useForm({
     name: props.customer.name,
-    email: props.customer.email,
     phone: props.customer.phone || '',
 });
 
@@ -92,14 +91,31 @@ const updatePassword = () => {
                         />
                         <p v-if="profileForm.errors.name" class="text-xs text-red-500">{{ profileForm.errors.name }}</p>
 
-                        <TextInput
-                            name="email"
-                            label="Email Address"
-                            v-model="profileForm.email"
-                            type="email"
-                            :required="true"
-                        />
-                        <p v-if="profileForm.errors.email" class="text-xs text-red-500">{{ profileForm.errors.email }}</p>
+                        <!-- Read-only Email Field with Verified Badge and Lock Icon -->
+                        <div>
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300">Email Address</label>
+                                <span class="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                                    Verified
+                                </span>
+                            </div>
+                            <div class="relative">
+                                <input
+                                    :value="customer.email"
+                                    type="email"
+                                    readonly
+                                    disabled
+                                    class="w-full text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900/60 text-gray-500 dark:text-gray-400 cursor-not-allowed pl-3 pr-9 py-2.5 font-mono select-none"
+                                />
+                                <div class="absolute inset-y-0 right-3 flex items-center pointer-events-none text-gray-400">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                                    </svg>
+                                </div>
+                            </div>
+                            <p class="text-[11px] text-gray-400 dark:text-gray-500 mt-1">Email address is read-only to safeguard account identity and order history.</p>
+                        </div>
 
                         <TextInput
                             name="phone"

@@ -1,0 +1,151 @@
+@php
+    $themeColor = $themeColor ?? \App\Models\StoreSetting::get('theme_primary_color', '#FF4B00');
+    $storeUrl   = \App\Models\StoreSetting::getBaseUrl();
+    $logoPath   = \App\Models\StoreSetting::getLogoPath();
+    $logoUrl    = null;
+
+    if (isset($message) && is_object($message) && method_exists($message, 'embed') && $logoPath && file_exists($logoPath)) {
+        try {
+            $logoUrl = $message->embed($logoPath);
+        } catch (\Throwable $e) {
+            $logoUrl = \App\Models\StoreSetting::getLogoUrl();
+        }
+    } else {
+        $logoUrl = \App\Models\StoreSetting::getLogoUrl();
+    }
+@endphp
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Your Email Address - {{ $storeName }}</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f1f5f9;
+            color: #1e293b;
+            margin: 0;
+            padding: 32px 16px;
+            -webkit-font-smoothing: antialiased;
+        }
+        .card {
+            max-width: 580px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            overflow: hidden;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+        .brand-header {
+            background-color: #ffffff;
+            padding: 28px 24px 20px 24px;
+            text-align: center;
+            border-bottom: 3px solid {{ $themeColor }};
+        }
+        .hero-banner {
+            background-color: #f8fafc;
+            padding: 20px 24px;
+            text-align: center;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .hero-title {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 700;
+            color: #0f172a;
+        }
+        .hero-subtitle {
+            margin: 4px 0 0;
+            font-size: 13px;
+            color: #64748b;
+        }
+        .content {
+            padding: 32px 28px;
+            line-height: 1.6;
+            color: #334155;
+            font-size: 15px;
+        }
+        .btn {
+            display: inline-block;
+            background-color: {{ $themeColor }};
+            color: #ffffff !important;
+            text-decoration: none;
+            padding: 13px 32px;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 15px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .info-box {
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-left: 4px solid {{ $themeColor }};
+            border-radius: 6px;
+            padding: 14px 16px;
+            margin: 24px 0;
+            font-size: 13px;
+            color: #64748b;
+            line-height: 1.5;
+        }
+        .footer {
+            padding: 24px;
+            text-align: center;
+            font-size: 12px;
+            color: #94a3b8;
+            border-top: 1px solid #f1f5f9;
+            background-color: #f8fafc;
+        }
+        .footer a {
+            color: #64748b;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="brand-header">
+            @if(!empty($logoUrl))
+                <a href="{{ $storeUrl }}" target="_blank" style="text-decoration: none; display: inline-block;">
+                    <img src="{{ $logoUrl }}" alt="{{ $storeName }}" height="42" style="max-height: 42px; max-width: 200px; width: auto; border: 0; display: block; margin: 0 auto;" />
+                </a>
+            @else
+                <h1 style="margin: 0; font-size: 24px; font-weight: 800; color: {{ $themeColor }};">{{ $storeName }}</h1>
+            @endif
+        </div>
+
+        <div class="hero-banner">
+            <h2 class="hero-title">Verify Your Email Address</h2>
+            <p class="hero-subtitle">Welcome to {{ $storeName }}</p>
+        </div>
+
+        <div class="content">
+            <p style="margin-top: 0;">Hello <strong>{{ $customer->name }}</strong>,</p>
+            <p>Thank you for registering at <strong>{{ $storeName }}</strong>! Please verify your email address by clicking the button below so you can access your account, track orders, and complete purchases:</p>
+
+            <div style="text-align: center; margin: 28px 0;">
+                <a href="{{ $verificationUrl }}" class="btn" target="_blank">Verify Email Address &rarr;</a>
+            </div>
+
+            <div class="info-box">
+                <strong style="color: #334155;">Important Notice:</strong><br>
+                This verification link is valid for 60 minutes.<br>
+                If you did not create an account with us, no further action is required.
+            </div>
+
+            <p style="font-size: 12px; color: #94a3b8; word-break: break-all; margin-bottom: 0;">
+                If you are having trouble clicking the button, copy and paste the URL below into your web browser:<br>
+                <a href="{{ $verificationUrl }}" style="color: {{ $themeColor }};">{{ $verificationUrl }}</a>
+            </p>
+        </div>
+
+        <div class="footer">
+            <p style="margin: 0 0 6px 0; font-weight: 600; color: #475569;">{{ $storeName }}</p>
+            <p style="margin: 0;">&copy; {{ date('Y') }} {{ $storeName }}. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>
+

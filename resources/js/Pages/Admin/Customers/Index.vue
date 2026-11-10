@@ -278,8 +278,22 @@ const formatCurrency = (amount) => {
                                             >
                                                 {{ c.name }}
                                             </Link>
-                                            <div class="text-xs text-gray-500 dark:text-gray-400 font-normal">
-                                                {{ c.email }}
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 font-normal flex items-center gap-1.5 mt-0.5">
+                                                <span>{{ c.email }}</span>
+                                                <span
+                                                    v-if="c.email_verified_at"
+                                                    class="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
+                                                    title="Verified Email"
+                                                >
+                                                    ✓ Verified
+                                                </span>
+                                                <span
+                                                    v-else
+                                                    class="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+                                                    title="Email Not Verified"
+                                                >
+                                                    Unverified
+                                                </span>
                                             </div>
                                         </div>
                                     </div>

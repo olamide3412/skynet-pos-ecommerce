@@ -166,6 +166,14 @@ Route::post('/login', [CustomerAuthController::class , 'login'])->name('customer
 Route::get('/register', [CustomerAuthController::class , 'showRegister'])->name('register');
 Route::post('/register', [CustomerAuthController::class , 'register'])->name('customer.register.submit');
 
+// Customer Email Verification Routes
+Route::get('/verify-email', [\App\Http\Controllers\Frontend\CustomerVerificationController::class, 'notice'])->name('verification.notice');
+Route::post('/verify-email/resend', [\App\Http\Controllers\Frontend\CustomerVerificationController::class, 'resend'])
+    ->middleware('throttle:6,1')
+    ->name('verification.resend');
+Route::get('/verify-email/{id}/{hash}', [\App\Http\Controllers\Frontend\CustomerVerificationController::class, 'verify'])
+    ->name('verification.verify');
+
 // Password Reset Routes
 Route::get('/forgot-password', [\App\Http\Controllers\Frontend\CustomerPasswordResetController::class, 'showForgotPassword'])->name('password.request');
 Route::post('/forgot-password', [\App\Http\Controllers\Frontend\CustomerPasswordResetController::class, 'sendResetLink'])

@@ -57,26 +57,29 @@ class CustomerAuthController extends Controller
         $guestSessionId = $request->session()->getId();
 
         $customer = Customer::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'password' => Hash::make($validated['password']),
-            'phone' => $validated['phone'] ?? null,
+            'name'              => $validated['name'],
+            'email'             => $validated['email'],
+            'password'          => Hash::make($validated['password']),
+            'phone'             => $validated['phone'] ?? null,
+            'email_verified_at' => null,
         ]);
 
-        Auth::guard('customer')->login($customer);
-        $request->session()->regenerate();
+        // Keep active guest session intact, but snapshot cart items to customer
+        $this->syncGuestCartToUnverifiedCustomer($guestSessionId, $customer);
 
-        $this->mergeGuestCart($guestSessionId, $customer);
-
+        // Send verification email with 30s cooldown
+        $lockKey = "customer_verify_cooldown:{$customer->id}";
         try {
-            \Illuminate\Support\Facades\Mail::to($customer->email)->queue(new \App\Mail\CustomerWelcomeMail($customer));
+            \Illuminate\Support\Facades\Mail::to($customer->email)->send(new \App\Mail\CustomerVerifyEmailMail($customer));
+            \Illuminate\Support\Facades\Cache::put($lockKey, now()->timestamp + 30, now()->addSeconds(35));
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning("Customer #{$customer->id} welcome email failed to queue: " . $e->getMessage());
+            \Illuminate\Support\Facades\Log::error("Failed to send customer verification email to {$customer->email}: " . $e->getMessage());
         }
 
-        $companyName = StoreSetting::get('company_name', config('app.name', 'Skynet'));
+        $request->session()->put('pending_verification_email', $customer->email);
 
-        return redirect()->route('home')->with('success', "Registration successful! Welcome to {$companyName}.");
+        return redirect()->route('verification.notice')
+            ->with('success', "Registration successful! We've sent a verification link to your email address.");
     }
 
     public function login(Request $request)
@@ -91,12 +94,36 @@ class CustomerAuthController extends Controller
         
         unset($credentials['cf_turnstile_response']);
 
-        $guestSessionId = $request->session()->getId();
+        $customer = Customer::where('email', $credentials['email'])->first();
 
-        if (Auth::guard('customer')->attempt($credentials, $request->remember ?? false)) {
+        if ($customer && Hash::check($credentials['password'], $customer->password)) {
+            // Check email verification before granting access
+            if (!$customer->hasVerifiedEmail()) {
+                $guestSessionId = $request->session()->getId();
+                $this->syncGuestCartToUnverifiedCustomer($guestSessionId, $customer);
+
+                $lockKey = "customer_verify_cooldown:{$customer->id}";
+                $lockUntil = (int) \Illuminate\Support\Facades\Cache::get($lockKey, 0);
+
+                if ($lockUntil <= now()->timestamp) {
+                    try {
+                        \Illuminate\Support\Facades\Mail::to($customer->email)->send(new \App\Mail\CustomerVerifyEmailMail($customer));
+                        \Illuminate\Support\Facades\Cache::put($lockKey, now()->timestamp + 30, now()->addSeconds(35));
+                    } catch (\Throwable $e) {
+                        \Illuminate\Support\Facades\Log::error("Failed to send customer verification email to {$customer->email}: " . $e->getMessage());
+                    }
+                }
+
+                $request->session()->put('pending_verification_email', $customer->email);
+
+                return redirect()->route('verification.notice')
+                    ->with('warning', 'Please verify your email address to log in. We have sent a verification link to your email.');
+            }
+
+            Auth::guard('customer')->login($customer, $request->remember ?? false);
             $request->session()->regenerate();
 
-            $customer = Auth::guard('customer')->user();
+            $guestSessionId = $request->session()->getId();
             $this->mergeGuestCart($guestSessionId, $customer);
             
             // If they are checking out, redirect them back to checkout
