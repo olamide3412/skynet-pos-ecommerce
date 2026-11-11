@@ -260,6 +260,85 @@ const toggleWishlist = () => {
     });
 };
 
+// ─── Share Product ───────────────────────────────────────────
+const showShareMenu = ref(false);
+const copiedLink    = ref(false);
+
+const shareData = computed(() => {
+    const url = typeof window !== 'undefined' ? window.location.href : '';
+    const title = props.product?.name || 'Product';
+    const company = page.props.store_settings?.company_name || 'Skynet';
+    const text = `Check out ${title} on ${company}!`;
+    return { url, title, text };
+});
+
+const handleShare = async () => {
+    // If mobile or browser supports native Web Share API
+    if (typeof navigator !== 'undefined' && navigator.share) {
+        try {
+            await navigator.share({
+                title: shareData.value.title,
+                text: shareData.value.text,
+                url: shareData.value.url,
+            });
+            return;
+        } catch (err) {
+            // Dismissed native share
+            if (err.name === 'AbortError') return;
+        }
+    }
+    // Fallback menu on desktop
+    showShareMenu.value = !showShareMenu.value;
+};
+
+const copyShareLink = async () => {
+    try {
+        if (navigator.clipboard) {
+            await navigator.clipboard.writeText(shareData.value.url);
+        } else {
+            const tempInput = document.createElement('input');
+            tempInput.value = shareData.value.url;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempInput);
+        }
+        copiedLink.value = true;
+        toast.success('Product link copied to clipboard!');
+        setTimeout(() => {
+            copiedLink.value = false;
+        }, 2200);
+    } catch (e) {
+        toast.error('Could not copy link.');
+    }
+};
+
+const shareTo = (platform) => {
+    const url  = encodeURIComponent(shareData.value.url);
+    const text = encodeURIComponent(shareData.value.text);
+    let target = '';
+
+    switch (platform) {
+        case 'whatsapp':
+            target = `https://api.whatsapp.com/send?text=${text}%20${url}`;
+            break;
+        case 'facebook':
+            target = `https://www.facebook.com/sharer/sharer.php?u=${url}`;
+            break;
+        case 'twitter':
+            target = `https://twitter.com/intent/tweet?url=${url}&text=${text}`;
+            break;
+        case 'telegram':
+            target = `https://t.me/share/url?url=${url}&text=${text}`;
+            break;
+    }
+
+    if (target) {
+        window.open(target, '_blank', 'noopener,noreferrer,width=600,height=500');
+        showShareMenu.value = false;
+    }
+};
+
 const breadcrumbs = computed(() => {
     const crumbs = [
         { label: 'All Products', url: route('shop.index') }
@@ -379,27 +458,117 @@ const structuredData = computed(() => {
                 </div>
                 
                 <div class="w-full md:w-1/2 flex flex-col justify-center">
-                    <!-- Title + Wishlist -->
+                    <!-- Title + Actions (Share & Wishlist) -->
                     <div class="flex items-start justify-between gap-3 mb-2">
                         <h1 class="text-3xl font-bold flex-1">{{ product.name }}</h1>
 
-                        <!-- Wishlist Heart (shown when enabled) -->
-                        <button
-                            v-if="wishlistEnabled"
-                            @click="toggleWishlist"
-                            :disabled="togglingWishlist"
-                            :title="isWishlisted ? 'Remove from wishlist' : 'Save to wishlist'"
-                            class="flex-shrink-0 w-11 h-11 rounded-full border-2 flex items-center justify-center transition-all hover:scale-110 disabled:opacity-60"
-                            :class="isWishlisted
-                                ? 'border-red-400 bg-red-50 dark:bg-red-900/20'
-                                : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700'">
-                            <svg class="w-6 h-6 transition-colors"
-                                :class="isWishlisted ? 'text-red-500 fill-red-500' : 'text-gray-400 fill-none'"
-                                stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
-                            </svg>
-                        </button>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <!-- Share Button & Popover Menu -->
+                            <div class="relative">
+                                <button
+                                    type="button"
+                                    @click="handleShare"
+                                    title="Share this product"
+                                    class="w-11 h-11 rounded-full border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 flex items-center justify-center transition-all hover:scale-110 shadow-xs focus:outline-none"
+                                >
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                                    </svg>
+                                </button>
+
+                                <!-- Dropdown Backdrop -->
+                                <div
+                                    v-if="showShareMenu"
+                                    @click="showShareMenu = false"
+                                    class="fixed inset-0 z-30"
+                                ></div>
+
+                                <!-- Share Menu Popover -->
+                                <div
+                                    v-if="showShareMenu"
+                                    class="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 py-2 z-40"
+                                >
+                                    <div class="px-3 py-1.5 border-b border-gray-100 dark:border-gray-700 text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                                        Share Product
+                                    </div>
+
+                                    <!-- Copy Link -->
+                                    <button
+                                        type="button"
+                                        @click="copyShareLink"
+                                        class="w-full px-3 py-2 text-left text-xs font-semibold flex items-center gap-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition"
+                                    >
+                                        <svg v-if="!copiedLink" class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                                        </svg>
+                                        <svg v-else class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <span :class="copiedLink ? 'text-emerald-600 dark:text-emerald-400' : ''">
+                                            {{ copiedLink ? 'Copied to clipboard!' : 'Copy Link' }}
+                                        </span>
+                                    </button>
+
+                                    <!-- WhatsApp -->
+                                    <button
+                                        type="button"
+                                        @click="shareTo('whatsapp')"
+                                        class="w-full px-3 py-2 text-left text-xs font-semibold flex items-center gap-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition"
+                                    >
+                                        <span class="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[10px] font-bold">💬</span>
+                                        <span>WhatsApp</span>
+                                    </button>
+
+                                    <!-- X / Twitter -->
+                                    <button
+                                        type="button"
+                                        @click="shareTo('twitter')"
+                                        class="w-full px-3 py-2 text-left text-xs font-semibold flex items-center gap-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition"
+                                    >
+                                        <span class="w-5 h-5 rounded-full bg-black text-white flex items-center justify-center text-[10px] font-bold">𝕏</span>
+                                        <span>X (Twitter)</span>
+                                    </button>
+
+                                    <!-- Facebook -->
+                                    <button
+                                        type="button"
+                                        @click="shareTo('facebook')"
+                                        class="w-full px-3 py-2 text-left text-xs font-semibold flex items-center gap-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition"
+                                    >
+                                        <span class="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold">f</span>
+                                        <span>Facebook</span>
+                                    </button>
+
+                                    <!-- Telegram -->
+                                    <button
+                                        type="button"
+                                        @click="shareTo('telegram')"
+                                        class="w-full px-3 py-2 text-left text-xs font-semibold flex items-center gap-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition"
+                                    >
+                                        <span class="w-5 h-5 rounded-full bg-sky-500 text-white flex items-center justify-center text-[10px] font-bold">✈</span>
+                                        <span>Telegram</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Wishlist Heart (shown when enabled) -->
+                            <button
+                                v-if="wishlistEnabled"
+                                @click="toggleWishlist"
+                                :disabled="togglingWishlist"
+                                :title="isWishlisted ? 'Remove from wishlist' : 'Save to wishlist'"
+                                class="flex-shrink-0 w-11 h-11 rounded-full border-2 flex items-center justify-center transition-all hover:scale-110 disabled:opacity-60"
+                                :class="isWishlisted
+                                    ? 'border-red-400 bg-red-50 dark:bg-red-900/20'
+                                    : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700'">
+                                <svg class="w-6 h-6 transition-colors"
+                                    :class="isWishlisted ? 'text-red-500 fill-red-500' : 'text-gray-400 fill-none'"
+                                    stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+                                </svg>
+                            </button>
+                        </div>
                     </div>
 
                     <div class="mb-4 flex flex-wrap items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
@@ -540,6 +709,33 @@ const structuredData = computed(() => {
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                             {{ !isPurchasable ? 'Out of Stock' : ((availableVariants?.length > 0 && !selectedVariant) ? 'Select Option to Buy Now' : 'Buy Now') }}
                         </button>
+                    </div>
+
+                    <!-- Share Strip Below Actions -->
+                    <div class="mt-4 pt-4 border-t dark:border-gray-700/80 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500 dark:text-gray-400">
+                        <span class="font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                            <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                            </svg>
+                            Share this product:
+                        </span>
+                        <div class="flex items-center gap-3">
+                            <button @click="shareTo('whatsapp')" type="button" class="hover:text-emerald-500 transition font-medium flex items-center gap-1 cursor-pointer" title="Share on WhatsApp">
+                                💬 WhatsApp
+                            </button>
+                            <span class="text-gray-300 dark:text-gray-600">•</span>
+                            <button @click="shareTo('twitter')" type="button" class="hover:text-black dark:hover:text-white transition font-medium flex items-center gap-1 cursor-pointer" title="Post on X">
+                                𝕏 Post
+                            </button>
+                            <span class="text-gray-300 dark:text-gray-600">•</span>
+                            <button @click="shareTo('facebook')" type="button" class="hover:text-blue-600 transition font-medium flex items-center gap-1 cursor-pointer" title="Share on Facebook">
+                                Facebook
+                            </button>
+                            <span class="text-gray-300 dark:text-gray-600">•</span>
+                            <button @click="copyShareLink" type="button" class="hover:text-primary transition font-medium flex items-center gap-1 cursor-pointer" title="Copy product link">
+                                🔗 {{ copiedLink ? 'Copied!' : 'Copy Link' }}
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

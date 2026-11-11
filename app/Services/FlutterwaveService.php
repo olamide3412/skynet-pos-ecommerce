@@ -7,12 +7,26 @@ use Illuminate\Support\Facades\Http;
 class FlutterwaveService
 {
     protected $secretKey;
+    protected $secretHash;
     protected $baseUrl;
 
     public function __construct()
     {
         $this->secretKey = config('services.flutterwave.secret_key');
+        $this->secretHash = config('services.flutterwave.secret_hash');
         $this->baseUrl = config('services.flutterwave.base_url', 'https://api.flutterwave.com/v3');
+    }
+
+    /**
+     * Verify whether the incoming Flutterwave webhook signature matches the configured secret hash.
+     */
+    public function isValidWebhookSignature(?string $signature): bool
+    {
+        if (empty($this->secretHash) || empty($signature)) {
+            return false;
+        }
+
+        return hash_equals((string) $this->secretHash, (string) $signature);
     }
 
     public function initializePayment($order, $email, $name)

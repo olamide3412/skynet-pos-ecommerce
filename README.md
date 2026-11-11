@@ -22,12 +22,13 @@
    - [Order Tracking & Customer Account](#5-order-tracking--customer-account)
    - [Product Comparison & Wishlist](#6-product-comparison--wishlist)
    - [Admin Backoffice & Analytics](#7-admin-backoffice--analytics)
-7. [Store Settings Dictionary (`store_settings`)](#-store-settings-dictionary-store_settings)
-8. [Routing Map](#-routing-map)
-9. [Frontend Structure & Inertia Bridge](#-frontend-structure--inertia-bridge)
-10. [Environment Variables & Configuration Reference](#-environment-variables--configuration-reference)
-11. [Installation & Setup Guide](#-installation--setup-guide)
-12. [AI Agent Quick-Reference & Gotchas](#-ai-agent-quick-reference--gotchas)
+7. [Inventory Architecture & Stock Management (Ecommerce vs. POS)](#-inventory-architecture--stock-management-ecommerce-vs-pos)
+8. [Store Settings Dictionary (`store_settings`)](#-store-settings-dictionary-store_settings)
+9. [Routing Map](#-routing-map)
+10. [Frontend Structure & Inertia Bridge](#-frontend-structure--inertia-bridge)
+11. [Environment Variables & Configuration Reference](#-environment-variables--configuration-reference)
+12. [Installation & Setup Guide](#-installation--setup-guide)
+13. [AI Agent Quick-Reference & Gotchas](#-ai-agent-quick-reference--gotchas)
 
 ---
 
@@ -573,6 +574,47 @@ Shopper Browser           Paystack / Flutterwave Gateways              Laravel B
   Date-range filtered financial overview, calculating total revenue, average order value, daily earnings timeline, and breakdown by payment gateway method (`paystack`, `flutterwave`, `cod`).
 - **Store Configuration Hub (`/admin/settings`):**  
   Real-time editing of store branding, hero titles/subtitles, contact details, payment credentials, taxes, fees, shipping thresholds, and feature flags.
+
+---
+
+## 📦 Inventory Architecture & Stock Management (Ecommerce vs. POS)
+
+The platform operates a specialized dual-inventory model that cleanly isolates physical retail items from online warehouse goods:
+
+### 1. Dual Inventory Source Model
+
+| Attribute | Connected POS Item (`inventory_source = 'pos'`) | Ecommerce Only Item (`inventory_source = 'ecommerce'`) |
+| :--- | :--- | :--- |
+| **Physical Ownership** | Physical store branch managed via **Skynet POS**. | Online warehouse / web-exclusive catalog. |
+| **Stock & Price Control** | Automatically synced from POS (`SyncedPosItem`). In-app price and stock fields are locked. | 100% manual administrative control over price and stock counts. |
+| **Online Order Impact** | Online checkout creates an authoritative reservation on the physical POS server (`PosReservationService`). | Deducts directly from local `products.stock` in the website database. |
+| **POS Deletion Protection** | Registered with POS API deletion protection. | Unregistered and independent. |
+
+### 2. Core Operational Rules & Architectural Decisions
+
+1. **Adjustments & Purchasing Restricted to "Ecommerce Only" Products:**  
+   Manual stock quantity adjustments (damage, spoilage, audit recounts) and supplier purchase receiving must **strictly target Ecommerce Only items**. Physical POS goods must be received and adjusted directly on the physical POS machine so cash drawers, barcodes, and till receipts balance out; any web-based stock edits on POS items would be overwritten by subsequent POS sync cycles.
+2. **Dedicated Immutable Inventory Ledger (`inventory_logs`):**  
+   Tracks every stock increase or decrease across the website:
+   - **Sales (`sale`):** Customer order checkouts referencing order tracking number.
+   - **Returns / Cancellations (`cancellation`):** Order cancellation restoring inventory.
+   - **Adjustments (`adjustment`):** Codified reasons (physical recount, damaged goods, expired, theft/loss, internal marketing samples).
+   - **Purchases (`purchase`):** Supplier deliveries and warehouse restocking referencing PO number.
+3. **Isolation of POS Sync Checks from Inventory Logs:**  
+   Routine background POS availability queries remain in `pos_sync_logs` rather than flooding `inventory_logs`. This keeps the main inventory ledger focused purely on authentic business transactions, sales, adjustments, and purchases.
+4. **Cost Price Accounting on Purchase:**  
+   When receiving supplier stock, unit purchase cost automatically updates the product's `cost_price` to the **latest purchase price** to maintain accurate gross profit reporting.
+
+### 3. Catalog CSV Export & Import Specifications
+
+- **Export (`/admin/products/export`):**
+  - Columns: `ID`, `Name`, `SKU`, `Inventory Source`, `POS Item ID`, `Synced POS Item Name`, `Category`, `Brand`, `Price (NGN)`, `Cost Price (NGN)`, `Special Price (NGN)`, `Stock`, `Status`, `Is Featured`, `Variants Count`, `Variant Details`, `Created At`, `URL Key`, `Thumbnail`.
+  - **`URL Key`** and **`Thumbnail`** are positioned as the **final two columns**.
+  - When available, `Thumbnail` outputs the full public web URL (e.g. `https://yourdomain.com/storage/products/image.webp`).
+- **Import (`/admin/products/import`):**
+  - **Header Name-Based Mapping:** Columns are resolved dynamically by normalized header names (`Thumbnail`, `Image`, `URL Key`, `SKU`, etc.), making column order completely independent.
+  - **Path Normalization:** Automatically strips domain/storage prefixes (e.g., `https://.../storage/products/...` $\rightarrow$ `products/...`).
+  - **Remote Asset Ingestion:** When an external HTTP/HTTPS image URL from a supplier is provided, the importer automatically downloads and saves the image to `storage/app/public/products/` so it is permanently hosted locally.
 
 ---
 

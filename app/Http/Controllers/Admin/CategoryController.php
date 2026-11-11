@@ -17,14 +17,37 @@ class CategoryController extends Controller
         protected ImageOptimizer $imageOptimizer
     ) {}
 
-    public function index()
+    public function index(Request $request)
     {
+        $search = trim((string) $request->input('search', ''));
+
+        $query = Category::withCount('products')
+            ->with(['attributes:id,name', 'parent:id,name', 'children:id,name,parent_id']);
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('slug', 'like', "%{$search}%")
+                  ->orWhere('description', 'like', "%{$search}%")
+                  ->orWhereHas('parent', function ($pq) use ($search) {
+                      $pq->where('name', 'like', "%{$search}%");
+                  })
+                  ->orWhereHas('children', function ($cq) use ($search) {
+                      $cq->where('name', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        $categories = $query->orderBy('menu_position')
+            ->orderBy('name')
+            ->paginate(50)
+            ->withQueryString();
+
         return Inertia::render('Admin/Categories/Index', [
-            'categories' => Category::withCount('products')
-                ->with(['attributes:id,name', 'parent:id,name', 'children:id,name,parent_id'])
-                ->orderBy('menu_position')
-                ->orderBy('name')
-                ->paginate(50),
+            'categories'        => $categories,
+            'filters'           => [
+                'search' => $search,
+            ],
             'attributes'        => Attribute::orderBy('name')->get(['id', 'name', 'type']),
             'parent_categories' => Category::whereNull('parent_id')->orderBy('menu_position', 'asc')->get(['id', 'name', 'menu_position']),
         ]);

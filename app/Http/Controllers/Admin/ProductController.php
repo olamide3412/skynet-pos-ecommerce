@@ -17,6 +17,7 @@ use App\Services\ImageOptimizer;
 use App\Services\PosIntegration\PosApiClient;
 use App\Services\PosIntegration\PosCatalogService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -208,11 +209,13 @@ class ProductController extends Controller
             'image'                => 'nullable|image|max:10240',
             'images'               => 'nullable|array|max:10',
             'images.*'             => 'image|max:10240',
+            'existing_images'      => 'nullable',
+            'remove_thumbnail'     => 'nullable',
             'compress_images'      => 'nullable',
         ];
     }
 
-    private function processRequest(Request $request, array $validated): array
+    private function processRequest(Request $request, array $validated, ?Product $product = null): array
     {
         $validated['slug'] = Str::slug($validated['name']) . '-' . uniqid();
         $validated['brand_id'] = !empty($validated['brand_id']) ? (int) $validated['brand_id'] : null;
@@ -265,7 +268,19 @@ class ProductController extends Controller
             ? Str::slug($validated['url_key'])
             : Str::slug($validated['name'] ?? 'product');
 
-        if ($request->hasFile('image')) {
+        // Handle thumbnail image removal or upload
+        $removeThumbnail = filter_var($request->input('remove_thumbnail', false), FILTER_VALIDATE_BOOLEAN);
+        unset($validated['remove_thumbnail']);
+
+        if ($removeThumbnail) {
+            if ($product && $product->image && Storage::disk('public')->exists($product->image)) {
+                Storage::disk('public')->delete($product->image);
+            }
+            $validated['image'] = null;
+        } elseif ($request->hasFile('image')) {
+            if ($product && $product->image && Storage::disk('public')->exists($product->image)) {
+                Storage::disk('public')->delete($product->image);
+            }
             $validated['image'] = $this->imageOptimizer->store(
                 file: $request->file('image'),
                 directory: 'products',
@@ -276,21 +291,52 @@ class ProductController extends Controller
             unset($validated['image']);
         }
 
+        // Handle gallery images (retained existing + newly uploaded)
+        $existingImagesInput = $request->input('existing_images');
+        $hasExistingImagesField = $request->has('existing_images');
+        $retainedGallery = [];
+
+        if ($hasExistingImagesField) {
+            if (is_string($existingImagesInput)) {
+                $decoded = json_decode($existingImagesInput, true);
+                $retainedGallery = is_array($decoded) ? $decoded : [];
+            } elseif (is_array($existingImagesInput)) {
+                $retainedGallery = $existingImagesInput;
+            }
+            $retainedGallery = array_values(array_filter($retainedGallery, 'is_string'));
+        } elseif ($product && is_array($product->images)) {
+            $retainedGallery = $product->images;
+        }
+
+        // Delete any gallery images that were removed by admin
+        if ($product && is_array($product->images)) {
+            $deletedGallery = array_diff($product->images, $retainedGallery);
+            foreach ($deletedGallery as $delImg) {
+                if (!empty($delImg) && Storage::disk('public')->exists($delImg)) {
+                    Storage::disk('public')->delete($delImg);
+                }
+            }
+        }
+
+        $newGalleryPaths = [];
         if ($request->hasFile('images')) {
-            $paths = [];
             foreach ($request->file('images') as $index => $file) {
-                $gallerySlug = "{$baseSlug}-gallery-" . ($index + 1);
-                $paths[] = $this->imageOptimizer->store(
+                $gallerySlug = "{$baseSlug}-gallery-" . (count($retainedGallery) + $index + 1);
+                $newGalleryPaths[] = $this->imageOptimizer->store(
                     file: $file,
                     directory: 'products',
                     compress: $shouldCompress,
                     slug: $gallerySlug
                 );
             }
-            $validated['images'] = $paths;
+        }
+
+        if ($hasExistingImagesField || $request->hasFile('images')) {
+            $validated['images'] = array_values(array_merge($retainedGallery, $newGalleryPaths));
         } else {
             unset($validated['images']);
         }
+        unset($validated['existing_images']);
 
         return $validated;
     }
@@ -303,7 +349,7 @@ class ProductController extends Controller
         }
 
         $validated = $request->validate($this->rules());
-        $validated = $this->processRequest($request, $validated);
+        $validated = $this->processRequest($request, $validated, null);
 
         $product = Product::create($validated);
 
@@ -349,7 +395,7 @@ class ProductController extends Controller
         $oldPosItemId = $product->pos_item_id;
 
         $validated = $request->validate($this->rules(true, $product));
-        $validated = $this->processRequest($request, $validated);
+        $validated = $this->processRequest($request, $validated, $product);
 
         $product->update($validated);
 
@@ -374,6 +420,7 @@ class ProductController extends Controller
             }
         } elseif ($oldPosItemId) {
             // Unmapped or converted to Ecommerce Only
+            $product->posUnits()->delete();
             SyncedPosItem::where('pos_item_id', $oldPosItemId)->update(['mapping_status' => 'unmapped']);
             $this->apiClient->unregisterMappings([$oldPosItemId]);
             try {
@@ -788,7 +835,6 @@ class ProductController extends Controller
                 'ID',
                 'Name',
                 'SKU',
-                'URL Key',
                 'Inventory Source',
                 'POS Item ID',
                 'Synced POS Item Name',
@@ -803,6 +849,8 @@ class ProductController extends Controller
                 'Variants Count',
                 'Variant Details',
                 'Created At',
+                'URL Key',
+                'Thumbnail',
             ]);
 
             $query->chunk(200, function ($products) use ($handle) {
@@ -811,6 +859,13 @@ class ProductController extends Controller
                     $statusLabel = $p->status ? 'Active' : 'Inactive';
                     $featuredLabel = $p->is_featured ? 'Yes' : 'No';
                     $posName = $p->syncedPosItem ? $p->syncedPosItem->pos_item_name : ($p->pos_item_name_snapshot ?? '');
+
+                    $thumbnailUrl = '';
+                    if (!empty($p->image)) {
+                        $thumbnailUrl = (str_starts_with($p->image, 'http://') || str_starts_with($p->image, 'https://'))
+                            ? $p->image
+                            : asset('storage/' . ltrim($p->image, '/'));
+                    }
 
                     $variantSummary = '';
                     if ($p->variantMappings && $p->variantMappings->isNotEmpty()) {
@@ -825,7 +880,6 @@ class ProductController extends Controller
                         $p->id,
                         $p->name,
                         $p->sku ?? '',
-                        $p->url_key ?? '',
                         $invSourceLabel,
                         $p->pos_item_id ?? '',
                         $posName,
@@ -840,6 +894,8 @@ class ProductController extends Controller
                         $p->variantMappings?->count() ?? 0,
                         $variantSummary,
                         $p->created_at?->format('Y-m-d H:i:s') ?? '',
+                        $p->url_key ?? '',
+                        $thumbnailUrl,
                     ]);
                 }
             });
@@ -1030,6 +1086,33 @@ class ProductController extends Controller
             $rowUrlKey = $getVal($row, ['url_key', 'url', 'slug']);
             $existingId = $getVal($row, ['id', 'product_id']);
 
+            $rawImage = $getVal($row, ['thumbnail', 'image', 'thumbnail_url', 'image_url', 'thumbnail_path']);
+            $imagePath = null;
+            if (!empty($rawImage)) {
+                if (preg_match('#/storage/(.+)$#', $rawImage, $matches)) {
+                    $imagePath = ltrim($matches[1], '/');
+                } elseif (str_starts_with($rawImage, 'http://') || str_starts_with($rawImage, 'https://')) {
+                    // Download external image if valid, otherwise fallback to URL
+                    try {
+                        $imgResponse = Http::timeout(6)->get($rawImage);
+                        if ($imgResponse->successful()) {
+                            $parsedPath = parse_url($rawImage, PHP_URL_PATH);
+                            $ext = strtolower(pathinfo($parsedPath ?? '', PATHINFO_EXTENSION) ?: 'jpg');
+                            $cleanExt = in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif']) ? $ext : 'jpg';
+                            $imgName = 'imported-' . Str::slug($name) . '-' . Str::random(6) . '.' . $cleanExt;
+                            Storage::disk('public')->put("products/{$imgName}", $imgResponse->body());
+                            $imagePath = "products/{$imgName}";
+                        } else {
+                            $imagePath = $rawImage;
+                        }
+                    } catch (\Throwable $e) {
+                        $imagePath = $rawImage;
+                    }
+                } else {
+                    $imagePath = ltrim($rawImage, '/');
+                }
+            }
+
             // Locate existing product if any
             $product = null;
             if ($existingId && is_numeric($existingId)) {
@@ -1061,6 +1144,7 @@ class ProductController extends Controller
                     $syncedItem->update(['mapping_status' => 'mapped']);
                 }
                 if ($sku && empty($product->sku)) $product->sku = $sku;
+                if ($imagePath) $product->image = $imagePath;
                 $product->save();
                 $updatedCount++;
             } else {
@@ -1091,6 +1175,7 @@ class ProductController extends Controller
                     'pos_item_id'            => $targetSource === 'pos' ? $posItemId : null,
                     'pos_item_name_snapshot' => $syncedItem?->pos_item_name,
                     'pos_sync_status'        => $targetSource === 'pos' ? 'synced' : 'synced',
+                    'image'                  => $imagePath,
                 ]);
 
                 if ($targetSource === 'pos' && $syncedItem) {

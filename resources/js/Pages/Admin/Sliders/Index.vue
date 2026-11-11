@@ -129,6 +129,8 @@ const settingsForm = useForm({
     hero_cta_primary:     props.settings?.hero_cta_primary || 'Shop Now',
     hero_cta_secondary:   props.settings?.hero_cta_secondary || 'Explore Categories',
     hero_image:           null,
+    home_categories_title: props.settings?.home_categories_title ?? 'Shop by Category',
+    home_categories_subtitle: props.settings?.home_categories_subtitle ?? 'Explore our wide catalog by curated collections',
     feature_1_title:      props.settings?.feature_1_title || 'Secure Payments',
     feature_1_desc:       props.settings?.feature_1_desc || '100% secure checkout via Paystack & Flutterwave.',
     feature_2_title:      props.settings?.feature_2_title || 'Fast Checkout',
@@ -449,7 +451,49 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                 </div>
             </section>
 
-            <!-- ─── 5. Homepage Feature Trust Blocks (Bottom of Homepage) ─────────── -->
+            <!-- ─── 5. Homepage Categories Section Heading ───────────────────────── -->
+            <section class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-xs overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/60 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <span class="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/>
+                            </svg>
+                        </span>
+                        <div>
+                            <h2 class="text-base font-bold text-gray-900 dark:text-white">Shop by Category Section</h2>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">
+                                Heading and subtitle text displayed above the category circular grid on the homepage.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-6">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Section Title</label>
+                            <input
+                                type="text"
+                                v-model="settingsForm.home_categories_title"
+                                class="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3.5 py-2.5 text-sm text-gray-900 dark:text-white"
+                                placeholder="Shop by Category"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Section Subtitle</label>
+                            <input
+                                type="text"
+                                v-model="settingsForm.home_categories_subtitle"
+                                class="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3.5 py-2.5 text-sm text-gray-900 dark:text-white"
+                                placeholder="Explore our wide catalog by curated collections"
+                            />
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ─── 6. Homepage Feature Trust Blocks (Bottom of Homepage) ─────────── -->
             <section class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-xs overflow-hidden">
                 <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/60 flex items-center justify-between">
                     <div class="flex items-center gap-3">

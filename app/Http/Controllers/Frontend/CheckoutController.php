@@ -592,13 +592,14 @@ class CheckoutController extends Controller
 
     public function paystackWebhook(Request $request)
     {
-        $secretKey = config('services.paystack.secret_key');
-        
-        if ($request->header('x-paystack-signature') !== hash_hmac('sha512', $request->getContent(), $secretKey)) {
+        $paystack = new PaystackService();
+        $signature = $request->header('x-paystack-signature');
+
+        if (!$paystack->isValidWebhookSignature($signature, $request->getContent())) {
             Log::warning('Invalid Paystack Webhook Signature', $request->all());
             ActivityLogger::webhook("Rejected Paystack webhook: Invalid signature", [
                 'headers' => [
-                    'x-paystack-signature' => $request->header('x-paystack-signature'),
+                    'x-paystack-signature' => $signature,
                 ],
                 'payload' => $request->all(),
             ], 'Paystack Webhook');
@@ -694,10 +695,10 @@ class CheckoutController extends Controller
 
     public function flutterwaveWebhook(Request $request)
     {
-        $secretHash = config('services.flutterwave.secret_hash');
+        $flutterwave = new FlutterwaveService();
         $signature = $request->header('verif-hash');
 
-        if (!$signature || $signature !== $secretHash) {
+        if (!$flutterwave->isValidWebhookSignature($signature)) {
             Log::warning('Invalid Flutterwave Webhook Signature');
             ActivityLogger::webhook("Rejected Flutterwave webhook: Invalid signature", [
                 'received_hash' => $signature,

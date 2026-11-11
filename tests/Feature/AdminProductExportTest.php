@@ -153,5 +153,50 @@ class AdminProductExportTest extends TestCase
         $this->assertStringNotContainsString('Exclusive Online Jacket', $content);
         $this->assertStringContainsString('7773', $content);
     }
+
+    public function test_export_includes_thumbnail_column_with_full_path(): void
+    {
+        Product::create([
+            'name'             => 'Product With Thumbnail',
+            'slug'             => 'product-with-thumbnail',
+            'url_key'          => 'product-with-thumbnail',
+            'product_number'   => 'THUMB-001',
+            'price'            => 10000,
+            'category_id'      => $this->category->id,
+            'status'           => true,
+            'stock'            => 12,
+            'image'            => 'products/sample-thumb.webp',
+            'inventory_source' => 'ecommerce',
+        ]);
+
+        Product::create([
+            'name'             => 'Product Without Thumbnail',
+            'slug'             => 'product-without-thumbnail',
+            'url_key'          => 'product-without-thumbnail',
+            'product_number'   => 'THUMB-002',
+            'price'            => 5000,
+            'category_id'      => $this->category->id,
+            'status'           => true,
+            'stock'            => 4,
+            'image'            => null,
+            'inventory_source' => 'ecommerce',
+        ]);
+
+        $response = $this->actingAs($this->admin, 'web')
+            ->get(route('admin.products.export', ['source' => 'all']));
+
+        $response->assertStatus(200);
+        $content = $response->streamedContent();
+
+        // Ensure header contains Thumbnail and URL Key as the last columns
+        $lines = explode("\n", trim($content));
+        $header = str_getcsv($lines[0]);
+        $this->assertEquals('URL Key', $header[count($header) - 2]);
+        $this->assertEquals('Thumbnail', $header[count($header) - 1]);
+
+        // Ensure full path is generated for the product with thumbnail
+        $expectedUrl = asset('storage/products/sample-thumb.webp');
+        $this->assertStringContainsString($expectedUrl, $content);
+    }
 }
 

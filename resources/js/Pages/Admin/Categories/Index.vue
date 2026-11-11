@@ -1,5 +1,5 @@
 <script setup>
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import AdminLayout from '@/Layouts/AdminLayout.vue';
 import Pagination from '@/Components/Pagination.vue';
 import { ref, computed, nextTick, watch } from 'vue';
@@ -10,7 +10,32 @@ const props = defineProps({
     categories:        Object,
     attributes:        Array,
     parent_categories: Array,
+    filters:           Object,
 });
+
+const search = ref(props.filters?.search || '');
+let searchTimeout = null;
+
+const applySearch = () => {
+    router.get(
+        route('admin.categories.index'),
+        {
+            search: search.value || undefined,
+        },
+        { preserveState: true, preserveScroll: true, replace: true }
+    );
+};
+
+watch(search, (newVal, oldVal) => {
+    if (newVal === oldVal) return;
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(applySearch, 350);
+});
+
+const clearSearch = () => {
+    search.value = '';
+    applySearch();
+};
 
 const generateSlug = (text) => {
     return text.toString().toLowerCase()
@@ -30,9 +55,23 @@ const handleSlugInput = () => {
 const activeTab = ref('parents');   // 'parents' | 'subcategories'
 const showForm  = ref(false);       // form panel toggle
 
-// ── Computed splits ────────────────────────────────────────────
-const parentRows = computed(() => props.categories?.data?.filter(c => !c.parent_id) ?? []);
-const subRows    = computed(() => props.categories?.data?.filter(c =>  c.parent_id) ?? []);
+// ── Filtered & Computed splits ─────────────────────────────────
+const filteredCategories = computed(() => {
+    const list = props.categories?.data ?? [];
+    const q = search.value.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter(c => {
+        const name = (c.name || '').toLowerCase();
+        const slug = (c.slug || '').toLowerCase();
+        const desc = (c.description || '').toLowerCase();
+        const parentName = (c.parent?.name || '').toLowerCase();
+        const childMatch = (c.children || []).some(ch => (ch.name || '').toLowerCase().includes(q));
+        return name.includes(q) || slug.includes(q) || desc.includes(q) || parentName.includes(q) || childMatch;
+    });
+});
+
+const parentRows = computed(() => filteredCategories.value.filter(c => !c.parent_id));
+const subRows    = computed(() => filteredCategories.value.filter(c =>  c.parent_id));
 
 // ── Form state ─────────────────────────────────────────────────
 const isEditing             = ref(false);
@@ -246,6 +285,40 @@ const toggleVisibility = (cat) => {
                 </div>
             </div>
 
+            <!-- ── Search & Filter Bar ──────────────────────── -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl border dark:border-gray-700 p-3 mb-5 shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                <div class="relative flex-1">
+                    <input
+                        v-model="search"
+                        type="text"
+                        placeholder="Search categories & subcategories by name, slug, description, or parent..."
+                        class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm pl-9 pr-9 py-2 focus:ring-primary focus:border-primary shadow-xs"
+                    />
+                    <svg class="w-4 h-4 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <button
+                        v-if="search"
+                        @click="clearSearch"
+                        type="button"
+                        class="absolute right-2.5 top-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-0.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-600 transition"
+                        title="Clear search"
+                    >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                <div v-if="search" class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 shrink-0">
+                    <span class="bg-primary/10 text-primary font-semibold px-2.5 py-1 rounded-md">
+                        {{ parentRows.length }} parent{{ parentRows.length === 1 ? '' : 's' }}, {{ subRows.length }} subcategor{{ subRows.length === 1 ? 'y' : 'ies' }}
+                    </span>
+                    <button @click="clearSearch" class="text-xs text-red-500 hover:underline font-semibold cursor-pointer">
+                        Clear
+                    </button>
+                </div>
+            </div>
+
             <!-- ── Tabs ─────────────────────────────────────── -->
             <div class="flex gap-0 border-b dark:border-gray-700">
                 <button @click="switchTab('parents')"
@@ -369,12 +442,21 @@ const toggleVisibility = (cat) => {
                             </tr>
                             <tr v-if="!parentRows.length">
                                 <td colspan="6" class="px-4 py-14 text-center">
-                                    <div class="text-4xl mb-3">📁</div>
-                                    <p class="text-gray-500 dark:text-gray-400 font-medium">No parent categories yet.</p>
-                                    <button @click="openNewForm"
-                                        class="mt-3 text-sm text-primary hover:underline font-semibold">
-                                        + Add your first category
-                                    </button>
+                                    <template v-if="search">
+                                        <div class="text-4xl mb-3">🔍</div>
+                                        <p class="text-gray-500 dark:text-gray-400 font-medium">No parent categories found matching "{{ search }}".</p>
+                                        <button @click="clearSearch" class="mt-2 text-xs font-semibold text-primary hover:underline">
+                                            Clear search filter
+                                        </button>
+                                    </template>
+                                    <template v-else>
+                                        <div class="text-4xl mb-3">📁</div>
+                                        <p class="text-gray-500 dark:text-gray-400 font-medium">No parent categories yet.</p>
+                                        <button @click="openNewForm"
+                                            class="mt-3 text-sm text-primary hover:underline font-semibold">
+                                            + Add your first category
+                                        </button>
+                                    </template>
                                 </td>
                             </tr>
                         </tbody>
@@ -447,18 +529,27 @@ const toggleVisibility = (cat) => {
 
                     <!-- Empty state -->
                     <div v-else class="px-4 py-14 text-center">
-                        <div class="text-4xl mb-3">📂</div>
-                        <p class="text-gray-500 dark:text-gray-400 font-medium">No subcategories yet.</p>
-                        <p class="text-xs text-gray-400 mt-1">
-                            <span v-if="!parent_categories?.length" class="text-amber-600 dark:text-amber-400">
-                                ⚠️ Create a parent category first.
-                            </span>
-                            <template v-else>
-                                <button @click="openNewForm" class="text-secondary hover:underline font-semibold">
-                                    + Add your first subcategory
-                                </button>
-                            </template>
-                        </p>
+                        <template v-if="search">
+                            <div class="text-4xl mb-3">🔍</div>
+                            <p class="text-gray-500 dark:text-gray-400 font-medium">No subcategories found matching "{{ search }}".</p>
+                            <button @click="clearSearch" class="mt-2 text-xs font-semibold text-secondary hover:underline">
+                                Clear search filter
+                            </button>
+                        </template>
+                        <template v-else>
+                            <div class="text-4xl mb-3">📂</div>
+                            <p class="text-gray-500 dark:text-gray-400 font-medium">No subcategories yet.</p>
+                            <p class="text-xs text-gray-400 mt-1">
+                                <span v-if="!parent_categories?.length" class="text-amber-600 dark:text-amber-400">
+                                    ⚠️ Create a parent category first.
+                                </span>
+                                <template v-else>
+                                    <button @click="openNewForm" class="text-secondary hover:underline font-semibold">
+                                        + Add your first subcategory
+                                    </button>
+                                </template>
+                            </p>
+                        </template>
                     </div>
                 </div>
 

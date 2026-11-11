@@ -739,7 +739,7 @@ const seoDescription = computed(() => {
                 No products found. <button @click="search=''; category=''; brand=''" class="text-primary underline ml-1 font-semibold">Clear filters</button>
             </div>
 
-            <Pagination v-if="products.data && products.data.length > 0" :paginator="products" class="mt-8 mb-4 border-t dark:border-gray-700 pt-6" />
+            <Pagination v-if="products.data && products.data.length > 0" :paginator="products" class="mt-8 mb-24 sm:mb-6 border-t dark:border-gray-700 pt-6" />
                 </div> <!-- End Main Content -->
             </div> <!-- End Flex Container -->
         </div>

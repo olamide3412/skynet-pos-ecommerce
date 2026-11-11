@@ -133,5 +133,31 @@ class AdminProductImportTest extends TestCase
         expect(session('warning'))->toContain('1 POS item(s) skipped');
         expect(Product::where('name', 'Nonexistent Branch Item')->exists())->toBeFalse();
     }
+
+    public function test_admin_can_import_products_with_thumbnail_column(): void
+    {
+        $csvContent = "Name,Price,Stock,Category,Thumbnail,Inventory Source\n"
+                    . "Item With Storage URL,3500,10,Groceries,http://localhost/storage/products/test-storage.webp,ecommerce\n"
+                    . "Item With Relative Path,4500,20,Groceries,products/test-relative.webp,ecommerce\n";
+
+        $file = UploadedFile::fake()->createWithContent('products_with_thumb.csv', $csvContent);
+
+        $response = $this->actingAs($this->admin, 'web')
+            ->post(route('admin.products.import'), [
+                'file' => $file,
+                'import_mode' => 'ecommerce',
+            ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHas('success');
+
+        $item1 = Product::where('name', 'Item With Storage URL')->first();
+        expect($item1)->not->toBeNull();
+        expect($item1->image)->toBe('products/test-storage.webp');
+
+        $item2 = Product::where('name', 'Item With Relative Path')->first();
+        expect($item2)->not->toBeNull();
+        expect($item2->image)->toBe('products/test-relative.webp');
+    }
 }
 

@@ -15,6 +15,20 @@ class PaystackService
         $this->baseUrl = config('services.paystack.base_url', 'https://api.paystack.co');
     }
 
+    /**
+     * Verify whether the incoming Paystack webhook signature matches the computed HMAC-SHA512.
+     */
+    public function isValidWebhookSignature(?string $signature, string $payload): bool
+    {
+        if (empty($this->secretKey) || empty($signature)) {
+            return false;
+        }
+
+        $computedSignature = hash_hmac('sha512', $payload, (string) $this->secretKey);
+
+        return hash_equals($computedSignature, (string) $signature);
+    }
+
     public function initializePayment($order, $email)
     {
         $response = Http::withToken($this->secretKey)

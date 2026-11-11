@@ -131,7 +131,9 @@ const isFormVisible = ref(false);
 const isEditing     = ref(false);
 const editId        = ref(null);
 const imagePreview  = ref(null);
-const galleryPreviews = ref([]);
+const galleryItems  = ref([]);
+const thumbnailInputRef = ref(null);
+const galleryInputRef   = ref(null);
 
 const form = useForm({
     _method:   'POST',
@@ -171,6 +173,7 @@ const form = useForm({
     // Media & Variants
     image:   null,
     images:  [],
+    remove_thumbnail: false,
     compress_images: true,
     variants: [],
     attributes: {},
@@ -436,14 +439,43 @@ watch(() => form.name, (val) => {
     }
 });
 
-const handleImageUpload  = (e) => {
-    form.image = e.target.files[0];
-    if (form.image) imagePreview.value = URL.createObjectURL(form.image);
+const removeThumbnail = () => {
+    imagePreview.value = null;
+    form.image = null;
+    form.remove_thumbnail = true;
+    if (thumbnailInputRef.value) thumbnailInputRef.value.value = '';
 };
+
+const handleImageUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+        form.image = file;
+        form.remove_thumbnail = false;
+        imagePreview.value = URL.createObjectURL(file);
+    }
+};
+
 const handleGalleryUpload = (e) => {
-    const files = Array.from(e.target.files).slice(0, 10);
-    form.images = files;
-    galleryPreviews.value = files.map(f => URL.createObjectURL(f));
+    const files = Array.from(e.target.files || []);
+    const remainingSlots = 10 - galleryItems.value.length;
+    if (remainingSlots <= 0) {
+        toast.warning('Maximum 10 gallery images allowed.');
+        if (e.target) e.target.value = '';
+        return;
+    }
+    const toAdd = files.slice(0, remainingSlots);
+    for (const f of toAdd) {
+        galleryItems.value.push({
+            type: 'new',
+            file: f,
+            url: URL.createObjectURL(f),
+        });
+    }
+    if (e.target) e.target.value = '';
+};
+
+const removeGalleryItem = (index) => {
+    galleryItems.value.splice(index, 1);
 };
 
 const addVariant = () => form.variants.push({
@@ -581,9 +613,19 @@ const save = () => {
         ? route('admin.products.update', editId.value)
         : route('admin.products.store');
 
+    const existingImages = galleryItems.value
+        .filter(item => item.type === 'existing')
+        .map(item => item.path);
+    const newFiles = galleryItems.value
+        .filter(item => item.type === 'new' && item.file)
+        .map(item => item.file);
+
     form.transform(data => ({
         ...data,
+        remove_thumbnail: data.remove_thumbnail ? 1 : 0,
         compress_images: data.compress_images ? 1 : 0,
+        existing_images: JSON.stringify(existingImages),
+        images: newFiles,
         variants: JSON.stringify(data.variants),
         attributes: JSON.stringify(data.attributes),
         related_products: JSON.stringify(data.related_products),
@@ -674,8 +716,17 @@ const openEditForm = (p) => {
         }));
     }
     form.attributes        = p.attributes || {};
+    form.remove_thumbnail  = false;
     imagePreview.value     = p.image ? '/storage/' + p.image : null;
-    if (p.images?.length) galleryPreviews.value = p.images.map(img => '/storage/' + img);
+    if (p.images?.length) {
+        galleryItems.value = p.images.map(img => ({
+            type: 'existing',
+            path: img,
+            url: '/storage/' + img,
+        }));
+    } else {
+        galleryItems.value = [];
+    }
     isFormVisible.value    = true;
     // Load thumbnails for already-selected related products, then init search
     loadSelectedRelated(form.related_products).then(() => initRelatedSearch());
@@ -695,7 +746,12 @@ const resetFormState = () => {
     quickBrandName.value = '';
     openVariantDropdownIndex.value = null;
     variantPosSearchQuery.value = '';
-    editId.value = null; imagePreview.value = null; galleryPreviews.value = [];
+    editId.value = null;
+    imagePreview.value = null;
+    form.remove_thumbnail = false;
+    galleryItems.value = [];
+    if (thumbnailInputRef.value) thumbnailInputRef.value.value = '';
+    if (galleryInputRef.value) galleryInputRef.value.value = '';
     form.status = true; form.visible_individually = true; form.show_stock_level = true;
     form.compress_images = true;
     form.meta_title = '';
@@ -764,7 +820,7 @@ const generateAiDescription = async (type = 'short') => {
                         fullDescQuillRef.value.pasteHTML(res.data.content || '');
                     }
                 });
-                toast.success('Generated rich full description successfully!');
+                toast.success('Generated AI description successfully!');
             } else if (type === 'seo') {
                 if (res.data.seo) {
                     form.meta_title = res.data.seo.meta_title || '';
@@ -1613,11 +1669,11 @@ const submitBulkDelete = () => {
                                         @click="generateAiDescription('full')"
                                         :disabled="aiGenerating.full"
                                         class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800 transition disabled:opacity-50"
-                                        title="Generate rich HTML formatted overview, key features and specs using AI"
+                                        title="Generate product description and details using AI"
                                     >
                                         <svg v-if="aiGenerating.full" class="animate-spin h-3.5 w-3.5 text-purple-600" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
                                         <span v-else>✨</span>
-                                        <span>{{ aiGenerating.full ? 'Generating HTML...' : 'AI Generate Rich HTML' }}</span>
+                                        <span>{{ aiGenerating.full ? 'Generating Description...' : 'Generate AI Description' }}</span>
                                     </button>
                                 </div>
                                 <div class="bg-white dark:bg-gray-700 rounded-lg overflow-hidden border border-gray-300 dark:border-gray-600">
@@ -2505,27 +2561,75 @@ const submitBulkDelete = () => {
 
                         <!-- Thumbnail -->
                         <div class="mb-5">
-                            <label class="block text-sm font-semibold mb-2">Thumbnail Image</label>
-                            <label class="relative block w-full aspect-square bg-gray-50 dark:bg-gray-900 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer overflow-hidden group">
-                                <input type="file" @change="handleImageUpload" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer z-10"/>
-                                <img v-if="imagePreview" :src="imagePreview" class="absolute inset-0 w-full h-full object-cover"/>
-                                <div v-else class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 group-hover:text-primary transition">
-                                    <svg class="w-9 h-9 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-                                    <span class="text-sm font-medium">Upload Thumbnail</span>
-                                </div>
-                                <div v-if="imagePreview" class="absolute bottom-0 inset-x-0 bg-black/50 text-white text-xs text-center py-1.5 opacity-0 group-hover:opacity-100 transition">Change</div>
-                            </label>
+                            <div class="flex items-center justify-between mb-2">
+                                <label class="block text-sm font-semibold">Thumbnail Image</label>
+                                <button
+                                    v-if="imagePreview"
+                                    type="button"
+                                    @click="removeThumbnail"
+                                    class="text-xs font-semibold text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 flex items-center gap-1 transition"
+                                >
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                    Remove
+                                </button>
+                            </div>
+                            <div class="relative block w-full aspect-square bg-gray-50 dark:bg-gray-900 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl overflow-hidden group">
+                                <!-- Floating Red X Button on Image -->
+                                <button
+                                    v-if="imagePreview"
+                                    type="button"
+                                    @click.stop.prevent="removeThumbnail"
+                                    class="absolute top-2.5 right-2.5 z-20 w-7 h-7 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center shadow-lg transition transform hover:scale-110 focus:outline-none"
+                                    title="Remove thumbnail image"
+                                >
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/>
+                                    </svg>
+                                </button>
+
+                                <label class="block w-full h-full cursor-pointer">
+                                    <input ref="thumbnailInputRef" type="file" @change="handleImageUpload" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer z-10"/>
+                                    <img v-if="imagePreview" :src="imagePreview" class="absolute inset-0 w-full h-full object-cover"/>
+                                    <div v-else class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 group-hover:text-primary transition">
+                                        <svg class="w-9 h-9 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                                        <span class="text-sm font-medium">Upload Thumbnail</span>
+                                    </div>
+                                    <div v-if="imagePreview" class="absolute bottom-0 inset-x-0 bg-black/60 text-white text-xs text-center py-1.5 opacity-0 group-hover:opacity-100 transition z-10 pointer-events-none">Change</div>
+                                </label>
+                            </div>
                         </div>
 
                         <!-- Gallery -->
                         <div>
-                            <label class="block text-sm font-semibold mb-2">Gallery Images <span class="font-normal text-gray-400">(max 10)</span></label>
-                            <input type="file" multiple @change="handleGalleryUpload" accept="image/*"
-                                class="w-full text-sm file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:font-semibold file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200 dark:file:bg-gray-700 dark:file:text-white cursor-pointer"/>
-                            <div v-if="galleryPreviews.length" class="mt-3 grid grid-cols-4 gap-1.5">
-                                <div v-for="(prev, i) in galleryPreviews" :key="i"
-                                    class="aspect-square rounded-lg overflow-hidden border dark:border-gray-600 bg-gray-100 dark:bg-gray-700">
-                                    <img :src="prev" class="w-full h-full object-cover"/>
+                            <div class="flex items-center justify-between mb-2">
+                                <label class="block text-sm font-semibold">Gallery Images <span class="font-normal text-gray-400">({{ galleryItems.length }}/10)</span></label>
+                                <button
+                                    v-if="galleryItems.length"
+                                    type="button"
+                                    @click="galleryItems = []"
+                                    class="text-xs font-semibold text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 flex items-center gap-1 transition"
+                                >
+                                    Clear all
+                                </button>
+                            </div>
+                            <input ref="galleryInputRef" type="file" multiple @change="handleGalleryUpload" accept="image/*"
+                                :disabled="galleryItems.length >= 10"
+                                class="w-full text-sm file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:font-semibold file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200 dark:file:bg-gray-700 dark:file:text-white cursor-pointer disabled:opacity-50"/>
+                            <div v-if="galleryItems.length" class="mt-3 grid grid-cols-4 gap-2">
+                                <div v-for="(item, i) in galleryItems" :key="i"
+                                    class="group relative aspect-square rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 shadow-xs">
+                                    <img :src="item.url" class="w-full h-full object-cover"/>
+                                    <!-- Floating Red X Button on Gallery Item -->
+                                    <button
+                                        type="button"
+                                        @click.stop.prevent="removeGalleryItem(i)"
+                                        class="absolute top-1 right-1 z-10 w-5 h-5 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center shadow transition transform hover:scale-110 focus:outline-none"
+                                        title="Remove image"
+                                    >
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/>
+                                        </svg>
+                                    </button>
                                 </div>
                             </div>
                         </div>
