@@ -68,7 +68,9 @@ class ProductController extends Controller
         }
 
         if ($invSource = $request->input('inventory_source')) {
-            $query->where('inventory_source', $invSource);
+            if (in_array($invSource, ['ecommerce', 'pos'])) {
+                $query->where('inventory_source', $invSource);
+            }
         }
 
         $sort = $request->input('sort', 'latest');
@@ -230,6 +232,9 @@ class ProductController extends Controller
             $syncedItem = SyncedPosItem::where('pos_item_id', $validated['pos_item_id'])->first();
             if ($syncedItem) {
                 $validated['price'] = $syncedItem->standard_price;
+                if ($syncedItem->buying_price !== null) {
+                    $validated['cost_price'] = $syncedItem->buying_price;
+                }
                 $validated['stock'] = (int) floor($syncedItem->effective_availability);
                 $validated['pos_item_name_snapshot'] = $syncedItem->pos_item_name;
                 $validated['pos_base_unit_name'] = $syncedItem->base_unit_name;
@@ -657,7 +662,7 @@ class ProductController extends Controller
         $validated = $request->validate([
             'ids'             => 'required|array|min:1',
             'ids.*'           => 'integer|exists:products,id',
-            'action'          => 'required|string|in:update_category,update_brand,update_status,update_featured,update_new,update_prices,delete',
+            'action'          => 'required|string|in:update_category,update_brand,update_status,update_featured,update_new,update_prices,delete,move_to_ecommerce',
             'category_id'     => 'nullable|required_if:action,update_category|exists:categories,id',
             'brand_id'        => 'nullable|exists:brands,id',
             'status'          => 'nullable|boolean',
@@ -723,6 +728,51 @@ class ProductController extends Controller
                     return back()->with('success', "Updated prices for {$count} product(s).");
                 }
                 break;
+
+            case 'move_to_ecommerce':
+                $posProducts = Product::whereIn('id', $ids)
+                    ->where('inventory_source', 'pos')
+                    ->get();
+
+                if ($posProducts->isEmpty()) {
+                    return back()->with('error', 'None of the selected products are POS-linked items.');
+                }
+
+                $posItemIds = $posProducts->pluck('pos_item_id')->filter()->values()->all();
+                $variantPosItemIds = ProductVariantMapping::whereIn('product_id', $posProducts->pluck('id'))->pluck('pos_item_id')->filter()->values()->all();
+                $allPosItemIds = array_values(array_unique(array_merge($posItemIds, $variantPosItemIds)));
+
+                foreach ($posProducts as $product) {
+                    $product->posUnits()->delete();
+                    $product->update([
+                        'inventory_source' => 'ecommerce',
+                        'pos_item_id'      => null,
+                        'pos_sync_status'  => 'synced',
+                    ]);
+                }
+
+                if (!empty($allPosItemIds)) {
+                    SyncedPosItem::whereIn('pos_item_id', $allPosItemIds)->update(['mapping_status' => 'unmapped']);
+                    try {
+                        $this->apiClient->unregisterMappings($allPosItemIds);
+                    } catch (\Throwable $e) {
+                        \Illuminate\Support\Facades\Log::warning("Failed to unregister mappings during bulk move to ecommerce: {$e->getMessage()}");
+                    }
+                }
+
+                try {
+                    $this->catalogService->reconcileAllMappings();
+                } catch (\Throwable $e) {
+                    // Non-blocking reconciliation
+                }
+
+                $convertedCount = $posProducts->count();
+                ActivityLogger::product("Bulk moved {$convertedCount} POS product(s) to Ecommerce Only", [
+                    'ids' => $posProducts->pluck('id')->all(),
+                    'pos_item_ids' => $allPosItemIds,
+                ]);
+
+                return back()->with('success', "Successfully moved {$convertedCount} POS product(s) to Ecommerce Only and released POS locks.");
 
             case 'delete':
                 $products = Product::whereIn('id', $ids)->get();

@@ -39,6 +39,7 @@ const search = ref(props.filters?.search || '');
 const filterCategory = ref(props.filters?.category_id || '');
 const filterBrand = ref(props.filters?.brand_id || '');
 const filterStatus = ref(props.filters?.status || '');
+const filterInventorySource = ref(props.filters?.inventory_source || '');
 const filterSort = ref(props.filters?.sort || 'latest');
 const perPage = ref(props.filters?.per_page || '25');
 
@@ -48,18 +49,20 @@ const applyFilters = debounce(() => {
         category_id: filterCategory.value || undefined,
         brand_id: filterBrand.value || undefined,
         status: filterStatus.value || undefined,
+        inventory_source: filterInventorySource.value || undefined,
         sort: filterSort.value !== 'latest' ? filterSort.value : undefined,
         per_page: perPage.value !== '25' ? perPage.value : undefined,
     }, { preserveState: true, replace: true });
 }, 300);
 
-watch([search, filterCategory, filterBrand, filterStatus, filterSort, perPage], applyFilters);
+watch([search, filterCategory, filterBrand, filterStatus, filterInventorySource, filterSort, perPage], applyFilters);
 
 const clearFilters = () => {
     search.value = '';
     filterCategory.value = '';
     filterBrand.value = '';
     filterStatus.value = '';
+    filterInventorySource.value = '';
     filterSort.value = 'latest';
     perPage.value = '25';
 };
@@ -681,7 +684,7 @@ const openEditForm = (p) => {
     form.meta_description  = p.meta_description || '';
     form.meta_keywords     = p.meta_keywords || '';
     form.price             = p.price;
-    form.cost_price        = p.cost_price || '';
+    form.cost_price        = (p.cost_price !== null && p.cost_price !== undefined && p.cost_price !== '') ? p.cost_price : (p.synced_pos_item?.buying_price ?? '');
     form.discount_price    = p.discount_price || '';
     form.special_price     = p.special_price || '';
     form.special_price_from = p.special_price_from ? p.special_price_from.substring(0,10) : '';
@@ -985,6 +988,12 @@ const bulkPriceType = ref('percentage');
 const bulkPriceAmount = ref('');
 
 const showBulkDeleteModal = ref(false);
+const showBulkMoveToEcommerceModal = ref(false);
+
+const selectedPosProducts = computed(() => {
+    const list = props.products.data || [];
+    return list.filter(p => selectedIds.value.includes(p.id) && p.inventory_source === 'pos');
+});
 
 const executeBulkAction = (action, extraData = {}) => {
     if (!selectedIds.value.length) return;
@@ -1001,6 +1010,7 @@ const executeBulkAction = (action, extraData = {}) => {
             showBulkBrandModal.value = false;
             showBulkPriceModal.value = false;
             showBulkDeleteModal.value = false;
+            showBulkMoveToEcommerceModal.value = false;
         },
         onFinish: () => {
             bulkProcessing.value = false;
@@ -1028,6 +1038,10 @@ const submitBulkPrice = () => {
 
 const submitBulkDelete = () => {
     executeBulkAction('delete');
+};
+
+const submitBulkMoveToEcommerce = () => {
+    executeBulkAction('move_to_ecommerce');
 };
 </script>
 
@@ -1193,6 +1207,16 @@ const submitBulkDelete = () => {
                     </select>
                 </div>
 
+                <div class="w-full sm:w-auto min-w-[160px]">
+                    <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Source</label>
+                    <select v-model="filterInventorySource" 
+                        class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary focus:border-primary">
+                        <option value="">All Sources (Both)</option>
+                        <option value="ecommerce">Ecommerce Only</option>
+                        <option value="pos">POS Branch Items</option>
+                    </select>
+                </div>
+
                 <div class="w-full sm:w-auto min-w-[170px]">
                     <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Sort By</label>
                     <select v-model="filterSort" 
@@ -1219,7 +1243,7 @@ const submitBulkDelete = () => {
                     </select>
                 </div>
 
-                <div v-if="search || filterCategory || filterBrand || filterStatus || filterSort !== 'latest' || perPage !== '25'">
+                <div v-if="search || filterCategory || filterBrand || filterStatus || filterInventorySource || filterSort !== 'latest' || perPage !== '25'">
                     <button @click="clearFilters" class="px-4 py-2 text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition h-[38px]">
                         Clear
                     </button>
@@ -1327,6 +1351,23 @@ const submitBulkDelete = () => {
                             class="px-3 py-1.5 bg-white dark:bg-gray-800 hover:bg-secondary-soft text-secondary rounded-lg text-xs font-semibold border border-secondary-soft transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
                         >
                             ₦ Adjust Prices
+                        </button>
+
+                        <!-- Move to Ecommerce (Only enabled when selected POS items > 0) -->
+                        <button
+                            type="button"
+                            @click="showBulkMoveToEcommerceModal = true"
+                            :disabled="bulkProcessing || selectedPosProducts.length === 0"
+                            :class="selectedPosProducts.length > 0 
+                                ? 'bg-white dark:bg-gray-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800 cursor-pointer shadow-xs' 
+                                : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-60'"
+                            class="px-3 py-1.5 rounded-lg text-xs font-semibold border transition flex items-center gap-1.5"
+                            :title="selectedPosProducts.length === 0 ? 'Only POS-linked items can be moved to Ecommerce' : 'Move selected POS items to Ecommerce Only'"
+                        >
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                            </svg>
+                            Move to Ecommerce
                         </button>
 
                         <!-- Delete Selected -->
@@ -1963,13 +2004,24 @@ const submitBulkDelete = () => {
                                 <p v-if="form.errors.discount_price" class="text-red-500 text-xs mt-1">{{ form.errors.discount_price }}</p>
                             </div>
                             <div>
-                                <label class="block text-sm font-semibold mb-1">
-                                    Cost Price (₦)
-                                    <span class="text-xs font-normal text-gray-400 ml-1">(Internal COGS)</span>
+                                <label class="block text-sm font-semibold mb-1 flex items-center justify-between">
+                                    <span>Cost Price (₦) <span class="text-xs font-normal text-gray-400 ml-1">(Internal COGS)</span></span>
+                                    <span v-if="form.inventory_source === 'pos'" class="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded">Synced from POS</span>
                                 </label>
-                                <input v-model="form.cost_price" type="number" step="0.01" min="0" placeholder="e.g. 5000"
-                                    class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-primary shadow-sm"/>
+                                <input
+                                    v-model="form.cost_price"
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    placeholder="e.g. 5000"
+                                    :readonly="form.inventory_source === 'pos'"
+                                    :class="form.inventory_source === 'pos' ? 'bg-gray-100 dark:bg-gray-800/80 cursor-not-allowed text-gray-500 font-mono' : ''"
+                                    class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-primary shadow-sm"
+                                />
                                 <p v-if="form.errors.cost_price" class="text-red-500 text-xs mt-1">{{ form.errors.cost_price }}</p>
+                                <p v-if="form.inventory_source === 'pos'" class="text-[11px] text-gray-400 mt-1">
+                                    Buying cost synced from POS branch inventory. Read-only.
+                                </p>
                             </div>
                             <div>
                                 <label class="block text-sm font-semibold mb-1 flex items-center justify-between">
@@ -2864,6 +2916,62 @@ const submitBulkDelete = () => {
                         >
                             <svg v-if="bulkProcessing" class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
                             Yes, Delete {{ selectedIds.length }} Product(s)
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Bulk Move to Ecommerce Modal ───────────────────────── -->
+            <div v-if="showBulkMoveToEcommerceModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-lg w-full p-6 border dark:border-gray-700 space-y-4">
+                    <div class="flex items-center justify-between pb-3 border-b dark:border-gray-700">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xl">📦</span>
+                            <h3 class="font-bold text-lg text-gray-900 dark:text-white">Move to Ecommerce Only</h3>
+                        </div>
+                        <button @click="showBulkMoveToEcommerceModal = false" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-lg">✕</button>
+                    </div>
+
+                    <p class="text-sm text-gray-600 dark:text-gray-300">
+                        Are you sure you want to move <span class="font-bold text-primary">{{ selectedPosProducts.length }}</span> POS-linked product(s) to Ecommerce Only?
+                    </p>
+
+                    <div v-if="selectedIds.length > selectedPosProducts.length" class="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 p-3 rounded-lg border border-amber-200 dark:border-amber-900/60 flex items-start gap-2">
+                        <span>ℹ️</span>
+                        <span>You selected {{ selectedIds.length }} total products. The <strong>{{ selectedIds.length - selectedPosProducts.length }}</strong> product(s) already marked as Ecommerce Only will remain unaffected.</span>
+                    </div>
+
+                    <div class="space-y-2.5 text-xs text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-700/50 p-3.5 rounded-xl border border-gray-200 dark:border-gray-700">
+                        <div class="flex items-start gap-2">
+                            <span class="text-emerald-500 font-bold">✓</span>
+                            <span><strong>Price & Stock Retained:</strong> Current selling price, cost price, and stock levels will be retained as baseline numbers and become directly editable here.</span>
+                        </div>
+                        <div class="flex items-start gap-2">
+                            <span class="text-indigo-500 font-bold">✓</span>
+                            <span><strong>POS Sync Disconnected:</strong> These items will no longer receive price or inventory overrides from POS branch sync.</span>
+                        </div>
+                        <div class="flex items-start gap-2">
+                            <span class="text-purple-500 font-bold">✓</span>
+                            <span><strong>POS Lock Released:</strong> Deletion protection mappings on the POS branch app will be unmapped and released immediately.</span>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-end gap-2.5 pt-3 border-t dark:border-gray-700">
+                        <button
+                            type="button"
+                            @click="showBulkMoveToEcommerceModal = false"
+                            class="px-4 py-2 rounded-lg border dark:border-gray-600 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition cursor-pointer"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            @click="submitBulkMoveToEcommerce"
+                            :disabled="bulkProcessing || selectedPosProducts.length === 0"
+                            class="px-5 py-2 rounded-lg bg-primary hover:bg-primary-dark text-white text-sm font-bold shadow transition disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                        >
+                            <svg v-if="bulkProcessing" class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+                            Yes, Move {{ selectedPosProducts.length }} Product(s)
                         </button>
                     </div>
                 </div>

@@ -175,4 +175,53 @@ class AdminProductSortTest extends TestCase
         $this->assertNotFalse($zebraPos);
         $this->assertTrue($antPos < $zebraPos, 'Ant should appear before Zebra when sorted by name_asc');
     }
+
+    public function test_can_filter_products_by_inventory_source(): void
+    {
+        Product::create([
+            'name'             => 'Ecommerce Product A',
+            'slug'             => 'ecommerce-product-a',
+            'url_key'          => 'ecommerce-product-a',
+            'price'            => 10,
+            'stock'            => 5,
+            'category_id'      => $this->category->id,
+            'status'           => 'active',
+            'inventory_source' => 'ecommerce',
+        ]);
+
+        Product::create([
+            'name'             => 'POS Product B',
+            'slug'             => 'pos-product-b',
+            'url_key'          => 'pos-product-b',
+            'price'            => 20,
+            'stock'            => 15,
+            'category_id'      => $this->category->id,
+            'status'           => 'active',
+            'inventory_source' => 'pos',
+            'pos_item_id'      => 456,
+        ]);
+
+        // Filter by ecommerce
+        $responseEcom = $this->actingAs($this->admin)
+            ->get(route('admin.products.index', ['inventory_source' => 'ecommerce']));
+        $responseEcom->assertOk();
+        $productsEcom = $responseEcom->original->getData()['page']['props']['products']['data'];
+        $this->assertCount(1, $productsEcom);
+        $this->assertEquals('Ecommerce Product A', $productsEcom[0]['name']);
+
+        // Filter by pos
+        $responsePos = $this->actingAs($this->admin)
+            ->get(route('admin.products.index', ['inventory_source' => 'pos']));
+        $responsePos->assertOk();
+        $productsPos = $responsePos->original->getData()['page']['props']['products']['data'];
+        $this->assertCount(1, $productsPos);
+        $this->assertEquals('POS Product B', $productsPos[0]['name']);
+
+        // Both / all
+        $responseAll = $this->actingAs($this->admin)
+            ->get(route('admin.products.index', ['inventory_source' => '']));
+        $responseAll->assertOk();
+        $productsAll = $responseAll->original->getData()['page']['props']['products']['data'];
+        $this->assertCount(2, $productsAll);
+    }
 }
