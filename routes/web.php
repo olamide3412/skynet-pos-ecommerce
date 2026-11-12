@@ -223,6 +223,20 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::resource('products', AdminProductController::class)->except(['create', 'edit', 'show']);
             Route::get('products/search-related', [AdminProductController::class , 'searchRelated'])->name('products.search-related');
             Route::get('products/related-by-ids', [AdminProductController::class , 'relatedByIds'])->name('products.related-by-ids');
+
+            // Inventory Adjustments & Stock Movement Ledger
+            Route::get('inventory/adjustments', [\App\Http\Controllers\Admin\InventoryAdjustmentController::class, 'index'])->name('inventory.adjustments.index');
+            Route::post('inventory/adjustments', [\App\Http\Controllers\Admin\InventoryAdjustmentController::class, 'store'])->name('inventory.adjustments.store');
+            Route::get('inventory/logs', [\App\Http\Controllers\Admin\InventoryLogController::class, 'index'])->name('inventory.logs.index');
+            Route::get('inventory/logs/export', [\App\Http\Controllers\Admin\InventoryLogController::class, 'exportCsv'])->name('inventory.logs.export');
+            Route::get('inventory/products/search', [\App\Http\Controllers\Admin\InventoryLogController::class, 'searchProducts'])->name('inventory.products.search');
+
+            // Stock Purchasing (Ecommerce Only)
+            Route::get('purchases', [\App\Http\Controllers\Admin\PurchaseController::class, 'index'])->name('purchases.index');
+            Route::get('purchases/create', [\App\Http\Controllers\Admin\PurchaseController::class, 'create'])->name('purchases.create');
+            Route::get('purchases/products/search', [\App\Http\Controllers\Admin\PurchaseController::class, 'searchProducts'])->name('purchases.products.search');
+            Route::post('purchases', [\App\Http\Controllers\Admin\PurchaseController::class, 'store'])->name('purchases.store');
+            Route::get('purchases/{purchase}', [\App\Http\Controllers\Admin\PurchaseController::class, 'show'])->name('purchases.show');
             // AI Product Content & Assistant
             Route::post('ai/generate-product-description', [\App\Http\Controllers\Admin\AiController::class, 'generateProductDescription'])->name('ai.generate-product-description');
             Route::post('ai/suggest-related-products', [\App\Http\Controllers\Admin\AiController::class, 'suggestRelatedProducts'])->name('ai.suggest-related-products');

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\InventoryLog;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
@@ -29,8 +30,23 @@ class InventoryService
                 if ($item->inventory_source === 'ecommerce' && $item->product_id) {
                     $product = Product::where('id', $item->product_id)->lockForUpdate()->first();
                     if ($product) {
-                        $newStock = max(0, $product->stock - $item->quantity);
+                        $prevStock = (int) $product->stock;
+                        $newStock = max(0, $prevStock - (int) $item->quantity);
                         $product->update(['stock' => $newStock]);
+
+                        $this->recordLog(
+                            product: $product,
+                            actionType: 'sale',
+                            quantityChange: -(int) $item->quantity,
+                            previousStock: $prevStock,
+                            newStock: $newStock,
+                            reason: 'Online Customer Checkout',
+                            notes: "Purchased in Order #{$order->tracking_number}",
+                            referenceType: Order::class,
+                            referenceId: $order->id,
+                            referenceNumber: $order->tracking_number,
+                            variantMappingId: $item->product_variant_mapping_id
+                        );
                     }
 
                     if ($item->product_variant_mapping_id) {
@@ -54,7 +70,23 @@ class InventoryService
                 if ($item->inventory_source === 'ecommerce' && $item->product_id) {
                     $product = Product::where('id', $item->product_id)->lockForUpdate()->first();
                     if ($product) {
-                        $product->increment('stock', $item->quantity);
+                        $prevStock = (int) $product->stock;
+                        $newStock = $prevStock + (int) $item->quantity;
+                        $product->update(['stock' => $newStock]);
+
+                        $this->recordLog(
+                            product: $product,
+                            actionType: 'cancellation',
+                            quantityChange: +(int) $item->quantity,
+                            previousStock: $prevStock,
+                            newStock: $newStock,
+                            reason: 'Order Cancelled / Returned',
+                            notes: "Restocked from Order #{$order->tracking_number}",
+                            referenceType: Order::class,
+                            referenceId: $order->id,
+                            referenceNumber: $order->tracking_number,
+                            variantMappingId: $item->product_variant_mapping_id
+                        );
                     }
 
                     if ($item->product_variant_mapping_id) {
@@ -71,6 +103,43 @@ class InventoryService
                 $this->posReservationService->releaseReservation($order);
             }
         });
+    }
+
+    /**
+     * Record an immutable inventory movement log entry.
+     */
+    public function recordLog(
+        Product $product,
+        string $actionType,
+        int $quantityChange,
+        int $previousStock,
+        int $newStock,
+        string $reason,
+        ?string $notes = null,
+        ?int $userId = null,
+        ?string $referenceType = null,
+        ?int $referenceId = null,
+        ?string $referenceNumber = null,
+        ?float $unitCost = null,
+        ?int $variantMappingId = null
+    ): InventoryLog {
+        return InventoryLog::create([
+            'product_id'                 => $product->id,
+            'product_variant_mapping_id' => $variantMappingId,
+            'user_id'                    => $userId,
+            'inventory_source'           => $product->inventory_source ?? 'ecommerce',
+            'action_type'                => $actionType,
+            'reference_type'             => $referenceType,
+            'reference_id'               => $referenceId,
+            'reference_number'           => $referenceNumber,
+            'previous_stock'             => $previousStock,
+            'quantity_change'            => $quantityChange,
+            'new_stock'                  => $newStock,
+            'unit_cost'                  => $unitCost ?? $product->cost_price,
+            'reason'                     => $reason,
+            'notes'                      => $notes,
+            'created_at'                 => now(),
+        ]);
     }
 
     /**

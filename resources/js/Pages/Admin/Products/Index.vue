@@ -898,6 +898,43 @@ const deleteProduct = (id) => {
     });
 };
 
+// ── Stock Adjustment (Ecommerce Only) ────────────────────────
+const showStockAdjustModal = ref(false);
+const adjustingProduct = ref(null);
+const stockAdjustForm = useForm({
+    product_id: null,
+    variant_id: null,
+    mode: 'add', // 'add', 'subtract', 'set'
+    quantity: 1,
+    reason: 'Physical Stock Audit / Recount',
+    notes: '',
+});
+
+const openStockAdjustModal = (product) => {
+    adjustingProduct.value = product;
+    stockAdjustForm.product_id = product.id;
+    stockAdjustForm.variant_id = null;
+    stockAdjustForm.mode = 'add';
+    stockAdjustForm.quantity = 1;
+    stockAdjustForm.reason = 'Physical Stock Audit / Recount';
+    stockAdjustForm.notes = '';
+    showStockAdjustModal.value = true;
+};
+
+const closeStockAdjustModal = () => {
+    showStockAdjustModal.value = false;
+    adjustingProduct.value = null;
+};
+
+const submitStockAdjustment = () => {
+    stockAdjustForm.post(route('admin.inventory.adjustments.store'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            closeStockAdjustModal();
+        },
+    });
+};
+
 // ── Multi-select & Bulk Actions ───────────────────────────
 const selectedIds = ref([]);
 const bulkProcessing = ref(false);
@@ -1423,7 +1460,15 @@ const submitBulkDelete = () => {
                                         </span>
                                     </div>
                                 </td>
-                                <td class="px-5 py-3 text-right">
+                                <td class="px-5 py-3 text-right whitespace-nowrap">
+                                    <button
+                                        v-if="p.inventory_source === 'ecommerce'"
+                                        @click="openStockAdjustModal(p)"
+                                        class="text-emerald-600 hover:text-emerald-800 dark:text-emerald-400 font-semibold text-xs mr-3 transition-colors"
+                                        title="Adjust manual inventory count"
+                                    >
+                                        Adjust Stock
+                                    </button>
                                     <button @click="openEditForm(p)" class="text-primary hover:opacity-80 font-semibold text-sm mr-3">Edit</button>
                                     <button @click="deleteProduct(p.id)" class="text-red-500 hover:text-red-700 font-medium text-sm">Delete</button>
                                 </td>
@@ -2821,6 +2866,145 @@ const submitBulkDelete = () => {
                             Yes, Delete {{ selectedIds.length }} Product(s)
                         </button>
                     </div>
+                </div>
+            </div>
+
+            <!-- ── Stock Adjustment Modal (Ecommerce Only) ─────────────── -->
+            <div v-if="showStockAdjustModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full p-6 border dark:border-gray-700 space-y-4">
+                    <div class="flex items-center justify-between pb-3 border-b dark:border-gray-700">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xl">📦</span>
+                            <div>
+                                <h3 class="font-bold text-base text-gray-900 dark:text-white leading-tight">Adjust Stock</h3>
+                                <p class="text-xs text-primary font-medium truncate max-w-xs">{{ adjustingProduct?.name }}</p>
+                            </div>
+                        </div>
+                        <button @click="closeStockAdjustModal" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-lg">✕</button>
+                    </div>
+
+                    <!-- Current Stock Display -->
+                    <div class="p-3 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 flex items-center justify-between text-xs">
+                        <span class="text-gray-500 font-semibold uppercase">Current Stock:</span>
+                        <span class="font-bold font-mono text-sm text-gray-900 dark:text-white">
+                            {{ adjustingProduct?.stock }} units
+                        </span>
+                    </div>
+
+                    <form @submit.prevent="submitStockAdjustment" class="space-y-4 text-sm">
+                        <!-- Mode Selector (Add / Subtract / Set) -->
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-1.5">Adjustment Action</label>
+                            <div class="grid grid-cols-3 gap-2">
+                                <button
+                                    type="button"
+                                    @click="stockAdjustForm.mode = 'add'"
+                                    :class="[
+                                        'py-2 px-3 text-xs font-bold rounded-xl border transition-all text-center',
+                                        stockAdjustForm.mode === 'add'
+                                            ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-500 shadow-xs'
+                                            : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                    ]"
+                                >
+                                    + Add Stock
+                                </button>
+                                <button
+                                    type="button"
+                                    @click="stockAdjustForm.mode = 'subtract'"
+                                    :class="[
+                                        'py-2 px-3 text-xs font-bold rounded-xl border transition-all text-center',
+                                        stockAdjustForm.mode === 'subtract'
+                                            ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-500 shadow-xs'
+                                            : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                    ]"
+                                >
+                                    - Subtract
+                                </button>
+                                <button
+                                    type="button"
+                                    @click="stockAdjustForm.mode = 'set'"
+                                    :class="[
+                                        'py-2 px-3 text-xs font-bold rounded-xl border transition-all text-center',
+                                        stockAdjustForm.mode === 'set'
+                                            ? 'bg-primary/10 text-primary border-primary shadow-xs'
+                                            : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                    ]"
+                                >
+                                    = Set Exact
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Quantity input -->
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-1">
+                                {{ stockAdjustForm.mode === 'set' ? 'New Exact Stock Level' : 'Quantity to ' + stockAdjustForm.mode }}
+                            </label>
+                            <input
+                                v-model.number="stockAdjustForm.quantity"
+                                type="number"
+                                :min="stockAdjustForm.mode === 'set' ? 0 : 1"
+                                required
+                                class="w-full text-sm font-mono bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl px-3 py-2 text-gray-900 dark:text-gray-100"
+                            />
+                        </div>
+
+                        <!-- Result Preview -->
+                        <div class="text-xs text-gray-500 flex items-center justify-between font-mono">
+                            <span>Projected Balance:</span>
+                            <span class="font-bold text-primary">
+                                {{ stockAdjustForm.mode === 'add' ? (adjustingProduct?.stock + (stockAdjustForm.quantity || 0)) : (stockAdjustForm.mode === 'subtract' ? Math.max(0, adjustingProduct?.stock - (stockAdjustForm.quantity || 0)) : stockAdjustForm.quantity) }} units
+                            </span>
+                        </div>
+
+                        <!-- Reason dropdown -->
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-1">Reason / Event</label>
+                            <select
+                                v-model="stockAdjustForm.reason"
+                                required
+                                class="w-full text-xs bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl px-3 py-2 text-gray-900 dark:text-gray-100"
+                            >
+                                <option value="Physical Stock Audit / Recount">Physical Stock Audit / Recount</option>
+                                <option value="Damaged Goods / Broken">Damaged Goods / Broken</option>
+                                <option value="Expired / Spoilage">Expired / Spoilage</option>
+                                <option value="Loss / Theft / Shrinkage">Loss / Theft / Shrinkage</option>
+                                <option value="Internal Store Use / Marketing Samples">Internal Store Use / Marketing Samples</option>
+                                <option value="Customer Return (Manual)">Customer Return (Manual)</option>
+                                <option value="Found Extra Warehouse Stock">Found Extra Warehouse Stock</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+
+                        <!-- Notes memo -->
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-1">Notes / Explanation</label>
+                            <textarea
+                                v-model="stockAdjustForm.notes"
+                                rows="2"
+                                placeholder="Optional details for ledger tracking..."
+                                class="w-full text-xs bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl p-2.5 text-gray-900 dark:text-gray-100 placeholder-gray-400"
+                            ></textarea>
+                        </div>
+
+                        <div class="flex items-center justify-end gap-2.5 pt-2 border-t dark:border-gray-700">
+                            <button
+                                type="button"
+                                @click="closeStockAdjustModal"
+                                class="px-4 py-2 rounded-xl border dark:border-gray-600 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                :disabled="stockAdjustForm.processing"
+                                class="px-5 py-2 rounded-xl bg-primary hover:bg-primary-dark text-white text-xs font-bold shadow-sm transition disabled:opacity-50 flex items-center gap-1.5"
+                            >
+                                <svg v-if="stockAdjustForm.processing" class="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+                                Save Adjustment
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </div>
 

@@ -81,6 +81,11 @@ class Product extends Model
         return $this->hasMany(ProductReview::class);
     }
 
+    public function inventoryLogs(): HasMany
+    {
+        return $this->hasMany(InventoryLog::class)->orderByDesc('created_at')->orderByDesc('id');
+    }
+
     public function approvedReviews(): HasMany
     {
         return $this->hasMany(ProductReview::class)->where('is_approved', true);
