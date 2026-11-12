@@ -14,6 +14,7 @@ class ProductVariantMapping extends Model
         'product_id',
         'variant_key',
         'variant_label',
+        'image',
         'option_values',
         'pos_item_id',
         'inventory_source',

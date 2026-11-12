@@ -31,17 +31,22 @@ class InventoryService
                     $product = Product::where('id', $item->product_id)->lockForUpdate()->first();
                     if ($product) {
                         $prevStock = (int) $product->stock;
-                        $newStock = max(0, $prevStock - (int) $item->quantity);
+                        $deductQty = (int) round($item->quantity_in_base_units > 0 ? $item->quantity_in_base_units : $item->quantity);
+                        $newStock = max(0, $prevStock - $deductQty);
                         $product->update(['stock' => $newStock]);
+
+                        $unitNote = $item->unit_name && $deductQty != $item->quantity
+                            ? " ({$item->quantity} {$item->unit_name} = {$deductQty} base units)"
+                            : "";
 
                         $this->recordLog(
                             product: $product,
                             actionType: 'sale',
-                            quantityChange: -(int) $item->quantity,
+                            quantityChange: -$deductQty,
                             previousStock: $prevStock,
                             newStock: $newStock,
                             reason: 'Online Customer Checkout',
-                            notes: "Purchased in Order #{$order->tracking_number}",
+                            notes: "Purchased in Order #{$order->tracking_number}{$unitNote}",
                             referenceType: Order::class,
                             referenceId: $order->id,
                             referenceNumber: $order->tracking_number,
@@ -71,17 +76,22 @@ class InventoryService
                     $product = Product::where('id', $item->product_id)->lockForUpdate()->first();
                     if ($product) {
                         $prevStock = (int) $product->stock;
-                        $newStock = $prevStock + (int) $item->quantity;
+                        $restoreQty = (int) round($item->quantity_in_base_units > 0 ? $item->quantity_in_base_units : $item->quantity);
+                        $newStock = $prevStock + $restoreQty;
                         $product->update(['stock' => $newStock]);
+
+                        $unitNote = $item->unit_name && $restoreQty != $item->quantity
+                            ? " ({$item->quantity} {$item->unit_name} = {$restoreQty} base units)"
+                            : "";
 
                         $this->recordLog(
                             product: $product,
                             actionType: 'cancellation',
-                            quantityChange: +(int) $item->quantity,
+                            quantityChange: +$restoreQty,
                             previousStock: $prevStock,
                             newStock: $newStock,
                             reason: 'Order Cancelled / Returned',
-                            notes: "Restocked from Order #{$order->tracking_number}",
+                            notes: "Restocked from Order #{$order->tracking_number}{$unitNote}",
                             referenceType: Order::class,
                             referenceId: $order->id,
                             referenceNumber: $order->tracking_number,

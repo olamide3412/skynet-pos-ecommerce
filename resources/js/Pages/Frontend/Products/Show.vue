@@ -91,6 +91,7 @@ const availableVariants = computed(() => {
                 id: m.id,
                 name: m.variant_label,
                 variant_key: m.variant_key,
+                image: m.image || null,
                 price: price,
                 stock: stock,
                 inventory_source: m.inventory_source,
@@ -105,6 +106,7 @@ const availableVariants = computed(() => {
             id: v.id || null,
             name: v.name,
             variant_key: v.key || null,
+            image: v.image || null,
             price: v.price ? parseFloat(v.price) : null,
             stock: v.stock !== undefined && v.stock !== null ? Number(v.stock) : null,
             inventory_source: v.inventory_source || 'ecommerce',
@@ -116,28 +118,104 @@ const availableVariants = computed(() => {
     return [];
 });
 
+const hasSellingUnits = computed(() => {
+    if (!Array.isArray(props.product.pos_units) || props.product.pos_units.length === 0) {
+        return false;
+    }
+    return props.product.pos_units.some(u => u.is_enabled_online !== false && u.is_enabled_online !== 0);
+});
+
+const requiresVariantSelection = computed(() => {
+    // If the product has selling units configured, the customer is purchasing the standard base product
+    // (in the selected packaging size / selling unit) so picking a variant option is optional.
+    if (hasSellingUnits.value) {
+        return false;
+    }
+    // For pure variant-only products (e.g. Size/Color items without packaging units), require picking an option
+    return (availableVariants.value?.length || 0) > 0 && !selectedVariant.value;
+});
+
+const toggleVariant = (v) => {
+    if (selectedVariant.value && selectedVariant.value.name === v.name) {
+        selectedVariant.value = null;
+    } else {
+        selectedVariant.value = v;
+    }
+};
+
+const clearSelectedVariant = () => {
+    selectedVariant.value = null;
+};
+
+const togglePosUnit = (u) => {
+    if (selectedPosUnit.value && selectedPosUnit.value.id === u.id) {
+        // Toggle back to base unit if currently on an additional unit
+        const baseUnit = props.product.pos_units?.find(unit => unit.unit_kind === 'base') || null;
+        if (baseUnit && baseUnit.id !== u.id) {
+            selectedPosUnit.value = baseUnit;
+        }
+    } else {
+        selectedPosUnit.value = u;
+    }
+};
+
 watch(selectedVariant, (newVal) => {
     form.variant = newVal ? newVal.name : null;
     form.variant_key = newVal ? (newVal.variant_key || null) : null;
     form.product_variant_mapping_id = newVal ? (newVal.id || null) : null;
+
+    if (newVal) {
+        // If a variant is selected, packaging units belong to the base item, so clear unit selection
+        const baseUnit = props.product.pos_units?.find(unit => unit.unit_kind === 'base') || null;
+        selectedPosUnit.value = baseUnit;
+        form.product_pos_unit_id = null;
+    } else {
+        // Revert to base selling unit
+        const baseUnit = props.product.pos_units?.find(unit => unit.unit_kind === 'base') || props.product.pos_units?.[0] || null;
+        selectedPosUnit.value = baseUnit;
+        form.product_pos_unit_id = baseUnit ? baseUnit.id : null;
+    }
+
     if (form.quantity > maxStock.value && maxStock.value > 0) {
         form.quantity = maxStock.value;
+    }
+    if (newVal && newVal.image) {
+        activeImage.value = newVal.image;
+    } else if (!newVal) {
+        // Revert to selling unit image if active, or default product gallery image
+        if (selectedPosUnit.value?.image) {
+            activeImage.value = selectedPosUnit.value.image;
+        } else {
+            activeImage.value = allImages.value.length ? allImages.value[0] : null;
+        }
     }
 });
 
 watch(selectedPosUnit, (newVal) => {
-    form.product_pos_unit_id = newVal ? newVal.id : null;
+    // Only bind product_pos_unit_id when no variant is selected
+    form.product_pos_unit_id = (newVal && !selectedVariant.value) ? newVal.id : null;
     if (form.quantity > maxStock.value && maxStock.value > 0) {
         form.quantity = maxStock.value;
+    }
+    if (newVal && newVal.image && !selectedVariant.value) {
+        activeImage.value = newVal.image;
+    } else if (!newVal || !newVal.image) {
+        if (selectedVariant.value?.image) {
+            activeImage.value = selectedVariant.value.image;
+        } else {
+            activeImage.value = allImages.value.length ? allImages.value[0] : null;
+        }
     }
 });
 
 const displayPrice = computed(() => {
-    if (selectedPosUnit.value && selectedPosUnit.value.unit_kind !== 'base' && parseFloat(selectedPosUnit.value.synced_standard_price) > 0) {
-        return parseFloat(selectedPosUnit.value.synced_standard_price);
-    }
+    // 1. Variant price always takes priority when an option is selected
     if (selectedVariant.value && selectedVariant.value.price) {
         return parseFloat(selectedVariant.value.price);
+    }
+    // 2. Packaging unit price applies to base product
+    if (selectedPosUnit.value && selectedPosUnit.value.unit_kind !== 'base' && parseFloat(selectedPosUnit.value.synced_standard_price) > 0) {
+        return parseFloat(selectedPosUnit.value.synced_standard_price);
     }
     if (props.product.is_on_flash_sale && props.product.special_price) {
         return parseFloat(props.product.special_price);
@@ -148,10 +226,12 @@ const displayPrice = computed(() => {
 });
 
 const maxStock = computed(() => {
-    let baseStock = parseInt(props.product.stock || 0);
+    // 1. When a variant is selected, use variant's specific stock count directly
     if (selectedVariant.value && selectedVariant.value.stock !== undefined) {
-        baseStock = parseInt(selectedVariant.value.stock);
+        return Math.max(0, parseInt(selectedVariant.value.stock));
     }
+    // 2. Otherwise calculate based on base stock and selected unit multiplier
+    let baseStock = parseInt(props.product.stock || 0);
     if (selectedPosUnit.value && parseFloat(selectedPosUnit.value.quantity_in_base_units) > 1) {
         const factor = parseFloat(selectedPosUnit.value.quantity_in_base_units);
         return Math.max(0, Math.floor(baseStock / factor));
@@ -622,29 +702,74 @@ const structuredData = computed(() => {
 
                     <!-- POS Selling Units Selection -->
                     <div v-if="product.pos_units && product.pos_units.length > 0" class="mb-5 bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 p-4 rounded-lg">
-                        <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Selling Unit</label>
-                        <div class="flex flex-wrap gap-2">
+                        <div class="flex items-center justify-between mb-2">
+                            <label class="block text-sm font-bold text-gray-700 dark:text-gray-300">Selling Unit</label>
+                            <span v-if="selectedPosUnit && selectedPosUnit.unit_kind !== 'base' && !selectedVariant" class="text-[11px] text-gray-500 dark:text-gray-400">
+                                Click selected unit again to reset to Base Unit
+                            </span>
+                        </div>
+
+                        <!-- Info prompt when a variant option is selected -->
+                        <div v-if="selectedVariant" class="p-3 rounded-lg bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 flex items-center justify-between gap-3 text-xs">
+                            <span class="text-indigo-900 dark:text-indigo-200">
+                                Packaging sizes apply to the standard item. You selected option <strong>"{{ selectedVariant.name }}"</strong>.
+                            </span>
+                            <button
+                                type="button"
+                                @click="clearSelectedVariant"
+                                class="shrink-0 px-2.5 py-1 text-[11px] font-bold rounded-md bg-indigo-600 text-white hover:bg-indigo-700 transition cursor-pointer"
+                            >
+                                Switch to Standard
+                            </button>
+                        </div>
+
+                        <!-- Packaging unit buttons when viewing standard base product -->
+                        <div v-else class="flex flex-wrap gap-2">
                             <button 
                                 v-for="u in product.pos_units" 
                                 :key="u.id"
                                 type="button"
-                                @click="selectedPosUnit = u"
+                                @click="togglePosUnit(u)"
                                 :class="selectedPosUnit?.id === u.id ? 'ring-2 ring-primary bg-primary/10 border-primary text-primary font-bold' : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-primary font-medium'"
-                                class="px-3.5 py-2 rounded-lg border text-sm transition text-left flex flex-col shadow-sm"
+                                class="px-3 py-2 rounded-lg border text-sm transition text-left flex items-center gap-2.5 shadow-sm cursor-pointer"
+                                :title="selectedPosUnit?.id === u.id && u.unit_kind !== 'base' ? 'Click to reset to standard base unit' : ''"
                             >
-                                <span class="capitalize">{{ u.online_label || u.unit_name }}</span>
-                                <span class="text-xs opacity-75">
-                                    <template v-if="parseFloat(u.synced_standard_price) > 0 && u.unit_kind !== 'base'">₦{{ parseFloat(u.synced_standard_price).toLocaleString() }}</template>
-                                    <template v-else>Standard Unit</template>
-                                    <span v-if="parseFloat(u.quantity_in_base_units) > 1" class="ml-1">({{ parseFloat(u.quantity_in_base_units) }}x)</span>
-                                </span>
+                                <img 
+                                    v-if="u.image" 
+                                    :src="'/storage/' + u.image" 
+                                    :alt="u.online_label || u.unit_name" 
+                                    class="w-7 h-7 rounded object-cover border border-gray-200 dark:border-gray-700 shrink-0"
+                                />
+                                <div class="flex flex-col">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="capitalize">{{ u.online_label || u.unit_name }}</span>
+                                        <span v-if="selectedPosUnit?.id === u.id" class="text-primary text-xs font-bold">✓</span>
+                                    </div>
+                                    <span class="text-xs opacity-75">
+                                        <template v-if="parseFloat(u.synced_standard_price) > 0 && u.unit_kind !== 'base'">₦{{ parseFloat(u.synced_standard_price).toLocaleString() }}</template>
+                                        <template v-else>Standard Unit</template>
+                                        <span v-if="parseFloat(u.quantity_in_base_units) > 1" class="ml-1">({{ parseFloat(u.quantity_in_base_units) }}x)</span>
+                                    </span>
+                                </div>
                             </button>
                         </div>
                     </div>
 
                     <div v-if="availableVariants && availableVariants.length > 0" class="mb-6 bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 p-4 rounded-lg">
                         <div class="flex items-center justify-between mb-3">
-                            <label class="block text-sm font-bold text-gray-700 dark:text-gray-300">Available Options</label>
+                            <div class="flex items-center gap-2">
+                                <label class="block text-sm font-bold text-gray-700 dark:text-gray-300">Available Options</label>
+                                <button
+                                    v-if="selectedVariant"
+                                    type="button"
+                                    @click="clearSelectedVariant"
+                                    class="text-[11px] font-semibold text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-0.5 cursor-pointer ml-1"
+                                    title="Click to deselect variant"
+                                >
+                                    <span>✕</span>
+                                    <span>Clear selection</span>
+                                </button>
+                            </div>
                             <span v-if="selectedVariant" class="text-xs font-semibold">
                                 <span v-if="selectedVariant.stock !== null && selectedVariant.stock <= 0" class="text-red-500 font-bold">Out of stock</span>
                                 <span v-else-if="selectedVariant.stock !== null && selectedVariant.stock <= 5" class="text-amber-600 font-bold">Only {{ selectedVariant.stock }} left in stock</span>
@@ -656,18 +781,28 @@ const structuredData = computed(() => {
                                 v-for="(v, index) in availableVariants" 
                                 :key="index"
                                 type="button"
-                                @click="selectedVariant = v"
-                                :class="selectedVariant?.name === v.name ? 'ring-2 ring-primary bg-primary/10 border-primary text-primary font-bold' : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 hover:border-primary'"
-                                class="px-4 py-2 rounded-md border text-sm font-semibold transition relative overflow-hidden text-left"
+                                @click="toggleVariant(v)"
+                                :class="selectedVariant?.name === v.name ? 'ring-2 ring-primary bg-primary/10 border-primary text-primary font-bold shadow-xs' : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 hover:border-primary text-gray-700 dark:text-gray-200'"
+                                class="px-3.5 py-2 rounded-md border text-sm font-semibold transition relative overflow-hidden text-left flex items-center gap-2.5 cursor-pointer"
+                                :title="selectedVariant?.name === v.name ? 'Click to deselect' : 'Select option'"
                             >
-                                <div class="flex items-center gap-1.5">
-                                    <span>{{ v.name }}</span>
-                                    <span v-if="v.stock !== null && v.stock <= 0" class="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
-                                        Sold out
-                                    </span>
-                                </div>
-                                <div v-if="v.price && parseFloat(v.price) > 0" class="text-xs font-normal text-gray-500 dark:text-gray-400 mt-0.5">
-                                    ₦{{ parseFloat(v.price).toLocaleString() }}
+                                <img 
+                                    v-if="v.image" 
+                                    :src="'/storage/' + v.image" 
+                                    :alt="v.name" 
+                                    class="w-7 h-7 rounded object-cover border border-gray-200 dark:border-gray-700 shrink-0"
+                                />
+                                <div class="min-w-0">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="truncate">{{ v.name }}</span>
+                                        <span v-if="selectedVariant?.name === v.name" class="text-primary text-xs font-bold">✓</span>
+                                        <span v-if="v.stock !== null && v.stock <= 0" class="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
+                                            Sold out
+                                        </span>
+                                    </div>
+                                    <div v-if="v.price && parseFloat(v.price) > 0" class="text-xs font-normal text-gray-500 dark:text-gray-400 mt-0.5">
+                                        ₦{{ parseFloat(v.price).toLocaleString() }}
+                                    </div>
                                 </div>
                             </button>
                         </div>
@@ -685,10 +820,10 @@ const structuredData = computed(() => {
                                 <button type="button" @click="form.quantity < maxStock ? form.quantity++ : form.quantity" class="px-4 h-full text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition font-bold disabled:opacity-50 select-none">+</button>
                             </div>
                             <button @click="addToCart" 
-                                :disabled="form.processing || !isPurchasable || (availableVariants?.length > 0 && !selectedVariant)" 
+                                :disabled="form.processing || !isPurchasable || requiresVariantSelection" 
                                 class="bg-gray-800 hover:bg-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 text-white font-bold transition flex-1 h-12 rounded-md disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wide flex items-center justify-center gap-2 text-sm shadow-sm">
                                 <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
-                                {{ !isPurchasable ? 'Out of Stock' : 'Add to Cart' }}
+                                {{ !isPurchasable ? 'Out of Stock' : (requiresVariantSelection ? 'Select an Option' : 'Add to Cart') }}
                             </button>
 
                             <button @click="addToCompare" :disabled="comparing"
@@ -704,10 +839,10 @@ const structuredData = computed(() => {
                             </button>
                         </div>
                         <button @click="buyNow" 
-                            :disabled="form.processing || !isPurchasable || (availableVariants?.length > 0 && !selectedVariant)" 
+                            :disabled="form.processing || !isPurchasable || requiresVariantSelection" 
                             class="bg-primary hover:opacity-90 text-white font-bold transition w-full h-12 rounded-md disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wide flex items-center justify-center gap-2 text-sm shadow-md hover:shadow-lg">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                            {{ !isPurchasable ? 'Out of Stock' : ((availableVariants?.length > 0 && !selectedVariant) ? 'Select Option to Buy Now' : 'Buy Now') }}
+                            {{ !isPurchasable ? 'Out of Stock' : (requiresVariantSelection ? 'Select Option to Buy Now' : 'Buy Now') }}
                         </button>
                     </div>
 

@@ -179,6 +179,7 @@ const form = useForm({
     remove_thumbnail: false,
     compress_images: true,
     variants: [],
+    pos_units: [],
     attributes: {},
 });
 
@@ -486,6 +487,7 @@ const addVariant = () => form.variants.push({
     name: '',
     price: '',
     stock: '',
+    image: '',
     inventory_source: form.inventory_source === 'pos' ? 'pos' : 'ecommerce',
     pos_item_id: null,
     absorb_standalone: true,
@@ -496,6 +498,124 @@ const removeVariant = (i) => {
         variantPosSearchQuery.value = '';
     }
     form.variants.splice(i, 1);
+};
+
+// ── Variant & Selling Unit Image Mapping ──────────────────────
+const showImagePickerModal = ref(false);
+const imagePickerTarget = ref(null); // { type: 'variant'|'unit', index: number, title: string }
+
+const availableGalleryImages = computed(() => {
+    const list = [];
+    if (imagePreview.value && typeof imagePreview.value === 'string' && !imagePreview.value.startsWith('blob:') && !imagePreview.value.startsWith('data:')) {
+        const rawPath = imagePreview.value.replace(/^\/storage\//, '');
+        list.push({ path: rawPath, url: imagePreview.value, label: 'Main Thumbnail' });
+    }
+    if (galleryItems.value?.length) {
+        galleryItems.value.forEach((item, idx) => {
+            if (item.type === 'existing' && item.path && !list.some(x => x.path === item.path)) {
+                list.push({ path: item.path, url: item.url, label: `Gallery Photo #${idx + 1}` });
+            }
+        });
+    }
+    return list;
+});
+
+const openImagePicker = (type, index, title) => {
+    imagePickerTarget.value = { type, index, title };
+    showImagePickerModal.value = true;
+};
+
+const selectMappedImage = (imgPath) => {
+    if (!imagePickerTarget.value) return;
+    const { type, index } = imagePickerTarget.value;
+    if (type === 'variant' && form.variants[index]) {
+        form.variants[index].image = imgPath;
+    } else if (type === 'unit' && form.pos_units[index]) {
+        form.pos_units[index].image = imgPath;
+    }
+    showImagePickerModal.value = false;
+};
+
+const clearMappedImage = () => {
+    if (!imagePickerTarget.value) return;
+    const { type, index } = imagePickerTarget.value;
+    if (type === 'variant' && form.variants[index]) {
+        form.variants[index].image = '';
+    } else if (type === 'unit' && form.pos_units[index]) {
+        form.pos_units[index].image = '';
+    }
+    showImagePickerModal.value = false;
+};
+
+const currentTargetImage = computed(() => {
+    if (!imagePickerTarget.value) return '';
+    const { type, index } = imagePickerTarget.value;
+    if (type === 'variant' && form.variants[index]) {
+        return form.variants[index].image || '';
+    } else if (type === 'unit' && form.pos_units[index]) {
+        return form.pos_units[index].image || '';
+    }
+    return '';
+});
+
+const enableEcommerceSellingUnits = () => {
+    if (!form.pos_units) form.pos_units = [];
+    if (!form.pos_units.some(u => u.unit_kind === 'base')) {
+        form.pos_units.unshift({
+            _uid: 'unit_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+            id: null,
+            unit_name: 'Single Item',
+            unit_kind: 'base',
+            quantity_in_base_units: 1,
+            synced_standard_price: form.price || 0,
+            online_label: 'Single',
+            is_enabled_online: true,
+            image: '',
+        });
+    }
+    if (form.pos_units.length === 1) {
+        form.pos_units.push({
+            _uid: 'unit_' + (Date.now() + 1) + '_' + Math.random().toString(36).substr(2, 9),
+            id: null,
+            unit_name: 'Pack of 6',
+            unit_kind: 'additional',
+            quantity_in_base_units: 6,
+            synced_standard_price: Number((Number(form.price || 0) * 6).toFixed(2)),
+            online_label: 'Pack of 6',
+            is_enabled_online: true,
+            image: '',
+        });
+    }
+    form.pos_units = [...form.pos_units];
+};
+
+const addEcommerceSellingUnit = () => {
+    if (!form.pos_units) form.pos_units = [];
+    const count = form.pos_units.length;
+    const factor = count >= 2 ? count * 12 : 12;
+    form.pos_units.push({
+        _uid: 'unit_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+        id: null,
+        unit_name: `Carton of ${factor}`,
+        unit_kind: 'additional',
+        quantity_in_base_units: factor,
+        synced_standard_price: Number((Number(form.price || 0) * factor).toFixed(2)),
+        online_label: `Carton (${factor} Units)`,
+        is_enabled_online: true,
+        image: '',
+    });
+    form.pos_units = [...form.pos_units];
+};
+
+const removeSellingUnit = (index) => {
+    if (form.pos_units && form.pos_units[index] !== undefined) {
+        form.pos_units.splice(index, 1);
+        form.pos_units = [...form.pos_units];
+    }
+};
+
+const disableEcommerceSellingUnits = () => {
+    form.pos_units = [];
 };
 
 const openVariantDropdownIndex = ref(null);
@@ -556,6 +676,7 @@ const includeBasePosItemAsVariant = () => {
         name: baseItem ? baseItem.pos_item_name : (form.name || 'Standard'),
         price: baseItem ? baseItem.standard_price : form.price,
         stock: baseItem ? baseItem.effective_availability : form.stock,
+        image: '',
         inventory_source: 'pos',
         pos_item_id: Number(form.pos_item_id),
         absorb_standalone: false,
@@ -630,6 +751,7 @@ const save = () => {
         existing_images: JSON.stringify(existingImages),
         images: newFiles,
         variants: JSON.stringify(data.variants),
+        pos_units: JSON.stringify(data.pos_units),
         attributes: JSON.stringify(data.attributes),
         related_products: JSON.stringify(data.related_products),
     }))
@@ -705,6 +827,7 @@ const openEditForm = (p) => {
             stock: m.local_stock !== null && m.local_stock !== undefined ? m.local_stock : (m.synced_pos_item?.effective_availability ?? ''),
             inventory_source: m.inventory_source || (m.pos_item_id ? 'pos' : 'ecommerce'),
             pos_item_id: m.pos_item_id || null,
+            image: m.image || '',
             absorb_standalone: true,
         }));
     } else {
@@ -715,9 +838,21 @@ const openEditForm = (p) => {
             stock: v.stock ?? '',
             inventory_source: v.inventory_source || (v.pos_item_id ? 'pos' : 'ecommerce'),
             pos_item_id: v.pos_item_id || null,
+            image: v.image || '',
             absorb_standalone: true,
         }));
     }
+    form.pos_units = (p.pos_units || []).map((u, idx) => ({
+        _uid: 'unit_exist_' + (u.id || idx) + '_' + Math.random().toString(36).substr(2, 9),
+        id: u.id,
+        unit_name: u.unit_name,
+        unit_kind: u.unit_kind,
+        quantity_in_base_units: u.quantity_in_base_units,
+        synced_standard_price: u.synced_standard_price,
+        online_label: u.online_label || '',
+        is_enabled_online: u.is_enabled_online !== false,
+        image: u.image || '',
+    }));
     form.attributes        = p.attributes || {};
     form.remove_thumbnail  = false;
     imagePreview.value     = p.image ? '/storage/' + p.image : null;
@@ -761,6 +896,8 @@ const resetFormState = () => {
     form.meta_description = '';
     form.meta_keywords = '';
     form.related_products = [];
+    form.variants = [];
+    form.pos_units = [];
     form.attributes = {};
     selectedRelatedProducts.value = [];
     relatedResults.value = [];
@@ -2319,7 +2456,7 @@ const submitBulkMoveToEcommerce = () => {
                                     </div>
                                 </div>
 
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
                                     <div>
                                         <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">
                                             Price (₦)
@@ -2334,10 +2471,228 @@ const submitBulkMoveToEcommerce = () => {
                                         </label>
                                         <input v-model="v.stock" type="number" class="w-full h-10 px-3 py-2 text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 focus:ring-primary shadow-xs"/>
                                     </div>
+                                    <div>
+                                        <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">
+                                            Variant Photo
+                                        </label>
+                                        <div class="flex items-center gap-2">
+                                            <div v-if="v.image" class="relative group w-10 h-10 shrink-0 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 bg-gray-50">
+                                                <img :src="'/storage/' + v.image" class="w-full h-full object-cover" alt="Variant"/>
+                                                <button
+                                                    type="button"
+                                                    @click="v.image = ''"
+                                                    class="absolute inset-0 bg-black/60 text-white text-[10px] font-bold flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer"
+                                                    title="Remove assigned photo"
+                                                >✕</button>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                @click="openImagePicker('variant', i, v.name || ('Variant #' + (i + 1)))"
+                                                class="flex-1 h-10 px-3 text-xs font-medium rounded-lg border border-dashed border-gray-300 dark:border-gray-600 hover:border-primary text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary transition flex items-center justify-center gap-1.5 cursor-pointer bg-gray-50/50 dark:bg-gray-800"
+                                            >
+                                                <span>📷</span>
+                                                <span class="truncate">{{ v.image ? 'Change Photo' : 'Map Photo' }}</span>
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             <div v-if="!form.variants.length" class="text-center py-6 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl text-gray-400 text-sm">
                                 No variants. Click "+ Add Variant" above to configure color/size options.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Selling Units & Packaging Sizes (Units of Measure) -->
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-indigo-100 dark:border-indigo-900/50">
+                        <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
+                            <div>
+                                <h3 class="text-base font-bold flex items-center gap-2 text-gray-900 dark:text-white">
+                                    <span class="w-6 h-6 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 rounded flex items-center justify-center text-sm">📏</span>
+                                    Selling Units & Packaging Sizes
+                                </h3>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                    Sell in multiple packaging sizes (e.g. Single, Pack of 6, Carton of 24) sharing the same warehouse inventory pool.
+                                </p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span v-if="form.pos_units && form.pos_units.length > 0" class="text-xs font-semibold px-2.5 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                                    {{ form.pos_units.length }} Unit(s)
+                                </span>
+                                <button
+                                    v-if="form.inventory_source === 'ecommerce' && form.pos_units && form.pos_units.length > 0"
+                                    type="button"
+                                    @click="addEcommerceSellingUnit"
+                                    class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition shadow-xs cursor-pointer"
+                                >
+                                    + Add Packaging Unit
+                                </button>
+                                <button
+                                    v-if="form.inventory_source === 'ecommerce' && form.pos_units && form.pos_units.length > 0"
+                                    type="button"
+                                    @click="disableEcommerceSellingUnits"
+                                    class="px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition cursor-pointer"
+                                    title="Disable packaging units and sell only as standard single product"
+                                >
+                                    Disable Units
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Empty state for Ecommerce products -->
+                        <div v-if="(!form.pos_units || form.pos_units.length === 0) && form.inventory_source === 'ecommerce'" class="text-center py-6 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl mt-3">
+                            <span class="text-2xl block mb-1">📦</span>
+                            <p class="text-xs font-bold text-gray-700 dark:text-gray-300">Selling Units Not Configured</p>
+                            <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 max-w-sm mx-auto mb-3">
+                                Offer bulk or packaging options (like Single, Pack of 6, Carton of 24) that automatically deduct from this product's unified stock pool.
+                            </p>
+                            <button
+                                type="button"
+                                @click="enableEcommerceSellingUnits"
+                                class="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-lg bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-700 transition cursor-pointer"
+                            >
+                                + Enable Selling Units & Packaging
+                            </button>
+                        </div>
+
+                        <!-- Empty state for POS products without units -->
+                        <div v-else-if="(!form.pos_units || form.pos_units.length === 0) && form.inventory_source === 'pos'" class="text-center py-4 text-xs text-gray-400">
+                            No additional selling units defined on POS branch. Only Base Unit will be sold.
+                        </div>
+
+                        <!-- Units list -->
+                        <div v-else class="space-y-3 mt-4">
+                            <div
+                                v-for="(u, uIdx) in form.pos_units"
+                                :key="u._uid || u.id || uIdx"
+                                class="p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-700/30 space-y-3 relative"
+                            >
+                                <!-- Unit Card Header: Checkbox + Name + Badge + Remove Action -->
+                                <div class="flex items-center justify-between gap-3 flex-wrap">
+                                    <div class="flex items-center gap-2.5 flex-1 min-w-[200px]">
+                                        <input
+                                            v-model="u.is_enabled_online"
+                                            type="checkbox"
+                                            :id="'pos_unit_online_' + uIdx"
+                                            class="rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary h-4 w-4 shrink-0 cursor-pointer"
+                                            title="Toggle online visibility"
+                                        />
+                                        <!-- Ecommerce Unit Name -->
+                                        <div v-if="form.inventory_source === 'ecommerce'" class="flex items-center gap-2 flex-1 max-w-sm">
+                                            <input
+                                                v-model="u.unit_name"
+                                                type="text"
+                                                placeholder="Unit Name (e.g. Pack of 6)"
+                                                class="h-8 px-2.5 text-xs font-bold rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-primary flex-1"
+                                            />
+                                            <span v-if="u.unit_kind === 'base'" class="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 shrink-0">
+                                                Base Unit (1x)
+                                            </span>
+                                        </div>
+                                        <!-- POS Unit Header -->
+                                        <div v-else class="flex items-center gap-2">
+                                            <span class="text-sm font-bold text-gray-900 dark:text-white">{{ u.unit_name }}</span>
+                                            <span v-if="Number(u.quantity_in_base_units) === 1" class="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
+                                                Base Unit
+                                            </span>
+                                            <span v-else class="text-[10px] font-semibold text-gray-500 dark:text-gray-400">
+                                                ({{ u.quantity_in_base_units }}x base)
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Top-Right Actions -->
+                                    <div class="flex items-center gap-2">
+                                        <span v-if="form.inventory_source === 'pos'" class="text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                                            ₦{{ Number(u.price || u.synced_standard_price || 0).toLocaleString() }}
+                                        </span>
+                                        <button
+                                            v-if="form.inventory_source === 'ecommerce' && u.unit_kind !== 'base'"
+                                            type="button"
+                                            @click.stop.prevent="removeSellingUnit(uIdx)"
+                                            class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 border border-rose-200 dark:border-rose-900/50 transition cursor-pointer"
+                                            title="Delete this packaging unit"
+                                        >
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                            <span>Remove</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Fields Grid: fits 100% inside the card width -->
+                                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 pt-2 border-t border-gray-200/60 dark:border-gray-700/60 items-end">
+                                    <!-- Multiplier -->
+                                    <div :class="form.inventory_source === 'ecommerce' ? 'lg:col-span-3' : 'hidden'">
+                                        <label class="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 mb-1">
+                                            Multiplier (Base Qty)
+                                        </label>
+                                        <input
+                                            v-if="u.unit_kind !== 'base'"
+                                            v-model="u.quantity_in_base_units"
+                                            type="number"
+                                            min="1"
+                                            step="1"
+                                            class="w-full h-9 px-3 text-xs rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                        />
+                                        <div v-else class="h-9 px-3 text-xs rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 text-gray-500 flex items-center font-mono font-bold">
+                                            1.0 (Fixed Base)
+                                        </div>
+                                    </div>
+
+                                    <!-- Unit Price -->
+                                    <div :class="form.inventory_source === 'ecommerce' ? 'lg:col-span-3' : 'hidden'">
+                                        <label class="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 mb-1">
+                                            Unit Price (₦)
+                                        </label>
+                                        <input
+                                            v-model="u.synced_standard_price"
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            placeholder="₦ Price"
+                                            class="w-full h-9 px-3 text-xs font-bold rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                        />
+                                    </div>
+
+                                    <!-- Online Display Label -->
+                                    <div :class="form.inventory_source === 'ecommerce' ? 'lg:col-span-3' : 'lg:col-span-7 sm:col-span-1'">
+                                        <label class="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 mb-1">
+                                            Online Display Label
+                                        </label>
+                                        <input
+                                            v-model="u.online_label"
+                                            type="text"
+                                            :placeholder="u.unit_name || 'Display label'"
+                                            class="w-full h-9 px-3 text-xs rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 focus:ring-primary shadow-xs"
+                                        />
+                                    </div>
+
+                                    <!-- Assigned Photo -->
+                                    <div :class="form.inventory_source === 'ecommerce' ? 'lg:col-span-3' : 'lg:col-span-5 sm:col-span-1'">
+                                        <label class="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 mb-1">
+                                            Assigned Photo
+                                        </label>
+                                        <div class="flex items-center gap-2">
+                                            <div v-if="u.image" class="relative group w-9 h-9 shrink-0 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 bg-gray-50">
+                                                <img :src="'/storage/' + u.image" class="w-full h-full object-cover" alt="Unit"/>
+                                                <button
+                                                    type="button"
+                                                    @click="u.image = ''"
+                                                    class="absolute inset-0 bg-black/60 text-white text-[10px] font-bold flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer"
+                                                    title="Remove assigned photo"
+                                                >✕</button>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                @click="openImagePicker('unit', uIdx, u.online_label || u.unit_name || ('Unit #' + (uIdx + 1)))"
+                                                class="flex-1 h-9 px-2.5 text-xs font-medium rounded-lg border border-dashed border-gray-300 dark:border-gray-600 hover:border-primary text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary transition flex items-center justify-center gap-1.5 cursor-pointer bg-white dark:bg-gray-800"
+                                            >
+                                                <span>📷</span>
+                                                <span class="truncate">{{ u.image ? 'Change Photo' : 'Map Photo' }}</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -3113,6 +3468,96 @@ const submitBulkMoveToEcommerce = () => {
                             </button>
                         </div>
                     </form>
+                </div>
+            </div>
+
+            <!-- ── Image Picker Modal (Map Photo to Variant or Unit) ── -->
+            <div
+                v-if="showImagePickerModal"
+                class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs"
+                @click.self="showImagePickerModal = false"
+            >
+                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-lg w-full p-6 border dark:border-gray-700 space-y-4">
+                    <div class="flex items-center justify-between pb-3 border-b dark:border-gray-700">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xl">📷</span>
+                            <div>
+                                <h3 class="font-bold text-base text-gray-900 dark:text-white leading-tight">
+                                    Map Photo
+                                </h3>
+                                <p class="text-xs text-primary font-medium truncate max-w-xs">
+                                    {{ imagePickerTarget?.title || 'Selected option' }}
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            @click="showImagePickerModal = false"
+                            class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-lg cursor-pointer"
+                        >✕</button>
+                    </div>
+
+                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                        Click on a gallery photo to link it. When customers select this variant or unit on the storefront, the product view switches to this photo.
+                    </p>
+
+                    <!-- Gallery Grid -->
+                    <div v-if="availableGalleryImages && availableGalleryImages.length > 0" class="max-h-72 overflow-y-auto pr-1">
+                        <div class="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                            <button
+                                v-for="(img, idx) in availableGalleryImages"
+                                :key="img.path || idx"
+                                type="button"
+                                @click="selectMappedImage(img.path)"
+                                :class="[
+                                    'relative aspect-square rounded-xl overflow-hidden border-2 transition-all p-0.5 group cursor-pointer flex items-center justify-center bg-gray-50 dark:bg-gray-900',
+                                    currentTargetImage === img.path
+                                        ? 'border-primary ring-2 ring-primary/40 shadow-sm'
+                                        : 'border-gray-200 dark:border-gray-700 hover:border-primary/60'
+                                ]"
+                            >
+                                <img :src="img.url" class="w-full h-full object-cover rounded-lg" :alt="img.label"/>
+                                <span
+                                    v-if="currentTargetImage === img.path"
+                                    class="absolute top-1.5 right-1.5 bg-primary text-white rounded-full p-0.5 shadow"
+                                >
+                                    <svg class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                    </svg>
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Empty Gallery State -->
+                    <div v-else class="text-center py-8 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl text-gray-400">
+                        <span class="text-3xl block mb-2">🖼️</span>
+                        <p class="text-sm font-semibold text-gray-700 dark:text-gray-300">No Gallery Photos Available</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-sm mx-auto">
+                            Please upload product photos in the "Product Images" gallery section above and save first, then select them here.
+                        </p>
+                    </div>
+
+                    <!-- Modal Actions -->
+                    <div class="flex items-center justify-between pt-3 border-t dark:border-gray-700">
+                        <button
+                            v-if="currentTargetImage"
+                            type="button"
+                            @click="clearMappedImage"
+                            class="px-3 py-1.5 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition cursor-pointer"
+                        >
+                            Remove Photo Link
+                        </button>
+                        <span v-else></span>
+
+                        <button
+                            type="button"
+                            @click="showImagePickerModal = false"
+                            class="px-4 py-2 rounded-lg border dark:border-gray-600 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition cursor-pointer"
+                        >
+                            Close
+                        </button>
+                    </div>
                 </div>
             </div>
 

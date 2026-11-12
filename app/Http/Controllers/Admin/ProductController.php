@@ -207,6 +207,7 @@ class ProductController extends Controller
             'related_products'     => 'nullable|array',
             'related_products.*'   => 'exists:products,id',
             'variants'             => 'nullable',
+            'pos_units'            => 'nullable',
             'attributes'           => 'nullable',
             'image'                => 'nullable|image|max:10240',
             'images'               => 'nullable|array|max:10',
@@ -256,14 +257,37 @@ class ProductController extends Controller
             $validated['related_products'] = json_decode($validated['related_products'], true) ?: [];
         }
 
-        if ($request->has('variants') && $request->input('variants')) {
+        if ($request->has('variants')) {
             $inputVariants = $request->input('variants');
-            $validated['variants'] = is_array($inputVariants) ? $inputVariants : (json_decode($inputVariants, true) ?: []);
+            if (is_array($inputVariants)) {
+                $validated['variants'] = $inputVariants;
+            } elseif (is_string($inputVariants) && trim($inputVariants) !== '') {
+                $validated['variants'] = json_decode($inputVariants, true) ?: [];
+            } else {
+                $validated['variants'] = [];
+            }
         }
 
-        if ($request->has('attributes') && $request->input('attributes')) {
+        if ($request->has('pos_units')) {
+            $inputUnits = $request->input('pos_units');
+            if (is_array($inputUnits)) {
+                $validated['pos_units'] = $inputUnits;
+            } elseif (is_string($inputUnits) && trim($inputUnits) !== '') {
+                $validated['pos_units'] = json_decode($inputUnits, true) ?: [];
+            } else {
+                $validated['pos_units'] = [];
+            }
+        }
+
+        if ($request->has('attributes')) {
             $inputAttrs = $request->input('attributes');
-            $validated['attributes'] = is_array($inputAttrs) ? $inputAttrs : (json_decode($inputAttrs, true) ?: []);
+            if (is_array($inputAttrs)) {
+                $validated['attributes'] = $inputAttrs;
+            } elseif (is_string($inputAttrs) && trim($inputAttrs) !== '') {
+                $validated['attributes'] = json_decode($inputAttrs, true) ?: [];
+            } else {
+                $validated['attributes'] = [];
+            }
         }
 
         $shouldCompress = filter_var($request->input('compress_images', true), FILTER_VALIDATE_BOOLEAN);
@@ -356,6 +380,9 @@ class ProductController extends Controller
         $validated = $request->validate($this->rules());
         $validated = $this->processRequest($request, $validated, null);
 
+        $posUnitsInput = $validated['pos_units'] ?? [];
+        unset($validated['pos_units']);
+
         $product = Product::create($validated);
 
         // Synchronize variants & POS variant mappings
@@ -380,6 +407,9 @@ class ProductController extends Controller
             }
         }
 
+        // Synchronize selling units (Units of Measure / packaging sizes)
+        $this->syncProductSellingUnits($product, $posUnitsInput);
+
         ActivityLogger::product("Created product '{$product->name}' (ID: #{$product->id})", [
             'product_id'       => $product->id,
             'price'            => $product->price,
@@ -401,6 +431,9 @@ class ProductController extends Controller
 
         $validated = $request->validate($this->rules(true, $product));
         $validated = $this->processRequest($request, $validated, $product);
+
+        $posUnitsInput = $validated['pos_units'] ?? [];
+        unset($validated['pos_units']);
 
         $product->update($validated);
 
@@ -434,6 +467,9 @@ class ProductController extends Controller
                 // Non-blocking reconciliation
             }
         }
+
+        // Synchronize selling units (Units of Measure / packaging sizes)
+        $this->syncProductSellingUnits($product, $posUnitsInput);
 
         ActivityLogger::product("Updated product '{$product->name}' (ID: #{$product->id})", [
             'product_id' => $product->id,
@@ -567,6 +603,7 @@ class ProductController extends Controller
             $payload = [
                 'variant_key'      => $variantKey,
                 'variant_label'    => $name,
+                'image'            => !empty($varData['image']) ? $varData['image'] : null,
                 'pos_item_id'      => $posItemId,
                 'inventory_source' => $invSource,
                 'local_stock'      => $localStock,
@@ -593,6 +630,7 @@ class ProductController extends Controller
                 'name'             => $name,
                 'price'            => $localPrice,
                 'stock'            => $localStock,
+                'image'            => !empty($varData['image']) ? $varData['image'] : null,
                 'inventory_source' => $invSource,
                 'pos_item_id'      => $posItemId,
             ];
@@ -654,6 +692,93 @@ class ProductController extends Controller
                 }
             }
             $this->apiClient->unregisterMappings($unmappedPosItemIds);
+        }
+    }
+
+    /**
+     * Synchronize selling units (Units of Measure / packaging sizes) for both Ecommerce and POS products.
+     */
+    private function syncProductSellingUnits(Product $product, array $unitsData): void
+    {
+        if (empty($unitsData)) {
+            if ($product->inventory_source === 'ecommerce') {
+                $product->posUnits()->delete();
+            }
+            return;
+        }
+
+        $existingUnits = $product->posUnits()->get()->keyBy('id');
+        $retainedUnitIds = [];
+
+        foreach ($unitsData as $index => $unit) {
+            $unitId = !empty($unit['id']) && is_numeric($unit['id']) ? (int) $unit['id'] : null;
+            $existing = $unitId ? $existingUnits->get($unitId) : null;
+
+            $unitName = trim($unit['unit_name'] ?? ($existing?->unit_name ?? ''));
+            if (empty($unitName)) {
+                continue;
+            }
+
+            $multiplier = isset($unit['quantity_in_base_units']) && $unit['quantity_in_base_units'] !== ''
+                ? max(0.0001, (float) $unit['quantity_in_base_units'])
+                : (float) ($existing?->quantity_in_base_units ?? 1.0);
+
+            $price = isset($unit['price']) && $unit['price'] !== ''
+                ? (float) $unit['price']
+                : (isset($unit['synced_standard_price']) && $unit['synced_standard_price'] !== ''
+                    ? (float) $unit['synced_standard_price']
+                    : (float) ($existing?->synced_standard_price ?? 0.0));
+
+            // If base unit on ecommerce product and price is 0, fall back to product base price
+            if ($multiplier == 1.0 && $price == 0.0 && (float) $product->price > 0) {
+                $price = (float) $product->price;
+            }
+
+            $onlineLabel = isset($unit['online_label']) ? (trim($unit['online_label']) !== '' ? trim($unit['online_label']) : null) : $existing?->online_label;
+            $image = isset($unit['image']) ? (!empty($unit['image']) ? $unit['image'] : null) : $existing?->image;
+            $isEnabled = isset($unit['is_enabled_online']) ? filter_var($unit['is_enabled_online'], FILTER_VALIDATE_BOOLEAN) : ($existing?->is_enabled_online ?? true);
+            $unitKind = $unit['unit_kind'] ?? ($existing?->unit_kind ?? ($multiplier == 1.0 && $index === 0 ? 'base' : 'additional'));
+
+            if ($existing) {
+                $updatePayload = [
+                    'online_label'      => $onlineLabel,
+                    'image'             => $image,
+                    'is_enabled_online' => $isEnabled,
+                    'sort_order'        => $index,
+                ];
+
+                // If ecommerce product, allow updating unit_name, multiplier, and price directly
+                if ($product->inventory_source === 'ecommerce') {
+                    $updatePayload['unit_name']              = $unitName;
+                    $updatePayload['quantity_in_base_units'] = $multiplier;
+                    $updatePayload['synced_standard_price']  = $price;
+                    $updatePayload['unit_kind']              = $unitKind;
+                }
+
+                $existing->update($updatePayload);
+                $retainedUnitIds[] = $existing->id;
+            } else {
+                // New unit created in admin form (ecommerce or custom)
+                $newRecord = ProductPosUnit::create([
+                    'product_id'             => $product->id,
+                    'pos_item_unit_id'       => null,
+                    'unit_kind'              => $unitKind,
+                    'unit_name'              => $unitName,
+                    'quantity_in_base_units' => $multiplier,
+                    'synced_standard_price'  => $price,
+                    'online_label'           => $onlineLabel,
+                    'image'                  => $image,
+                    'is_enabled_online'      => $isEnabled,
+                    'sort_order'             => $index,
+                    'last_pos_sync_at'       => null,
+                ]);
+                $retainedUnitIds[] = $newRecord->id;
+            }
+        }
+
+        // For ecommerce products, delete any units that were removed by the admin
+        if ($product->inventory_source === 'ecommerce') {
+            $product->posUnits()->whereNotIn('id', $retainedUnitIds)->delete();
         }
     }
 

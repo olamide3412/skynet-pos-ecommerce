@@ -48,18 +48,6 @@ class CartController extends Controller
 
         $cart = $this->getOrCreateCart($request);
 
-        // Resolve selling unit
-        $selectedUnit = null;
-        if ($request->product_pos_unit_id) {
-            $selectedUnit = $product->posUnits->firstWhere('id', $request->product_pos_unit_id);
-            if (!$selectedUnit || !$selectedUnit->is_enabled_online) {
-                return back()->with('error', 'The selected purchasing unit is not available.');
-            }
-        }
-
-        $unitName = $selectedUnit ? $selectedUnit->display_label : ($product->pos_base_unit_name ?? 'Piece');
-        $price = $product->getEffectivePriceForUnit($selectedUnit);
-
         // Resolve variant mapping if present
         $variantMapping = null;
         if ($request->product_variant_mapping_id) {
@@ -69,6 +57,29 @@ class CartController extends Controller
                 return $m->variant_label === $request->variant
                     || $m->variant_key === ($request->variant_key ?? $request->variant);
             });
+        }
+
+        // Resolve selling unit (selling units apply to the base product only, not variants)
+        $selectedUnit = null;
+        if (!$variantMapping && !$request->variant && $request->product_pos_unit_id) {
+            $selectedUnit = $product->posUnits->firstWhere('id', $request->product_pos_unit_id);
+            if (!$selectedUnit || !$selectedUnit->is_enabled_online) {
+                return back()->with('error', 'The selected purchasing unit is not available.');
+            }
+        }
+
+        $unitName = $selectedUnit ? $selectedUnit->display_label : ($product->pos_base_unit_name ?? 'Piece');
+        $price = $product->getEffectivePriceForUnit($selectedUnit);
+
+        // Check stock availability if product is ecommerce-managed
+        if ($product->inventory_source === 'ecommerce') {
+            $baseStock = $variantMapping && $variantMapping->local_stock !== null ? (int) $variantMapping->local_stock : (int) $product->stock;
+            $unitMultiplier = $selectedUnit ? floatval($selectedUnit->quantity_in_base_units ?: 1.0) : 1.0;
+            $maxAllowed = (int) floor($baseStock / ($unitMultiplier > 0 ? $unitMultiplier : 1.0));
+            if ($maxAllowed < $request->quantity) {
+                $targetLabel = $selectedUnit ? $unitName : 'unit(s)';
+                return back()->with('error', "Only {$maxAllowed} {$targetLabel} available based on current warehouse stock.");
+            }
         }
 
         if ($variantMapping) {
@@ -162,8 +173,13 @@ class CartController extends Controller
         }
 
         $product = $cartItem->product;
-        if ($product && $product->stock < $request->quantity) {
-            return back()->with('error', "Only {$product->stock} unit(s) available in stock.");
+        if ($product) {
+            $multiplier = $cartItem->posUnit ? floatval($cartItem->posUnit->quantity_in_base_units ?: 1.0) : 1.0;
+            $maxAllowed = (int) floor($product->stock / ($multiplier > 0 ? $multiplier : 1.0));
+            if ($request->quantity > $maxAllowed) {
+                $unitLabel = $cartItem->posUnit?->display_label ?? 'unit(s)';
+                return back()->with('error', "Only {$maxAllowed} {$unitLabel} available in stock.");
+            }
         }
 
         $cartItem->update(['quantity' => $request->quantity]);

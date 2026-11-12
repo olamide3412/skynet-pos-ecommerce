@@ -18,6 +18,7 @@ class ProductPosUnit extends Model
         'quantity_in_base_units',
         'synced_standard_price',
         'online_label',
+        'image',
         'is_enabled_online',
         'sort_order',
         'last_pos_sync_at',

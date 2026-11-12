@@ -544,6 +544,7 @@ class PosCatalogService
                 'quantity_in_base_units' => 1.0,
                 'synced_standard_price' => $syncedItem->standard_price,
                 'online_label' => $baseExisting?->online_label ?? $syncedItem->base_unit_name,
+                'image' => $baseExisting?->image,
                 'is_enabled_online' => true,
                 'sort_order' => 0,
                 'last_pos_sync_at' => now(),
@@ -551,7 +552,9 @@ class PosCatalogService
         );
 
         // Additional units
+        $activePosUnitIds = [];
         foreach ($syncedUnits->where('unit_kind', 'additional') as $index => $unit) {
+            $activePosUnitIds[] = $unit->pos_item_unit_id;
             $key = 'additional_' . $unit->pos_item_unit_id;
             $exist = $existingUnits->get($key);
 
@@ -566,11 +569,34 @@ class PosCatalogService
                     'quantity_in_base_units' => $unit->quantity_in_base_units,
                     'synced_standard_price' => $unit->standard_price,
                     'online_label' => $exist?->online_label ?? $unit->unit_name,
+                    'image' => $exist?->image,
                     'is_enabled_online' => $exist ? $exist->is_enabled_online : true,
                     'sort_order' => $index + 1,
                     'last_pos_sync_at' => now(),
                 ]
             );
+        }
+
+        // Delete any additional units for this product that were deleted on POS
+        $staleUnitsQuery = ProductPosUnit::where('product_id', $product->id)
+            ->where('unit_kind', 'additional');
+
+        if (!empty($activePosUnitIds)) {
+            $staleUnitsQuery->whereNotIn('pos_item_unit_id', $activePosUnitIds);
+        }
+
+        $staleUnits = $staleUnitsQuery->get();
+        if ($staleUnits->isNotEmpty()) {
+            $staleUnitIds = $staleUnits->pluck('id')->all();
+
+            // Clear any active cart items referencing deleted units so carts don't checkout invalid units
+            \App\Models\CartItem::whereIn('product_pos_unit_id', $staleUnitIds)->delete();
+
+            // Delete stale units from product_pos_units
+            ProductPosUnit::whereIn('id', $staleUnitIds)->delete();
+
+            // Refresh loaded relation on product model
+            $product->unsetRelation('posUnits');
         }
     }
 
