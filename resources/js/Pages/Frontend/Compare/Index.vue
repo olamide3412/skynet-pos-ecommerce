@@ -90,9 +90,9 @@ const addToCart = (product) => {
                                 </button>
                                 
                                 <div class="flex flex-col h-full relative">
-                                    <Link :href="route('shop.show', item.product.url_key)" class="block mb-4 overflow-hidden rounded-xl bg-white border dark:border-gray-600 relative group">
-                                        <div class="aspect-video sm:aspect-square w-full">
-                                            <img :src="item.product.image ? '/storage/' + item.product.image : 'https://placehold.co/400x300?text=' + item.product.name" class="w-full h-full object-cover group-hover:scale-105 transition duration-500" :alt="item.product.name" />
+                                    <Link :href="route('shop.show', item.product.url_key)" class="block mb-4 overflow-hidden rounded-xl bg-white dark:bg-gray-800 border dark:border-gray-600 relative group">
+                                        <div class="aspect-video sm:aspect-square w-full p-2 sm:p-3 flex items-center justify-center">
+                                            <img :src="item.product.image ? '/storage/' + item.product.image : 'https://placehold.co/400x300?text=' + item.product.name" class="max-w-full max-h-full object-contain group-hover:scale-105 transition duration-500" :alt="item.product.name" />
                                         </div>
                                     </Link>
                                     

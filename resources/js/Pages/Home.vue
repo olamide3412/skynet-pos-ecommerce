@@ -416,11 +416,11 @@ onUnmounted(() => {
                             class="w-[145px] sm:w-[170px] md:w-[190px] shrink-0 bg-white dark:bg-gray-800 rounded-lg sm:rounded-xl shadow-2xs hover:shadow-md transition-all duration-300 border border-red-100 dark:border-red-900/30 group/card flex flex-col overflow-hidden"
                         >
                             <!-- Image Box -->
-                            <div class="relative overflow-hidden h-28 sm:h-36 md:h-40 shrink-0 bg-gray-100 dark:bg-gray-700">
-                                <Link :href="route('shop.show', product.url_key)" class="block w-full h-full">
+                            <div class="relative overflow-hidden h-28 sm:h-36 md:h-40 shrink-0 bg-white dark:bg-gray-800 p-1.5 sm:p-2 flex items-center justify-center">
+                                <Link :href="route('shop.show', product.url_key)" class="flex items-center justify-center w-full h-full">
                                     <img
                                         :src="product.image ? '/storage/' + product.image : 'https://placehold.co/400x400'"
-                                        class="w-full h-full object-cover transform group-hover/card:scale-105 transition duration-500"
+                                        class="max-w-full max-h-full object-contain transform group-hover/card:scale-105 transition duration-500"
                                         :alt="product.name"
                                     />
                                 </Link>
@@ -604,11 +604,11 @@ onUnmounted(() => {
                             class="w-[145px] sm:w-[170px] md:w-[190px] shrink-0 bg-white dark:bg-gray-800 rounded-lg sm:rounded-xl shadow-2xs hover:shadow-md transition-all duration-300 border border-gray-100 dark:border-gray-700/80 group/card flex flex-col overflow-hidden"
                         >
                             <!-- Image Box -->
-                            <div class="relative overflow-hidden h-28 sm:h-36 md:h-40 shrink-0 bg-gray-100 dark:bg-gray-700">
-                                <Link :href="route('shop.show', { url_key: product.url_key, ...(product.url_query || {}) })" class="block w-full h-full">
+                            <div class="relative overflow-hidden h-28 sm:h-36 md:h-40 shrink-0 bg-white dark:bg-gray-800 p-1.5 sm:p-2 flex items-center justify-center">
+                                <Link :href="route('shop.show', { url_key: product.url_key, ...(product.url_query || {}) })" class="flex items-center justify-center w-full h-full">
                                     <img
                                         :src="product.image ? '/storage/' + product.image : 'https://placehold.co/400x400'"
-                                        class="w-full h-full object-cover transform group-hover/card:scale-105 transition duration-500"
+                                        class="max-w-full max-h-full object-contain transform group-hover/card:scale-105 transition duration-500"
                                         :alt="product.name"
                                     />
                                 </Link>
@@ -795,11 +795,11 @@ onUnmounted(() => {
                             class="w-[145px] sm:w-[170px] md:w-[190px] shrink-0 bg-white dark:bg-gray-800 rounded-lg sm:rounded-xl shadow-2xs hover:shadow-md transition-all duration-300 border border-gray-100 dark:border-gray-700/80 group/card flex flex-col overflow-hidden"
                         >
                             <!-- Image Box -->
-                            <div class="relative overflow-hidden h-28 sm:h-36 md:h-40 shrink-0 bg-gray-100 dark:bg-gray-700">
-                                <Link :href="route('shop.show', { url_key: product.url_key, ...(product.url_query || {}) })" class="block w-full h-full">
+                            <div class="relative overflow-hidden h-28 sm:h-36 md:h-40 shrink-0 bg-white dark:bg-gray-800 p-1.5 sm:p-2 flex items-center justify-center">
+                                <Link :href="route('shop.show', { url_key: product.url_key, ...(product.url_query || {}) })" class="flex items-center justify-center w-full h-full">
                                     <img
                                         :src="product.image ? '/storage/' + product.image : 'https://placehold.co/400x400'"
-                                        class="w-full h-full object-cover transform group-hover/card:scale-105 transition duration-500"
+                                        class="max-w-full max-h-full object-contain transform group-hover/card:scale-105 transition duration-500"
                                         :alt="product.name"
                                     />
                                 </Link>
@@ -989,11 +989,11 @@ onUnmounted(() => {
                             class="w-[145px] sm:w-[170px] md:w-[190px] shrink-0 bg-white dark:bg-gray-800 rounded-lg sm:rounded-xl shadow-2xs hover:shadow-md transition-all duration-300 border border-gray-100 dark:border-gray-700/80 group/card flex flex-col overflow-hidden"
                         >
                             <!-- Image Box -->
-                            <div class="relative overflow-hidden h-28 sm:h-36 md:h-40 shrink-0 bg-gray-100 dark:bg-gray-700">
-                                <Link :href="route('shop.show', { url_key: product.url_key, ...(product.url_query || {}) })" class="block w-full h-full">
+                            <div class="relative overflow-hidden h-28 sm:h-36 md:h-40 shrink-0 bg-white dark:bg-gray-800 p-1.5 sm:p-2 flex items-center justify-center">
+                                <Link :href="route('shop.show', { url_key: product.url_key, ...(product.url_query || {}) })" class="flex items-center justify-center w-full h-full">
                                     <img
                                         :src="product.image ? '/storage/' + product.image : 'https://placehold.co/400x400'"
-                                        class="w-full h-full object-cover transform group-hover/card:scale-105 transition duration-500"
+                                        class="max-w-full max-h-full object-contain transform group-hover/card:scale-105 transition duration-500"
                                         :alt="product.name"
                                     />
                                 </Link>
@@ -1277,11 +1277,11 @@ onUnmounted(() => {
                             class="w-[145px] sm:w-[170px] md:w-[190px] shrink-0 bg-white dark:bg-gray-800 rounded-lg sm:rounded-xl shadow-2xs hover:shadow-md transition-all duration-300 border border-gray-100 dark:border-gray-700/80 group/card flex flex-col overflow-hidden"
                         >
                             <!-- Image Box -->
-                            <div class="relative overflow-hidden h-28 sm:h-36 md:h-40 shrink-0 bg-gray-100 dark:bg-gray-700">
-                                <Link :href="route('shop.show', { url_key: product.url_key, ...(product.url_query || {}) })" class="block w-full h-full">
+                            <div class="relative overflow-hidden h-28 sm:h-36 md:h-40 shrink-0 bg-white dark:bg-gray-800 p-1.5 sm:p-2 flex items-center justify-center">
+                                <Link :href="route('shop.show', { url_key: product.url_key, ...(product.url_query || {}) })" class="flex items-center justify-center w-full h-full">
                                     <img
                                         :src="product.image ? '/storage/' + product.image : 'https://placehold.co/400x400'"
-                                        class="w-full h-full object-cover transform group-hover/card:scale-105 transition duration-500"
+                                        class="max-w-full max-h-full object-contain transform group-hover/card:scale-105 transition duration-500"
                                         :alt="product.name"
                                     />
                                 </Link>

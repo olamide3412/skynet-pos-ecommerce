@@ -75,10 +75,12 @@ const addToCart = (item) => {
 
                     <!-- Product Image -->
                     <Link :href="route('shop.show', item.product?.url_key)" class="block relative overflow-hidden">
-                        <img
-                            :src="item.product?.image ? '/storage/' + item.product.image : 'https://placehold.co/400x300?text=Product'"
-                            :alt="item.product?.name"
-                            class="w-full h-36 sm:h-48 object-cover hover:scale-105 transition duration-300" />
+                        <div class="w-full h-36 sm:h-48 bg-white dark:bg-gray-800 p-2 sm:p-3 flex items-center justify-center overflow-hidden">
+                            <img
+                                :src="item.product?.image ? '/storage/' + item.product.image : 'https://placehold.co/400x300?text=Product'"
+                                :alt="item.product?.name"
+                                class="max-w-full max-h-full object-contain hover:scale-105 transition duration-300" />
+                        </div>
                         <!-- Remove heart overlay -->
                         <button
                             @click.prevent="removeFromWishlist(item)"

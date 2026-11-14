@@ -664,8 +664,10 @@ const seoDescription = computed(() => {
                     </div>
 
                     <Link :href="route('shop.show', { url_key: product.url_key, ...(product.url_query || {}) })" class="block flex-1 flex flex-col">
-                        <img :src="product.image ? '/storage/' + product.image : 'https://placehold.co/400x300?text=Product'"
-                            :alt="product.name" class="w-full h-36 sm:h-44 md:h-48 object-cover group-hover:scale-105 transition duration-300" />
+                        <div class="w-full h-36 sm:h-44 md:h-48 bg-white dark:bg-gray-800 p-2 sm:p-2.5 flex items-center justify-center overflow-hidden shrink-0">
+                            <img :src="product.image ? '/storage/' + product.image : 'https://placehold.co/400x300?text=Product'"
+                                :alt="product.name" class="max-w-full max-h-full object-contain group-hover:scale-105 transition duration-300" />
+                        </div>
                         <div class="p-2 sm:p-3 flex-1 flex flex-col">
                             <div class="flex items-center justify-between gap-1 mb-0.5">
                                 <p v-if="product.category" class="text-[10px] sm:text-xs text-gray-400 dark:text-gray-500 uppercase tracking-wide truncate">{{ product.category.name }}</p>
