@@ -175,10 +175,11 @@ const handleLogin = () => {
 
           <!-- Remember Me & Forgot Password -->
           <div class="flex items-center justify-between">
-            <label class="flex items-center">
+            <label for="admin_remember" class="flex items-center cursor-pointer select-none">
               <input
+                id="admin_remember"
                 type="checkbox"
-                class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded cursor-pointer"
                 v-model="form.remember"
               />
               <span class="ml-2 text-sm text-gray-600 dark:text-gray-200">Remember me</span>

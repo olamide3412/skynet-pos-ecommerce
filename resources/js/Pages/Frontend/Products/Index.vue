@@ -61,6 +61,7 @@ const sortLabel = computed(() => {
 
 const {
     cartItemsByProductId,
+    getCartItemForListing,
     addToCart,
     updateQuantity,
     isUpdatingItem,
@@ -633,7 +634,7 @@ const seoDescription = computed(() => {
 
                     <!-- ─── Product Grid ──────────────────────────────── -->
                     <div class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3.5 md:gap-4">
-                <div v-for="product in products.data" :key="product.id"
+                <div v-for="product in products.data" :key="product.listing_key || product.id"
                     class="border border-gray-100 dark:border-gray-700/80 rounded-xl sm:rounded-2xl overflow-hidden shadow-xs hover:shadow-md hover:border-gray-200 dark:hover:border-gray-600 transition-all bg-white dark:bg-gray-800 flex flex-col relative group">
 
                     <!-- Wishlist Heart Button -->
@@ -651,15 +652,18 @@ const seoDescription = computed(() => {
                         </svg>
                     </button>
 
-                    <!-- Flash Sale or Regular Sale Badge -->
-                    <div v-if="product.is_on_flash_sale" class="absolute top-2 left-2 sm:top-3 sm:left-3 z-10 bg-amber-500 text-white text-[9px] sm:text-[10px] font-black px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full shadow-md animate-pulse flex items-center gap-1">
+                    <!-- Unit Badge, Flash Sale, or Regular Sale Badge -->
+                    <div v-if="product.is_unit_listing" class="absolute top-2 left-2 sm:top-3 sm:left-3 z-10 bg-indigo-600 text-white text-[9px] sm:text-[10px] font-bold px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full shadow-md flex items-center gap-1">
+                        📦 <span>{{ product.unit_label }}</span>
+                    </div>
+                    <div v-else-if="product.is_on_flash_sale" class="absolute top-2 left-2 sm:top-3 sm:left-3 z-10 bg-amber-500 text-white text-[9px] sm:text-[10px] font-black px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full shadow-md animate-pulse flex items-center gap-1">
                         ⚡ <span class="hidden sm:inline">FLASH DEAL</span><span class="sm:hidden">DEAL</span>
                     </div>
                     <div v-else-if="product.discount_price" class="absolute top-2 left-2 sm:top-3 sm:left-3 z-10 bg-red-500 text-white text-[9px] sm:text-[10px] font-bold px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full shadow-md">
                         SALE
                     </div>
 
-                    <Link :href="route('shop.show', product.url_key)" class="block flex-1 flex flex-col">
+                    <Link :href="route('shop.show', { url_key: product.url_key, ...(product.url_query || {}) })" class="block flex-1 flex flex-col">
                         <img :src="product.image ? '/storage/' + product.image : 'https://placehold.co/400x300?text=Product'"
                             :alt="product.name" class="w-full h-36 sm:h-44 md:h-48 object-cover group-hover:scale-105 transition duration-300" />
                         <div class="p-2 sm:p-3 flex-1 flex flex-col">
@@ -669,7 +673,7 @@ const seoDescription = computed(() => {
                             </div>
                             <h4 class="text-xs sm:text-sm font-semibold mb-1 text-gray-900 dark:text-white line-clamp-2 leading-snug">{{ product.name }}</h4>
                             <div class="flex flex-col mt-auto pt-1 sm:pt-2">
-                                <span v-if="product.is_on_flash_sale || product.discount_price" class="text-[10px] sm:text-xs font-medium text-gray-400 line-through">₦{{ parseFloat(product.price).toLocaleString() }}</span>
+                                <span v-if="!product.is_unit_listing && (product.is_on_flash_sale || product.discount_price)" class="text-[10px] sm:text-xs font-medium text-gray-400 line-through">₦{{ parseFloat(product.price).toLocaleString() }}</span>
                                 <span class="text-primary font-black text-sm sm:text-base">
                                     ₦{{ parseFloat(product.effective_price || product.discount_price || product.price).toLocaleString() }}
                                 </span>
@@ -680,22 +684,22 @@ const seoDescription = computed(() => {
                     <!-- Add to Cart & Compare -->
                     <div class="px-2 pb-2 sm:px-3 sm:pb-3 mt-auto flex items-center gap-1.5 sm:gap-2">
                         <!-- In Cart: Quantity Controls -[1]+ -->
-                        <div v-if="cartItemsByProductId[product.id]" class="flex-1 inline-flex items-center justify-between border border-primary/40 bg-primary/5 dark:bg-primary/10 rounded-lg overflow-hidden shadow-xs h-8 sm:h-9.5">
+                        <div v-if="getCartItemForListing(product)" class="flex-1 inline-flex items-center justify-between border border-primary/40 bg-primary/5 dark:bg-primary/10 rounded-lg overflow-hidden shadow-xs h-8 sm:h-9.5">
                             <button
                                 type="button"
-                                @click.prevent="updateQuantity(cartItemsByProductId[product.id], cartItemsByProductId[product.id].quantity - 1)"
-                                :disabled="isUpdatingItem(cartItemsByProductId[product.id].id)"
+                                @click.prevent="updateQuantity(getCartItemForListing(product), getCartItemForListing(product).quantity - 1)"
+                                :disabled="isUpdatingItem(getCartItemForListing(product).id)"
                                 class="w-7 sm:w-10 h-full flex items-center justify-center font-bold text-gray-700 dark:text-gray-200 hover:bg-primary hover:text-white transition disabled:opacity-50 text-xs sm:text-base cursor-pointer"
                                 title="Decrease quantity">
                                 -
                             </button>
                             <span class="px-1 sm:px-2 text-center text-xs sm:text-sm font-black text-primary">
-                                {{ cartItemsByProductId[product.id].quantity }}
+                                {{ getCartItemForListing(product).quantity }}
                             </span>
                             <button
                                 type="button"
-                                @click.prevent="updateQuantity(cartItemsByProductId[product.id], cartItemsByProductId[product.id].quantity + 1)"
-                                :disabled="isUpdatingItem(cartItemsByProductId[product.id].id)"
+                                @click.prevent="updateQuantity(getCartItemForListing(product), getCartItemForListing(product).quantity + 1)"
+                                :disabled="isUpdatingItem(getCartItemForListing(product).id)"
                                 class="w-7 sm:w-10 h-full flex items-center justify-center font-bold text-gray-700 dark:text-gray-200 hover:bg-primary hover:text-white transition disabled:opacity-50 text-xs sm:text-base cursor-pointer"
                                 title="Increase quantity">
                                 +
@@ -704,16 +708,17 @@ const seoDescription = computed(() => {
 
                         <button v-else
                             @click="addToCart(product)"
-                            :disabled="isAddingProduct(product.id)"
-                            class="flex-1 py-1.5 sm:py-2 rounded-lg bg-primary hover:opacity-90 text-white text-xs sm:text-sm font-bold transition disabled:opacity-60 flex items-center justify-center gap-1 sm:gap-2 shadow-xs cursor-pointer h-8 sm:h-9.5">
-                            <svg v-if="!isAddingProduct(product.id)" class="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            :disabled="isAddingProduct(product.id) || product.stock <= 0"
+                            :class="product.stock <= 0 ? 'opacity-50 cursor-not-allowed bg-gray-400 dark:bg-gray-600' : 'bg-primary hover:opacity-90 cursor-pointer'"
+                            class="flex-1 py-1.5 sm:py-2 rounded-lg text-white text-xs sm:text-sm font-bold transition flex items-center justify-center gap-1 sm:gap-2 shadow-xs h-8 sm:h-9.5">
+                            <svg v-if="!isAddingProduct(product.id) && product.stock > 0" class="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
                             </svg>
-                            <svg v-else class="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
+                            <svg v-else-if="isAddingProduct(product.id)" class="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
                                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
                                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                             </svg>
-                            <span class="truncate">{{ isAddingProduct(product.id) ? '...' : 'Add' }}</span>
+                            <span class="truncate">{{ product.stock <= 0 ? 'Out of Stock' : (isAddingProduct(product.id) ? '...' : 'Add') }}</span>
                         </button>
 
                         <button @click="addToCompare(product)" :disabled="comparing[product.id]"

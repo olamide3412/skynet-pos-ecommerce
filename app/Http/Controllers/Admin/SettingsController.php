@@ -92,10 +92,17 @@ class SettingsController extends Controller
             'show_cart_total_header'        => 'boolean',
             'tracking_number_prefix'        => 'nullable|string|max:10',
             // Product display
-            'show_stock_level_default'      => 'boolean',
-            'stock_display_mode'            => 'nullable|string|in:threshold_only,always,hidden',
-            'low_stock_threshold'           => 'nullable|integer|min:1|max:100',
-            'pos_brand_sync_overwrite'      => 'boolean',
+            'show_stock_level_default'          => 'boolean',
+            'stock_display_mode'                => 'nullable|string|in:threshold_only,always,hidden',
+            'low_stock_threshold'               => 'nullable|integer|min:1|max:100',
+            'split_selling_units_in_listing'    => 'boolean',
+            'split_unit_out_of_stock_behavior'  => 'nullable|string|in:show_out_of_stock,hide',
+            'pos_brand_sync_overwrite'          => 'boolean',
+            'default_product_warranty'          => 'nullable|string|max:1000',
+            'default_product_return_policy'     => 'nullable|string|max:2000',
+            'enable_product_expiry_tracking'    => 'boolean',
+            'expiry_warning_threshold_days'     => 'nullable|integer|min:1|max:365',
+            'hide_expired_products_on_storefront' => 'boolean',
 
             // Authentication Providers
             'turnstile_enabled'             => 'boolean',

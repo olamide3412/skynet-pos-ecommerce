@@ -26,8 +26,29 @@ export function useCart() {
     return map;
   });
 
+  // Map of listing_key ("p{id}-u{unit_id}" or "p{id}") -> matching cart item
+  const cartItemsByListingKey = computed(() => {
+    const map = {};
+    for (const item of cartItems.value) {
+      const key = item.product_pos_unit_id ? `p${item.product_id}-u${item.product_pos_unit_id}` : `p${item.product_id}`;
+      if (!map[key]) {
+        map[key] = item;
+      }
+    }
+    return map;
+  });
+
   const getCartItemForProduct = (productId) => {
     return cartItemsByProductId.value[productId] || null;
+  };
+
+  const getCartItemForListing = (productOrKey) => {
+    if (!productOrKey) return null;
+    if (typeof productOrKey === 'string') {
+      return cartItemsByListingKey.value[productOrKey] || null;
+    }
+    const key = productOrKey.listing_key || (productOrKey.unit_id ? `p${productOrKey.id}-u${productOrKey.unit_id}` : `p${productOrKey.id}`);
+    return cartItemsByListingKey.value[key] || cartItemsByProductId.value[productOrKey.id] || null;
   };
 
   const addToCart = (product, quantity = 1, options = {}) => {
@@ -37,7 +58,7 @@ export function useCart() {
     const payload = {
       product_id: productId,
       quantity: quantity,
-      product_pos_unit_id: options.product_pos_unit_id ?? null,
+      product_pos_unit_id: options.product_pos_unit_id ?? (product.unit_id || null),
       variant: options.variant ?? null,
       variant_key: options.variant_key ?? null,
     };
@@ -101,7 +122,9 @@ export function useCart() {
     cartCount,
     cartItems,
     cartItemsByProductId,
+    cartItemsByListingKey,
     getCartItemForProduct,
+    getCartItemForListing,
     addToCart,
     updateQuantity,
     removeFromCart,

@@ -173,8 +173,8 @@ const handleLogin = () => {
                     </template>
 
                     <div class="flex items-center justify-between">
-                        <label class="flex items-center">
-                            <input type="checkbox" class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded" v-model="form.remember" />
+                        <label for="customer_remember" class="flex items-center cursor-pointer select-none">
+                            <input id="customer_remember" type="checkbox" class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded cursor-pointer" v-model="form.remember" />
                             <span class="ml-2 text-sm text-gray-600 dark:text-gray-300">Remember me</span>
                         </label>
                         <Link :href="route('password.request')" class="text-sm font-medium text-primary hover:underline">

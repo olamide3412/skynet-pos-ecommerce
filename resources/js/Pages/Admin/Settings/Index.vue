@@ -69,7 +69,14 @@ const form = useForm({
     show_stock_level_default:       props.settings.show_stock_level_default !== '0',
     stock_display_mode:             props.settings.stock_display_mode || 'threshold_only',
     low_stock_threshold:            props.settings.low_stock_threshold || '5',
+    split_selling_units_in_listing: props.settings.split_selling_units_in_listing !== '0',
+    split_unit_out_of_stock_behavior: props.settings.split_unit_out_of_stock_behavior || 'show_out_of_stock',
     pos_brand_sync_overwrite:       props.settings.pos_brand_sync_overwrite === '1',
+    default_product_warranty:       props.settings.default_product_warranty || '',
+    default_product_return_policy:  props.settings.default_product_return_policy || '',
+    enable_product_expiry_tracking: props.settings.enable_product_expiry_tracking === '1',
+    expiry_warning_threshold_days:  props.settings.expiry_warning_threshold_days || '30',
+    hide_expired_products_on_storefront: props.settings.hide_expired_products_on_storefront !== '0',
     // Authentication Providers
     turnstile_enabled:              props.settings.turnstile_enabled !== '0',
     google_auth_enabled:            props.settings.google_auth_enabled === '1',
@@ -684,6 +691,128 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                                     <input type="number" min="1" max="100" v-model="form.low_stock_threshold"
                                         class="w-20 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-1.5 text-center font-bold text-sm" />
                                     <span class="text-xs text-gray-500 dark:text-gray-400">units</span>
+                                </div>
+                            </div>
+
+                            <!-- Split Selling Units into Separate Storefront Listings -->
+                            <div class="pt-4 border-t border-gray-200 dark:border-gray-700 space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                                            <span>📏</span> Split Selling Units in Storefront Listings
+                                        </p>
+                                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                                            When enabled, packaging sizes/selling units (e.g. Milo Half Roll x5, Milo 1 Roll x10) will split into individual product cards across the shop, search, and home listings.
+                                        </p>
+                                    </div>
+                                    <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                                        <input type="checkbox" v-model="form.split_selling_units_in_listing" class="sr-only peer" />
+                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                                    </label>
+                                </div>
+
+                                <!-- Out of Stock Behavior for Unit Listings -->
+                                <div v-if="form.split_selling_units_in_listing" class="p-3.5 bg-gray-50 dark:bg-gray-900/60 rounded-xl border border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                    <div>
+                                        <p class="text-xs font-bold text-gray-800 dark:text-gray-200 uppercase tracking-wider">
+                                            Zero Stock Behavior for Packaging Units
+                                        </p>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                            When a unit package cannot be made (e.g. stock is 8, but package requires 10):
+                                        </p>
+                                    </div>
+                                    <select v-model="form.split_unit_out_of_stock_behavior" class="rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-1.5 text-xs text-gray-900 dark:text-white font-semibold focus:ring-primary">
+                                        <option value="show_out_of_stock">Show Card with "Out of Stock" badge</option>
+                                        <option value="hide">Hide the unit card completely</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Store-Wide Default Warranty & Return Policy -->
+                            <div class="pt-4 border-t border-gray-200 dark:border-gray-700 space-y-4">
+                                <div>
+                                    <p class="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                                        <span>🛡️</span> Store-Wide Default Warranty & Return Policy
+                                    </p>
+                                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                                        These default policies automatically apply to products on the storefront unless a product specifies its own custom warranty or return policy.
+                                    </p>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-1.5">
+                                            Default Product Warranty
+                                        </label>
+                                        <input
+                                            type="text"
+                                            v-model="form.default_product_warranty"
+                                            placeholder="e.g. 1 Year Official Warranty, or 30-day replacement"
+                                            class="w-full rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3.5 py-2 text-sm text-gray-900 dark:text-white focus:ring-primary"
+                                        />
+                                        <span class="text-[11px] text-gray-400 mt-1 block">Shown on product pages as the default warranty guarantee.</span>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-1.5">
+                                            Default Return & Refund Policy
+                                        </label>
+                                        <input
+                                            type="text"
+                                            v-model="form.default_product_return_policy"
+                                            placeholder="e.g. 7 Days Free Return if unopened with original seal"
+                                            class="w-full rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3.5 py-2 text-sm text-gray-900 dark:text-white focus:ring-primary"
+                                        />
+                                        <span class="text-[11px] text-gray-400 mt-1 block">Shown on product pages as the standard return condition.</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Product Expiry & Shelf Life Tracking -->
+                            <div class="pt-5 border-t border-gray-100 dark:border-gray-700/60">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                                            <span>⏳</span> Enable Product Expiry Tracking
+                                        </p>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400">
+                                            Master switch. When enabled, monitors optional product expiry dates, alerts admins for items nearing expiration, and blocks expired goods from being ordered.
+                                        </p>
+                                    </div>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" v-model="form.enable_product_expiry_tracking" class="sr-only peer" />
+                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                                    </label>
+                                </div>
+
+                                <!-- Expiry Options (Visible only when tracking is enabled) -->
+                                <div v-if="form.enable_product_expiry_tracking" class="mt-4 p-4 rounded-xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-900/40 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-xs font-bold text-gray-800 dark:text-gray-200 mb-1">
+                                            ⚠️ Warning Threshold (Days Before Expiry)
+                                        </label>
+                                        <div class="flex items-center gap-2">
+                                            <input
+                                                type="number"
+                                                v-model="form.expiry_warning_threshold_days"
+                                                min="1"
+                                                max="365"
+                                                class="w-24 rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-xs font-bold text-gray-900 dark:text-white focus:ring-primary"
+                                            />
+                                            <span class="text-xs text-gray-500 dark:text-gray-400">days (flags item as "Expiring Soon")</span>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center justify-between sm:justify-end gap-3 pt-1">
+                                        <div class="text-right">
+                                            <label class="block text-xs font-bold text-gray-800 dark:text-gray-200">
+                                                Hide Expired from Storefront
+                                            </label>
+                                            <span class="text-[11px] text-gray-500 dark:text-gray-400">Completely remove from search/shop</span>
+                                        </div>
+                                        <input
+                                            type="checkbox"
+                                            v-model="form.hide_expired_products_on_storefront"
+                                            class="rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary h-4 w-4 cursor-pointer"
+                                        />
+                                    </div>
                                 </div>
                             </div>
                         </div>

@@ -73,6 +73,22 @@ class ProductController extends Controller
             }
         }
 
+        if ($expiryFilter = $request->input('expiry_status')) {
+            $threshold = (int) \App\Models\StoreSetting::get('expiry_warning_threshold_days', 30);
+            if ($expiryFilter === 'expired') {
+                $query->whereNotNull('expiry_date')->where('expiry_date', '<=', now()->toDateString());
+            } elseif ($expiryFilter === 'expiring_soon') {
+                $query->whereNotNull('expiry_date')
+                    ->where('expiry_date', '>', now()->toDateString())
+                    ->where('expiry_date', '<=', now()->addDays($threshold)->toDateString());
+            } elseif ($expiryFilter === 'valid') {
+                $query->whereNotNull('expiry_date')
+                    ->where('expiry_date', '>', now()->addDays($threshold)->toDateString());
+            } elseif ($expiryFilter === 'has_expiry') {
+                $query->whereNotNull('expiry_date');
+            }
+        }
+
         $sort = $request->input('sort', 'latest');
         match ($sort) {
             'name_asc'   => $query->orderBy('name', 'asc'),
@@ -138,7 +154,7 @@ class ProductController extends Controller
             'brands' => Brand::ordered()->get(['id', 'name', 'slug', 'logo', 'is_active', 'pos_brand_id']),
             'synced_pos_items' => $syncedItems,
             'store_settings' => \App\Models\StoreSetting::allAsArray(),
-            'filters' => array_merge($request->only(['search', 'category_id', 'brand_id', 'status', 'inventory_source', 'sort']), [
+            'filters' => array_merge($request->only(['search', 'category_id', 'brand_id', 'status', 'inventory_source', 'expiry_status', 'sort']), [
                 'per_page' => (string) $perPageInput,
             ]),
         ]);
@@ -186,6 +202,8 @@ class ProductController extends Controller
             'brand_id'             => 'nullable|exists:brands,id',
             'short_description'    => 'nullable|string',
             'description'          => 'nullable|string',
+            'warranty'             => 'nullable|string|max:2000',
+            'return_policy'        => 'nullable|string|max:2000',
             'meta_title'           => 'nullable|string|max:255',
             'meta_description'     => 'nullable|string|max:1000',
             'meta_keywords'        => 'nullable|string|max:1000',
@@ -199,6 +217,7 @@ class ProductController extends Controller
             'special_price_from'   => 'nullable|date',
             'special_price_to'     => 'nullable|date|after_or_equal:special_price_from',
             'stock'                => 'required|integer|min:0',
+            'expiry_date'          => 'nullable|date',
             'is_new'               => 'boolean',
             'is_featured'          => 'boolean',
             'visible_individually' => 'boolean',
@@ -737,6 +756,7 @@ class ProductController extends Controller
             $onlineLabel = isset($unit['online_label']) ? (trim($unit['online_label']) !== '' ? trim($unit['online_label']) : null) : $existing?->online_label;
             $image = isset($unit['image']) ? (!empty($unit['image']) ? $unit['image'] : null) : $existing?->image;
             $isEnabled = isset($unit['is_enabled_online']) ? filter_var($unit['is_enabled_online'], FILTER_VALIDATE_BOOLEAN) : ($existing?->is_enabled_online ?? true);
+            $showInListing = isset($unit['show_in_listing']) ? filter_var($unit['show_in_listing'], FILTER_VALIDATE_BOOLEAN) : ($existing?->show_in_listing ?? true);
             $unitKind = $unit['unit_kind'] ?? ($existing?->unit_kind ?? ($multiplier == 1.0 && $index === 0 ? 'base' : 'additional'));
 
             if ($existing) {
@@ -744,15 +764,19 @@ class ProductController extends Controller
                     'online_label'      => $onlineLabel,
                     'image'             => $image,
                     'is_enabled_online' => $isEnabled,
+                    'show_in_listing'   => $showInListing,
                     'sort_order'        => $index,
                 ];
 
-                // If ecommerce product, allow updating unit_name, multiplier, and price directly
-                if ($product->inventory_source === 'ecommerce') {
+                // Allow updating unit_name, multiplier, and price directly for ecommerce items or custom units
+                if ($product->inventory_source === 'ecommerce' || empty($existing->pos_item_unit_id)) {
                     $updatePayload['unit_name']              = $unitName;
                     $updatePayload['quantity_in_base_units'] = $multiplier;
                     $updatePayload['synced_standard_price']  = $price;
                     $updatePayload['unit_kind']              = $unitKind;
+                } elseif ($price > 0) {
+                    // For POS-synced units, allow online price override if entered
+                    $updatePayload['synced_standard_price']  = $price;
                 }
 
                 $existing->update($updatePayload);
@@ -769,6 +793,7 @@ class ProductController extends Controller
                     'online_label'           => $onlineLabel,
                     'image'                  => $image,
                     'is_enabled_online'      => $isEnabled,
+                    'show_in_listing'        => $showInListing,
                     'sort_order'             => $index,
                     'last_pos_sync_at'       => null,
                 ]);
@@ -776,9 +801,12 @@ class ProductController extends Controller
             }
         }
 
-        // For ecommerce products, delete any units that were removed by the admin
+        // Delete any units that were removed by the admin
         if ($product->inventory_source === 'ecommerce') {
             $product->posUnits()->whereNotIn('id', $retainedUnitIds)->delete();
+        } else {
+            // For POS products, delete custom units that were created online and removed
+            $product->posUnits()->whereNull('pos_item_unit_id')->whereNotIn('id', $retainedUnitIds)->delete();
         }
     }
 

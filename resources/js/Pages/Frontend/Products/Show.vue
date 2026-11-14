@@ -28,6 +28,10 @@ const props = defineProps({
         type: Object,
         default: null,
     },
+    preselected_unit_id: {
+        type: [Number, String],
+        default: null,
+    },
 });
 
 const page = usePage();
@@ -49,12 +53,30 @@ const wishlistEnabled = computed(() => page.props.store_settings?.wishlist_enabl
 const isWishlisted = ref(props.is_wishlisted);
 const togglingWishlist = ref(false);
 
+const effectiveWarranty = computed(() => {
+    return (props.product.warranty && props.product.warranty.trim()) 
+        ? props.product.warranty.trim() 
+        : (page.props.store_settings?.default_product_warranty || '');
+});
+
+const effectiveReturnPolicy = computed(() => {
+    return (props.product.return_policy && props.product.return_policy.trim()) 
+        ? props.product.return_policy.trim() 
+        : (page.props.store_settings?.default_product_return_policy || '');
+});
+
 const selectedVariant = ref(null);
-const selectedPosUnit = ref(
-    props.product.pos_units && props.product.pos_units.length > 0 
-        ? (props.product.pos_units.find(u => u.unit_kind === 'base') || props.product.pos_units[0]) 
-        : null
-);
+
+const initialUnit = (() => {
+    if (!props.product.pos_units || props.product.pos_units.length === 0) return null;
+    if (props.preselected_unit_id) {
+        const found = props.product.pos_units.find(u => Number(u.id) === Number(props.preselected_unit_id));
+        if (found) return found;
+    }
+    return props.product.pos_units.find(u => u.unit_kind === 'base') || props.product.pos_units[0];
+})();
+
+const selectedPosUnit = ref(initialUnit);
 
 const allImages = computed(() => {
     let imgs = [];
@@ -65,7 +87,7 @@ const allImages = computed(() => {
     return imgs;
 });
 
-const activeImage = ref(allImages.value.length ? allImages.value[0] : null);
+const activeImage = ref(initialUnit?.image || (allImages.value.length ? allImages.value[0] : null));
 
 const form = useForm({
     product_id: props.product.id,
@@ -239,7 +261,14 @@ const maxStock = computed(() => {
     return Math.max(0, baseStock);
 });
 
+const isExpired = computed(() => {
+    return page.props.store_settings?.enable_product_expiry_tracking === '1' && props.product.expiry_status === 'expired';
+});
+
 const isPurchasable = computed(() => {
+    if (isExpired.value) {
+        return false;
+    }
     if (selectedVariant.value && selectedVariant.value.is_pos) {
         return maxStock.value > 0;
     }
@@ -258,6 +287,13 @@ const lowStockThreshold = computed(() => {
 });
 
 const stockBadge = computed(() => {
+    if (isExpired.value) {
+        return {
+            text: 'Expired / Unavailable',
+            class: 'bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-300 border border-red-200 dark:border-red-800',
+            dotClass: 'bg-red-500',
+        };
+    }
     if (!isPurchasable.value || maxStock.value <= 0) {
         return {
             text: 'Out of Stock',
@@ -698,6 +734,12 @@ const structuredData = computed(() => {
                         <span :class="['px-3 py-1 text-sm rounded-full border shadow-xs transition-all', stockBadge.class]">
                             {{ stockBadge.text }}
                         </span>
+
+                        <span v-if="page.props.store_settings?.enable_product_expiry_tracking === '1' && product.expiry_date && !isExpired"
+                              class="px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 flex items-center gap-1">
+                            <span>⏳</span>
+                            <span>Best Before: {{ new Date(product.expiry_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) }}</span>
+                        </span>
                     </div>
 
                     <!-- POS Selling Units Selection -->
@@ -823,7 +865,7 @@ const structuredData = computed(() => {
                                 :disabled="form.processing || !isPurchasable || requiresVariantSelection" 
                                 class="bg-gray-800 hover:bg-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 text-white font-bold transition flex-1 h-12 rounded-md disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wide flex items-center justify-center gap-2 text-sm shadow-sm">
                                 <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
-                                {{ !isPurchasable ? 'Out of Stock' : (requiresVariantSelection ? 'Select an Option' : 'Add to Cart') }}
+                                {{ !isPurchasable ? (isExpired ? 'Expired — Not for Sale' : 'Out of Stock') : (requiresVariantSelection ? 'Select an Option' : 'Add to Cart') }}
                             </button>
 
                             <button @click="addToCompare" :disabled="comparing"
@@ -842,36 +884,38 @@ const structuredData = computed(() => {
                             :disabled="form.processing || !isPurchasable || requiresVariantSelection" 
                             class="bg-primary hover:opacity-90 text-white font-bold transition w-full h-12 rounded-md disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wide flex items-center justify-center gap-2 text-sm shadow-md hover:shadow-lg">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                            {{ !isPurchasable ? 'Out of Stock' : (requiresVariantSelection ? 'Select Option to Buy Now' : 'Buy Now') }}
+                            {{ !isPurchasable ? (isExpired ? 'Expired — Not for Sale' : 'Out of Stock') : (requiresVariantSelection ? 'Select Option to Buy Now' : 'Buy Now') }}
                         </button>
                     </div>
+                </div>
+            </div>
 
-                    <!-- Share Strip Below Actions -->
-                    <div class="mt-4 pt-4 border-t dark:border-gray-700/80 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500 dark:text-gray-400">
-                        <span class="font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
-                            <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                            </svg>
-                            Share this product:
-                        </span>
-                        <div class="flex items-center gap-3">
-                            <button @click="shareTo('whatsapp')" type="button" class="hover:text-emerald-500 transition font-medium flex items-center gap-1 cursor-pointer" title="Share on WhatsApp">
-                                💬 WhatsApp
-                            </button>
-                            <span class="text-gray-300 dark:text-gray-600">•</span>
-                            <button @click="shareTo('twitter')" type="button" class="hover:text-black dark:hover:text-white transition font-medium flex items-center gap-1 cursor-pointer" title="Post on X">
-                                𝕏 Post
-                            </button>
-                            <span class="text-gray-300 dark:text-gray-600">•</span>
-                            <button @click="shareTo('facebook')" type="button" class="hover:text-blue-600 transition font-medium flex items-center gap-1 cursor-pointer" title="Share on Facebook">
-                                Facebook
-                            </button>
-                            <span class="text-gray-300 dark:text-gray-600">•</span>
-                            <button @click="copyShareLink" type="button" class="hover:text-primary transition font-medium flex items-center gap-1 cursor-pointer" title="Copy product link">
-                                🔗 {{ copiedLink ? 'Copied!' : 'Copy Link' }}
-                            </button>
-                        </div>
+            <!-- Share & Community Section of its own -->
+            <div class="mt-8 bg-white dark:bg-gray-800 p-4 sm:p-5 rounded-xl shadow-xs border dark:border-gray-700 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                        </svg>
                     </div>
+                    <div>
+                        <h4 class="text-sm font-bold text-gray-900 dark:text-white">Share This Product</h4>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">Recommend this item to friends and family across social media</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <button @click="shareTo('whatsapp')" type="button" class="px-3.5 py-2 text-xs font-semibold rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 transition flex items-center gap-1.5 cursor-pointer">
+                        <span>💬</span> WhatsApp
+                    </button>
+                    <button @click="shareTo('twitter')" type="button" class="px-3.5 py-2 text-xs font-semibold rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 transition flex items-center gap-1.5 cursor-pointer">
+                        <span>𝕏</span> Post
+                    </button>
+                    <button @click="shareTo('facebook')" type="button" class="px-3.5 py-2 text-xs font-semibold rounded-lg bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 transition flex items-center gap-1.5 cursor-pointer">
+                        <span>f</span> Facebook
+                    </button>
+                    <button @click="copyShareLink" type="button" class="px-3.5 py-2 text-xs font-semibold rounded-lg border border-gray-300 dark:border-gray-600 hover:border-primary text-gray-700 dark:text-gray-200 transition flex items-center gap-1.5 cursor-pointer">
+                        <span>🔗</span> {{ copiedLink ? 'Copied to Clipboard!' : 'Copy Link' }}
+                    </button>
                 </div>
             </div>
             
@@ -880,6 +924,63 @@ const structuredData = computed(() => {
                 <h3 class="text-2xl font-bold mb-6 text-black dark:text-white border-b dark:border-gray-700 pb-4">Product Description</h3>
                 <div class="ql-snow">
                     <div class="ql-editor prose prose-blue prose-lg dark:prose-invert max-w-none text-gray-800 dark:text-gray-200" v-html="product.description" style="padding: 0;"></div>
+                </div>
+            </div>
+
+            <!-- Warranty & Return Guidelines Dedicated Section -->
+            <div v-if="effectiveWarranty || effectiveReturnPolicy" id="warranty-and-returns" class="mt-12 bg-white dark:bg-gray-800 p-8 rounded-xl shadow-sm border dark:border-gray-700 scroll-mt-24">
+                <div class="flex items-center justify-between pb-6 border-b dark:border-gray-700 flex-wrap gap-3">
+                    <div>
+                        <h3 class="text-2xl font-bold text-black dark:text-white flex items-center gap-2.5">
+                            <span class="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-lg">🛡️</span>
+                            Warranty & Return Policy
+                        </h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                            Clear and transparent coverage terms for this product.
+                        </p>
+                    </div>
+                    <span class="text-xs font-semibold px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                        Buyer Protection Guaranteed
+                    </span>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                    <!-- Warranty Card -->
+                    <div v-if="effectiveWarranty" class="p-6 rounded-xl bg-gray-50/70 dark:bg-gray-900/40 border border-gray-200/80 dark:border-gray-700/80 flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-xs uppercase font-extrabold tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                                    <span>🛡️</span> Official Warranty
+                                </span>
+                                <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
+                                    Coverage
+                                </span>
+                            </div>
+                            <h4 class="text-base font-bold text-gray-900 dark:text-white mb-2">Warranty Terms</h4>
+                            <p class="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line leading-relaxed">
+                                {{ effectiveWarranty }}
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Return Policy Card -->
+                    <div v-if="effectiveReturnPolicy" class="p-6 rounded-xl bg-gray-50/70 dark:bg-gray-900/40 border border-gray-200/80 dark:border-gray-700/80 flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-xs uppercase font-extrabold tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                                    <span>🔄</span> Return & Refund
+                                </span>
+                                <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300">
+                                    Policy
+                                </span>
+                            </div>
+                            <h4 class="text-base font-bold text-gray-900 dark:text-white mb-2">Return Guidelines</h4>
+                            <p class="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line leading-relaxed">
+                                {{ effectiveReturnPolicy }}
+                            </p>
+                        </div>
+                    </div>
                 </div>
             </div>
 

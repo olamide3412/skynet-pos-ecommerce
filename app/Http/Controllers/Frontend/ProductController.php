@@ -7,14 +7,22 @@ use App\Models\Brand;
 use App\Models\Product;
 use App\Models\Category;
 use App\Models\Wishlist;
+use App\Services\Storefront\StorefrontListingExpander;
 use Inertia\Inertia;
 use Illuminate\Http\Request;
 
 class ProductController extends Controller
 {
+    public function __construct(
+        protected StorefrontListingExpander $expander
+    ) {}
+
     public function index(Request $request, ?Brand $currentBrand = null)
     {
-        $query = Product::where('status', true)->with(['category', 'brand:id,name,slug,logo']);
+        $query = Product::availableOnStorefront()->with(array_merge(
+            ['category', 'brand:id,name,slug,logo'],
+            $this->expander->eagerLoad()
+        ));
         
         $collection = $request->input('collection', $request->input('filter'));
 
@@ -102,7 +110,15 @@ class ProductController extends Controller
             if ($searchTerm !== '') {
                 $query->where(function ($q) use ($searchTerm) {
                     $q->where('name', 'like', '%' . $searchTerm . '%')
-                        ->orWhereHas('brand', fn ($bq) => $bq->where('name', 'like', '%' . $searchTerm . '%'));
+                        ->orWhereHas('brand', fn ($bq) => $bq->where('name', 'like', '%' . $searchTerm . '%'))
+                        ->orWhereHas('posUnits', function ($uq) use ($searchTerm) {
+                            $uq->where('is_enabled_online', true)
+                               ->where('show_in_listing', true)
+                               ->where(function ($sub) use ($searchTerm) {
+                                   $sub->where('online_label', 'like', '%' . $searchTerm . '%')
+                                       ->orWhere('unit_name', 'like', '%' . $searchTerm . '%');
+                               });
+                        });
                 });
 
                 // Log full shop search (first page only to avoid inflating count on pagination clicks)
@@ -188,8 +204,11 @@ class ProductController extends Controller
             ->filter(fn ($b) => $b->products_count > 0 || ($currentBrand && $b->id === $currentBrand->id))
             ->values();
 
+        $paginator = $query->paginate(16)->withQueryString();
+        $expandedPaginator = $this->expander->expandPaginator($paginator, $request->input('search'));
+
         return Inertia::render('Frontend/Products/Index', [
-            'products'      => $query->paginate(16)->withQueryString(),
+            'products'      => $expandedPaginator,
             'categories'    => $categories,
             'brands'        => $brands,
             'current_brand' => $currentBrand,
@@ -205,7 +224,7 @@ class ProductController extends Controller
         return $this->index($request, $brand);
     }
 
-    public function show(string $url_key)
+    public function show(Request $request, string $url_key)
     {
         // Resolve active product by url_key first, fall back to slug for old links
         $product = Product::where('status', true)
@@ -233,41 +252,57 @@ class ProductController extends Controller
             ->get();
         $avgRating = round((float) ($product->approvedReviews()->avg('rating') ?: 5.0), 1);
         $reviewsCount = $product->approvedReviews()->count();
+
+        // Preselect selling unit if passed via ?unit= parameter
+        $preselectedUnitId = null;
+        if ($request->has('unit')) {
+            $requestedUnit = $product->posUnits()->where('id', $request->query('unit'))->where('is_enabled_online', true)->first();
+            if ($requestedUnit) {
+                $preselectedUnitId = (int) $requestedUnit->id;
+            }
+        }
         
         return Inertia::render('Frontend/Products/Show', [
-            'product'        => $product->load([
+            'product'             => $product->load([
                 'category',
                 'brand:id,name,slug,logo',
                 'posUnits' => fn($q) => $q->where('is_enabled_online', true)->orderBy('sort_order'),
                 'variantMappings' => fn($q) => $q->where('is_active', true)->with('syncedPosItem')->orderBy('sort_order'),
             ]),
-            'is_wishlisted'  => $isWishlisted,
-            'related'        => $this->getRelated($product),
-            'reviews'        => $reviews,
-            'average_rating' => $avgRating,
-            'reviews_count'  => $reviewsCount,
-            'user_review'    => $userReview,
+            'is_wishlisted'       => $isWishlisted,
+            'related'             => $this->getRelated($product),
+            'reviews'             => $reviews,
+            'average_rating'      => $avgRating,
+            'reviews_count'       => $reviewsCount,
+            'user_review'         => $userReview,
+            'preselected_unit_id' => $preselectedUnitId,
         ]);
     }
 
     private function getRelated(Product $product): \Illuminate\Support\Collection
     {
+        $eagerLoad = array_merge(['category', 'brand:id,name,slug,logo'], $this->expander->eagerLoad());
+
         // Manually selected takes priority
         if (!empty($product->related_products)) {
-            $related = Product::with(['category', 'brand:id,name,slug,logo'])
+            $related = Product::with($eagerLoad)
                 ->whereIn('id', $product->related_products)
                 ->where('status', true)
                 ->where('id', '!=', $product->id)
                 ->take(12)
                 ->get();
-            if ($related->isNotEmpty()) return $related;
+            if ($related->isNotEmpty()) {
+                return $this->expander->expandAndLimit($related, 12);
+            }
         }
         // Fallback: same category
-        return Product::with(['category', 'brand:id,name,slug,logo'])
+        $related = Product::with($eagerLoad)
             ->where('category_id', $product->category_id)
             ->where('id', '!=', $product->id)
             ->where('status', true)
             ->take(10)
             ->get();
+
+        return $this->expander->expandAndLimit($related, 10);
     }
 }

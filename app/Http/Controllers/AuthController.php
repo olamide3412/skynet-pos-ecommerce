@@ -50,7 +50,7 @@ class AuthController extends Controller
         // Try to authenticate using email
         $credentials = ['email' => $login, 'password' => $attributes['password']];
 
-        if (Auth::guard('web')->attempt($credentials, $request->remember ?? false)) {
+        if (Auth::guard('web')->attempt($credentials, $request->boolean('remember'))) {
             $user = Auth::guard('web')->user();
 
             if ($user->status === StatusEnums::Disable->value) {

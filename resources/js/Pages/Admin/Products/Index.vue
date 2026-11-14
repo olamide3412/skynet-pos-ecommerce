@@ -40,6 +40,7 @@ const filterCategory = ref(props.filters?.category_id || '');
 const filterBrand = ref(props.filters?.brand_id || '');
 const filterStatus = ref(props.filters?.status || '');
 const filterInventorySource = ref(props.filters?.inventory_source || '');
+const filterExpiryStatus = ref(props.filters?.expiry_status || '');
 const filterSort = ref(props.filters?.sort || 'latest');
 const perPage = ref(props.filters?.per_page || '25');
 
@@ -50,12 +51,13 @@ const applyFilters = debounce(() => {
         brand_id: filterBrand.value || undefined,
         status: filterStatus.value || undefined,
         inventory_source: filterInventorySource.value || undefined,
+        expiry_status: filterExpiryStatus.value || undefined,
         sort: filterSort.value !== 'latest' ? filterSort.value : undefined,
         per_page: perPage.value !== '25' ? perPage.value : undefined,
     }, { preserveState: true, replace: true });
 }, 300);
 
-watch([search, filterCategory, filterBrand, filterStatus, filterInventorySource, filterSort, perPage], applyFilters);
+watch([search, filterCategory, filterBrand, filterStatus, filterInventorySource, filterExpiryStatus, filterSort, perPage], applyFilters);
 
 const clearFilters = () => {
     search.value = '';
@@ -63,6 +65,7 @@ const clearFilters = () => {
     filterBrand.value = '';
     filterStatus.value = '';
     filterInventorySource.value = '';
+    filterExpiryStatus.value = '';
     filterSort.value = 'latest';
     perPage.value = '25';
 };
@@ -152,6 +155,8 @@ const form = useForm({
     sku:               '',
     short_description: '',
     description:       '',
+    warranty:          '',
+    return_policy:     '',
     // SEO
     meta_title:        '',
     meta_description:  '',
@@ -165,6 +170,7 @@ const form = useForm({
     special_price_to:  '',
     // Inventory
     stock:             '',
+    expiry_date:       '',
     // Flags
     status:            true,
     is_new:            false,
@@ -564,12 +570,13 @@ const enableEcommerceSellingUnits = () => {
         form.pos_units.unshift({
             _uid: 'unit_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
             id: null,
-            unit_name: 'Single Item',
+            unit_name: 'Single Unit',
             unit_kind: 'base',
             quantity_in_base_units: 1,
             synced_standard_price: form.price || 0,
-            online_label: 'Single',
+            online_label: '',
             is_enabled_online: true,
+            show_in_listing: true,
             image: '',
         });
     }
@@ -577,12 +584,13 @@ const enableEcommerceSellingUnits = () => {
         form.pos_units.push({
             _uid: 'unit_' + (Date.now() + 1) + '_' + Math.random().toString(36).substr(2, 9),
             id: null,
-            unit_name: 'Pack of 6',
+            unit_name: '',
             unit_kind: 'additional',
-            quantity_in_base_units: 6,
-            synced_standard_price: Number((Number(form.price || 0) * 6).toFixed(2)),
-            online_label: 'Pack of 6',
+            quantity_in_base_units: '',
+            synced_standard_price: '',
+            online_label: '',
             is_enabled_online: true,
+            show_in_listing: true,
             image: '',
         });
     }
@@ -591,17 +599,30 @@ const enableEcommerceSellingUnits = () => {
 
 const addEcommerceSellingUnit = () => {
     if (!form.pos_units) form.pos_units = [];
-    const count = form.pos_units.length;
-    const factor = count >= 2 ? count * 12 : 12;
+    if (!form.pos_units.some(u => u.unit_kind === 'base')) {
+        form.pos_units.unshift({
+            _uid: 'unit_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+            id: null,
+            unit_name: 'Single Unit',
+            unit_kind: 'base',
+            quantity_in_base_units: 1,
+            synced_standard_price: form.price || 0,
+            online_label: '',
+            is_enabled_online: true,
+            show_in_listing: true,
+            image: '',
+        });
+    }
     form.pos_units.push({
-        _uid: 'unit_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+        _uid: 'unit_' + (Date.now() + 1) + '_' + Math.random().toString(36).substr(2, 9),
         id: null,
-        unit_name: `Carton of ${factor}`,
+        unit_name: '',
         unit_kind: 'additional',
-        quantity_in_base_units: factor,
-        synced_standard_price: Number((Number(form.price || 0) * factor).toFixed(2)),
-        online_label: `Carton (${factor} Units)`,
+        quantity_in_base_units: '',
+        synced_standard_price: '',
+        online_label: '',
         is_enabled_online: true,
+        show_in_listing: true,
         image: '',
     });
     form.pos_units = [...form.pos_units];
@@ -797,6 +818,8 @@ const openEditForm = (p) => {
     form.sku               = p.sku || '';
     form.short_description = p.short_description || '';
     form.description       = p.description || '';
+    form.warranty          = p.warranty || '';
+    form.return_policy     = p.return_policy || '';
     nextTick(() => {
         if (fullDescQuillRef.value) {
             fullDescQuillRef.value.pasteHTML(p.description || '');
@@ -812,6 +835,7 @@ const openEditForm = (p) => {
     form.special_price_from = p.special_price_from ? p.special_price_from.substring(0,10) : '';
     form.special_price_to   = p.special_price_to   ? p.special_price_to.substring(0,10)   : '';
     form.stock             = p.stock;
+    form.expiry_date       = p.expiry_date ? p.expiry_date.substring(0, 10) : '';
     form.status            = p.status;
     form.is_new            = p.is_new;
     form.is_featured       = p.is_featured;
@@ -850,7 +874,8 @@ const openEditForm = (p) => {
         quantity_in_base_units: u.quantity_in_base_units,
         synced_standard_price: u.synced_standard_price,
         online_label: u.online_label || '',
-        is_enabled_online: u.is_enabled_online !== false,
+        is_enabled_online: u.is_enabled_online !== false && u.is_enabled_online !== 0,
+        show_in_listing: u.show_in_listing !== false && u.show_in_listing !== 0,
         image: u.image || '',
     }));
     form.attributes        = p.attributes || {};
@@ -895,6 +920,9 @@ const resetFormState = () => {
     form.meta_title = '';
     form.meta_description = '';
     form.meta_keywords = '';
+    form.warranty = '';
+    form.return_policy = '';
+    form.expiry_date = '';
     form.related_products = [];
     form.variants = [];
     form.pos_units = [];
@@ -1354,6 +1382,18 @@ const submitBulkMoveToEcommerce = () => {
                     </select>
                 </div>
 
+                <div v-if="$page.props.store_settings?.enable_product_expiry_tracking === '1'" class="w-full sm:w-auto min-w-[160px]">
+                    <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">⏳ Expiry Status</label>
+                    <select v-model="filterExpiryStatus" 
+                        class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary focus:border-primary">
+                        <option value="">All Expiry</option>
+                        <option value="expired">🔴 Expired Only</option>
+                        <option value="expiring_soon">🟡 Expiring Soon</option>
+                        <option value="valid">🟢 Fresh / Valid</option>
+                        <option value="has_expiry">⏳ Has Expiry Date</option>
+                    </select>
+                </div>
+
                 <div class="w-full sm:w-auto min-w-[170px]">
                     <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Sort By</label>
                     <select v-model="filterSort" 
@@ -1380,7 +1420,7 @@ const submitBulkMoveToEcommerce = () => {
                     </select>
                 </div>
 
-                <div v-if="search || filterCategory || filterBrand || filterStatus || filterInventorySource || filterSort !== 'latest' || perPage !== '25'">
+                <div v-if="search || filterCategory || filterBrand || filterStatus || filterInventorySource || filterExpiryStatus || filterSort !== 'latest' || perPage !== '25'">
                     <button @click="clearFilters" class="px-4 py-2 text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition h-[38px]">
                         Clear
                     </button>
@@ -1627,6 +1667,17 @@ const submitBulkMoveToEcommerce = () => {
                                             :class="p.stock > 10 ? 'bg-green-500' : (p.stock > 0 ? 'bg-yellow-500' : 'bg-red-500')"></span>
                                         {{ p.stock > 0 ? `${p.stock} in stock` : 'Out of stock' }}
                                     </span>
+                                    <div v-if="$page.props.store_settings?.enable_product_expiry_tracking === '1' && p.expiry_date" class="mt-1">
+                                        <span v-if="p.expiry_status === 'expired'" class="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
+                                            <span>🔴</span> Expired: {{ p.expiry_date.substring(0, 10) }}
+                                        </span>
+                                        <span v-else-if="p.expiry_status === 'expiring_soon'" class="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+                                            <span>🟡</span> Exp: {{ p.days_until_expiry }}d left
+                                        </span>
+                                        <span v-else class="text-[10px] text-gray-400 dark:text-gray-500 block">
+                                            Exp: {{ p.expiry_date.substring(0, 10) }}
+                                        </span>
+                                    </div>
                                 </td>
                                 <td class="px-5 py-3">
                                     <div class="flex flex-wrap gap-1">
@@ -2112,11 +2163,12 @@ const submitBulkMoveToEcommerce = () => {
                             </div>
                         </div>
 
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4.5 mb-5">
+                        <!-- Pricing Fields -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4.5 mb-5">
                             <div>
-                                <label class="block text-sm font-semibold mb-1 flex items-center justify-between">
+                                <label class="block text-sm font-semibold mb-1 flex items-center justify-between gap-1">
                                     <span>Base Price (₦) *</span>
-                                    <span v-if="form.inventory_source === 'pos'" class="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded">Synced from POS</span>
+                                    <span v-if="form.inventory_source === 'pos'" class="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded shrink-0 whitespace-nowrap">Synced from POS</span>
                                 </label>
                                 <input
                                     v-model="form.price"
@@ -2132,18 +2184,18 @@ const submitBulkMoveToEcommerce = () => {
                                 <p v-if="form.errors.price" class="text-red-500 text-xs mt-1">{{ form.errors.price }}</p>
                             </div>
                             <div>
-                                <label class="block text-sm font-semibold mb-1">
-                                    Discount Price (₦)
-                                    <span class="text-xs font-normal text-gray-400 ml-1">(Optional)</span>
+                                <label class="block text-sm font-semibold mb-1 flex items-center justify-between gap-1">
+                                    <span>Discount Price (₦)</span>
+                                    <span class="text-xs font-normal text-gray-400">Optional</span>
                                 </label>
                                 <input v-model="form.discount_price" type="number" step="0.01" min="0" placeholder="Optional sale price"
                                     class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-primary shadow-sm"/>
                                 <p v-if="form.errors.discount_price" class="text-red-500 text-xs mt-1">{{ form.errors.discount_price }}</p>
                             </div>
                             <div>
-                                <label class="block text-sm font-semibold mb-1 flex items-center justify-between">
-                                    <span>Cost Price (₦) <span class="text-xs font-normal text-gray-400 ml-1">(Internal COGS)</span></span>
-                                    <span v-if="form.inventory_source === 'pos'" class="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded">Synced from POS</span>
+                                <label class="block text-sm font-semibold mb-1 flex items-center justify-between gap-1">
+                                    <span>Cost Price (₦)</span>
+                                    <span v-if="form.inventory_source === 'pos'" class="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded shrink-0 whitespace-nowrap">Synced from POS</span>
                                 </label>
                                 <input
                                     v-model="form.cost_price"
@@ -2156,14 +2208,18 @@ const submitBulkMoveToEcommerce = () => {
                                     class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-primary shadow-sm"
                                 />
                                 <p v-if="form.errors.cost_price" class="text-red-500 text-xs mt-1">{{ form.errors.cost_price }}</p>
-                                <p v-if="form.inventory_source === 'pos'" class="text-[11px] text-gray-400 mt-1">
-                                    Buying cost synced from POS branch inventory. Read-only.
+                                <p class="text-[11px] text-gray-400 mt-1">
+                                    {{ form.inventory_source === 'pos' ? 'Buying cost synced from POS branch. Read-only.' : 'Internal cost of goods sold (COGS).' }}
                                 </p>
                             </div>
+                        </div>
+
+                        <!-- Inventory & Shelf Life Fields -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4.5 mb-5 pt-3 border-t border-gray-100 dark:border-gray-700/60">
                             <div>
-                                <label class="block text-sm font-semibold mb-1 flex items-center justify-between">
+                                <label class="block text-sm font-semibold mb-1 flex items-center justify-between gap-1">
                                     <span>Stock Qty *</span>
-                                    <span v-if="form.inventory_source === 'pos'" class="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded">Synced from POS</span>
+                                    <span v-if="form.inventory_source === 'pos'" class="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded shrink-0 whitespace-nowrap">Synced from POS</span>
                                 </label>
                                 <input
                                     v-model="form.stock"
@@ -2176,6 +2232,25 @@ const submitBulkMoveToEcommerce = () => {
                                     class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-primary shadow-sm"
                                 />
                                 <p v-if="form.errors.stock" class="text-red-500 text-xs mt-1">{{ form.errors.stock }}</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold mb-1 flex items-center justify-between gap-1">
+                                    <span>⏳ Expiry Date</span>
+                                    <button
+                                        v-if="form.expiry_date"
+                                        type="button"
+                                        @click="form.expiry_date = ''"
+                                        class="text-[11px] text-rose-500 hover:underline font-semibold cursor-pointer"
+                                    >Clear</button>
+                                    <span v-else class="text-xs font-normal text-gray-400">Optional</span>
+                                </label>
+                                <input
+                                    v-model="form.expiry_date"
+                                    type="date"
+                                    class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-primary shadow-sm text-sm"
+                                />
+                                <p class="text-[11px] text-gray-400 mt-1">Leave empty for non-perishable goods.</p>
+                                <p v-if="form.errors.expiry_date" class="text-red-500 text-xs mt-1">{{ form.errors.expiry_date }}</p>
                             </div>
                         </div>
 
@@ -2512,7 +2587,7 @@ const submitBulkMoveToEcommerce = () => {
                                     Selling Units & Packaging Sizes
                                 </h3>
                                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                                    Sell in multiple packaging sizes (e.g. Single, Pack of 6, Carton of 24) sharing the same warehouse inventory pool.
+                                    Sell in custom packaging sizes (e.g. Single, Half Roll, 1 Roll, Pack, Carton) sharing the same warehouse inventory pool.
                                 </p>
                             </div>
                             <div class="flex items-center gap-2">
@@ -2520,7 +2595,6 @@ const submitBulkMoveToEcommerce = () => {
                                     {{ form.pos_units.length }} Unit(s)
                                 </span>
                                 <button
-                                    v-if="form.inventory_source === 'ecommerce' && form.pos_units && form.pos_units.length > 0"
                                     type="button"
                                     @click="addEcommerceSellingUnit"
                                     class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition shadow-xs cursor-pointer"
@@ -2539,12 +2613,12 @@ const submitBulkMoveToEcommerce = () => {
                             </div>
                         </div>
 
-                        <!-- Empty state for Ecommerce products -->
-                        <div v-if="(!form.pos_units || form.pos_units.length === 0) && form.inventory_source === 'ecommerce'" class="text-center py-6 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl mt-3">
+                        <!-- Empty state -->
+                        <div v-if="!form.pos_units || form.pos_units.length === 0" class="text-center py-6 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl mt-3">
                             <span class="text-2xl block mb-1">📦</span>
                             <p class="text-xs font-bold text-gray-700 dark:text-gray-300">Selling Units Not Configured</p>
                             <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 max-w-sm mx-auto mb-3">
-                                Offer bulk or packaging options (like Single, Pack of 6, Carton of 24) that automatically deduct from this product's unified stock pool.
+                                Offer bulk or packaging options (e.g. Single Unit, Half Roll, 1 Roll, Pack, Carton) that automatically deduct from this product's unified stock pool.
                             </p>
                             <button
                                 type="button"
@@ -2555,11 +2629,6 @@ const submitBulkMoveToEcommerce = () => {
                             </button>
                         </div>
 
-                        <!-- Empty state for POS products without units -->
-                        <div v-else-if="(!form.pos_units || form.pos_units.length === 0) && form.inventory_source === 'pos'" class="text-center py-4 text-xs text-gray-400">
-                            No additional selling units defined on POS branch. Only Base Unit will be sold.
-                        </div>
-
                         <!-- Units list -->
                         <div v-else class="space-y-3 mt-4">
                             <div
@@ -2567,47 +2636,29 @@ const submitBulkMoveToEcommerce = () => {
                                 :key="u._uid || u.id || uIdx"
                                 class="p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-700/30 space-y-3 relative"
                             >
-                                <!-- Unit Card Header: Checkbox + Name + Badge + Remove Action -->
+                                <!-- Unit Card Header: Checkbox + Name Input + Badge + Remove Action -->
                                 <div class="flex items-center justify-between gap-3 flex-wrap">
-                                    <div class="flex items-center gap-2.5 flex-1 min-w-[200px]">
-                                        <input
-                                            v-model="u.is_enabled_online"
-                                            type="checkbox"
-                                            :id="'pos_unit_online_' + uIdx"
-                                            class="rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary h-4 w-4 shrink-0 cursor-pointer"
-                                            title="Toggle online visibility"
-                                        />
-                                        <!-- Ecommerce Unit Name -->
-                                        <div v-if="form.inventory_source === 'ecommerce'" class="flex items-center gap-2 flex-1 max-w-sm">
+                                    <div class="flex items-center gap-2.5 flex-1 min-w-[240px]">
+                                        <div class="flex items-center gap-2 flex-1 max-w-md">
                                             <input
                                                 v-model="u.unit_name"
                                                 type="text"
-                                                placeholder="Unit Name (e.g. Pack of 6)"
+                                                :placeholder="u.unit_kind === 'base' ? 'Base Unit Name (e.g. Single, Sachet, Tin)' : 'Unit Name (e.g. Half Roll, 1 Roll, Pack)'"
                                                 class="h-8 px-2.5 text-xs font-bold rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-primary flex-1"
                                             />
-                                            <span v-if="u.unit_kind === 'base'" class="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 shrink-0">
+                                            <span v-if="u.unit_kind === 'base' || Number(u.quantity_in_base_units) === 1" class="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 shrink-0">
                                                 Base Unit (1x)
                                             </span>
-                                        </div>
-                                        <!-- POS Unit Header -->
-                                        <div v-else class="flex items-center gap-2">
-                                            <span class="text-sm font-bold text-gray-900 dark:text-white">{{ u.unit_name }}</span>
-                                            <span v-if="Number(u.quantity_in_base_units) === 1" class="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
-                                                Base Unit
-                                            </span>
-                                            <span v-else class="text-[10px] font-semibold text-gray-500 dark:text-gray-400">
-                                                ({{ u.quantity_in_base_units }}x base)
+                                            <span v-else class="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 shrink-0">
+                                                ({{ u.quantity_in_base_units || '?' }}x base)
                                             </span>
                                         </div>
                                     </div>
 
                                     <!-- Top-Right Actions -->
                                     <div class="flex items-center gap-2">
-                                        <span v-if="form.inventory_source === 'pos'" class="text-xs font-bold text-indigo-600 dark:text-indigo-400">
-                                            ₦{{ Number(u.price || u.synced_standard_price || 0).toLocaleString() }}
-                                        </span>
                                         <button
-                                            v-if="form.inventory_source === 'ecommerce' && u.unit_kind !== 'base'"
+                                            v-if="u.unit_kind !== 'base'"
                                             type="button"
                                             @click.stop.prevent="removeSellingUnit(uIdx)"
                                             class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 border border-rose-200 dark:border-rose-900/50 transition cursor-pointer"
@@ -2621,17 +2672,18 @@ const submitBulkMoveToEcommerce = () => {
 
                                 <!-- Fields Grid: fits 100% inside the card width -->
                                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 pt-2 border-t border-gray-200/60 dark:border-gray-700/60 items-end">
-                                    <!-- Multiplier -->
-                                    <div :class="form.inventory_source === 'ecommerce' ? 'lg:col-span-3' : 'hidden'">
+                                    <!-- Multiplier (Base Qty) -->
+                                    <div class="lg:col-span-2 sm:col-span-1">
                                         <label class="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 mb-1">
-                                            Multiplier (Base Qty)
+                                            Qty of Base Units
                                         </label>
                                         <input
                                             v-if="u.unit_kind !== 'base'"
                                             v-model="u.quantity_in_base_units"
                                             type="number"
                                             min="1"
-                                            step="1"
+                                            step="any"
+                                            placeholder="e.g. 5, 10, 12"
                                             class="w-full h-9 px-3 text-xs rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                                         />
                                         <div v-else class="h-9 px-3 text-xs rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 text-gray-500 flex items-center font-mono font-bold">
@@ -2639,23 +2691,23 @@ const submitBulkMoveToEcommerce = () => {
                                         </div>
                                     </div>
 
-                                    <!-- Unit Price -->
-                                    <div :class="form.inventory_source === 'ecommerce' ? 'lg:col-span-3' : 'hidden'">
+                                    <!-- Selling Price -->
+                                    <div class="lg:col-span-3 sm:col-span-1">
                                         <label class="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 mb-1">
-                                            Unit Price (₦)
+                                            Selling Price (₦)
                                         </label>
                                         <input
                                             v-model="u.synced_standard_price"
                                             type="number"
                                             step="0.01"
                                             min="0"
-                                            placeholder="₦ Price"
+                                            :placeholder="u.price ? '₦ ' + u.price : '₦ Price'"
                                             class="w-full h-9 px-3 text-xs font-bold rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                                         />
                                     </div>
 
                                     <!-- Online Display Label -->
-                                    <div :class="form.inventory_source === 'ecommerce' ? 'lg:col-span-3' : 'lg:col-span-7 sm:col-span-1'">
+                                    <div class="lg:col-span-3 sm:col-span-1">
                                         <label class="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 mb-1">
                                             Online Display Label
                                         </label>
@@ -2668,7 +2720,7 @@ const submitBulkMoveToEcommerce = () => {
                                     </div>
 
                                     <!-- Assigned Photo -->
-                                    <div :class="form.inventory_source === 'ecommerce' ? 'lg:col-span-3' : 'lg:col-span-5 sm:col-span-1'">
+                                    <div class="lg:col-span-4 sm:col-span-1">
                                         <label class="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 mb-1">
                                             Assigned Photo
                                         </label>
@@ -2692,6 +2744,140 @@ const submitBulkMoveToEcommerce = () => {
                                             </button>
                                         </div>
                                     </div>
+                                </div>
+
+                                <!-- Visibility & Splitting Options -->
+                                <div class="flex items-center gap-6 pt-2 text-xs text-gray-600 dark:text-gray-300 flex-wrap">
+                                    <label class="inline-flex items-center gap-2 cursor-pointer font-medium select-none">
+                                        <input
+                                            v-model="u.is_enabled_online"
+                                            type="checkbox"
+                                            class="rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary h-4 w-4 cursor-pointer"
+                                        />
+                                        <span>Sell Online</span>
+                                    </label>
+                                    <label class="inline-flex items-center gap-2 cursor-pointer font-medium select-none">
+                                        <input
+                                            v-model="u.show_in_listing"
+                                            type="checkbox"
+                                            class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer"
+                                        />
+                                        <span class="flex items-center gap-1">
+                                            <span class="font-bold text-indigo-700 dark:text-indigo-400">Split Card:</span>
+                                            <span class="text-gray-500 dark:text-gray-400">Show as separate item card in shop & search listings</span>
+                                        </span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Warranty & Return Policy -->
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-emerald-100 dark:border-emerald-900/50">
+                        <div class="mb-4">
+                            <h3 class="text-base font-bold flex items-center gap-2 text-gray-900 dark:text-white">
+                                <span class="w-6 h-6 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 rounded flex items-center justify-center text-sm">🛡️</span>
+                                Product Warranty & Return Policy
+                            </h3>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                Set product-specific warranty terms and return guidelines. If left blank, the store-wide defaults will apply automatically.
+                            </p>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <!-- Product Warranty -->
+                            <div class="space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <label class="block text-xs font-bold text-gray-700 dark:text-gray-300">
+                                        🛡️ Product Warranty
+                                    </label>
+                                    <span v-if="!form.warranty && $page.props.store_settings?.default_product_warranty" class="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium truncate max-w-[200px]" :title="$page.props.store_settings.default_product_warranty">
+                                        Default: {{ $page.props.store_settings.default_product_warranty }}
+                                    </span>
+                                </div>
+                                <textarea
+                                    v-model="form.warranty"
+                                    rows="2"
+                                    placeholder="e.g. 1 Year Official Manufacturer Warranty. Covers parts and labor."
+                                    class="w-full text-xs rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-emerald-500 focus:border-emerald-500"
+                                ></textarea>
+                                <!-- Quick Presets -->
+                                <div class="flex items-center gap-1.5 flex-wrap pt-1">
+                                    <span class="text-[10px] text-gray-400 uppercase font-semibold">Quick Pick:</span>
+                                    <button
+                                        type="button"
+                                        @click="form.warranty = 'No Warranty / Sold As-Is'"
+                                        class="px-2 py-0.5 text-[10px] font-medium rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition"
+                                    >No Warranty</button>
+                                    <button
+                                        type="button"
+                                        @click="form.warranty = '30 Days Replacement Warranty'"
+                                        class="px-2 py-0.5 text-[10px] font-medium rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition"
+                                    >30 Days Replacement</button>
+                                    <button
+                                        type="button"
+                                        @click="form.warranty = '6 Months Official Warranty'"
+                                        class="px-2 py-0.5 text-[10px] font-medium rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition"
+                                    >6 Months</button>
+                                    <button
+                                        type="button"
+                                        @click="form.warranty = '1 Year Official Manufacturer Warranty'"
+                                        class="px-2 py-0.5 text-[10px] font-medium rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition"
+                                    >1 Year</button>
+                                    <button
+                                        v-if="form.warranty"
+                                        type="button"
+                                        @click="form.warranty = ''"
+                                        class="px-2 py-0.5 text-[10px] font-medium rounded text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
+                                    >Clear (Use Default)</button>
+                                </div>
+                            </div>
+
+                            <!-- Product Return Policy -->
+                            <div class="space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <label class="block text-xs font-bold text-gray-700 dark:text-gray-300">
+                                        🔄 Return & Refund Policy
+                                    </label>
+                                    <span v-if="!form.return_policy && $page.props.store_settings?.default_product_return_policy" class="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium truncate max-w-[200px]" :title="$page.props.store_settings.default_product_return_policy">
+                                        Default: {{ $page.props.store_settings.default_product_return_policy }}
+                                    </span>
+                                </div>
+                                <textarea
+                                    v-model="form.return_policy"
+                                    rows="2"
+                                    placeholder="e.g. 7 Days Hassle-Free Returns. Item must be in original condition and packaging."
+                                    class="w-full text-xs rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-emerald-500 focus:border-emerald-500"
+                                ></textarea>
+                                <!-- Quick Presets -->
+                                <div class="flex items-center gap-1.5 flex-wrap pt-1">
+                                    <span class="text-[10px] text-gray-400 uppercase font-semibold">Quick Pick:</span>
+                                    <button
+                                        type="button"
+                                        @click="form.return_policy = '7 Days Hassle-Free Return Policy'"
+                                        class="px-2 py-0.5 text-[10px] font-medium rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition"
+                                    >7 Days</button>
+                                    <button
+                                        type="button"
+                                        @click="form.return_policy = '14 Days Return / Exchange Guarantee'"
+                                        class="px-2 py-0.5 text-[10px] font-medium rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition"
+                                    >14 Days</button>
+                                    <button
+                                        type="button"
+                                        @click="form.return_policy = 'Non-Returnable Perishable / Hygiene Item'"
+                                        class="px-2 py-0.5 text-[10px] font-medium rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition"
+                                    >Non-Returnable</button>
+                                    <button
+                                        type="button"
+                                        @click="form.return_policy = 'Final Sale: No Returns or Exchanges'"
+                                        class="px-2 py-0.5 text-[10px] font-medium rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition"
+                                    >Final Sale</button>
+                                    <button
+                                        v-if="form.return_policy"
+                                        type="button"
+                                        @click="form.return_policy = ''"
+                                        class="px-2 py-0.5 text-[10px] font-medium rounded text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
+                                    >Clear (Use Default)</button>
                                 </div>
                             </div>
                         </div>

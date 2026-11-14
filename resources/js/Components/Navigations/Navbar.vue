@@ -72,7 +72,7 @@ const submitSearch = () => {
 const goToProduct = (product) => {
     showDropdown.value = false;
     search.value = '';
-    router.visit(route('shop.show', product.url_key));
+    router.visit(route('shop.show', { url_key: product.url_key, ...(product.url_query || {}) }));
 };
 
 const viewAll = () => {
@@ -391,7 +391,7 @@ const openMegaMenu = (e) => {
             <div class="space-y-1">
               <div
                 v-for="(product, idx) in trendingSearches.products.slice(0, 5)"
-                :key="product.id"
+                :key="product.listing_key || product.id"
                 @mousedown.prevent="goToProduct(product)"
                 class="flex items-center gap-3 px-2.5 py-2 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/60 cursor-pointer transition group"
               >
@@ -436,7 +436,7 @@ const openMegaMenu = (e) => {
           <!-- ─── Typed Search Suggestions Dropdown (>= 2 chars) ─── -->
           <div v-if="showDropdown && search.trim().length >= 2 && suggestions.length > 0"
             class="absolute top-full left-0 right-0 mt-1.5 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border dark:border-gray-700 overflow-hidden z-50">
-            <div v-for="product in suggestions" :key="product.id"
+            <div v-for="product in suggestions" :key="product.listing_key || product.id"
               @mousedown.prevent="goToProduct(product)"
               class="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer border-b dark:border-gray-700 last:border-0 transition group">
               <img
@@ -444,7 +444,10 @@ const openMegaMenu = (e) => {
                 class="w-10 h-10 object-cover rounded-lg flex-shrink-0 border dark:border-gray-600"
                 :alt="product.name"/>
               <div class="flex-1 min-w-0">
-                <p class="text-sm font-semibold text-gray-900 dark:text-white truncate group-hover:text-primary transition">{{ product.name }}</p>
+                <p class="text-sm font-semibold text-gray-900 dark:text-white truncate group-hover:text-primary transition flex items-center gap-1.5">
+                  <span class="truncate">{{ product.name }}</span>
+                  <span v-if="product.is_unit_listing" class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-bold shrink-0">📦 {{ product.unit_label }}</span>
+                </p>
                 <p v-if="product.category" class="text-xs text-gray-400 dark:text-gray-500">{{ product.category.name }}</p>
               </div>
               <div class="flex-shrink-0 text-right">

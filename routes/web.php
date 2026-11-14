@@ -33,7 +33,7 @@ Route::post('/newsletter/subscribe', [\App\Http\Controllers\Frontend\NewsletterC
     ->name('newsletter.subscribe');
 
 // Quick search suggestions (JSON — used by the header search dropdown)
-Route::get('/search/suggestions', function (\Illuminate\Http\Request $request) {
+Route::get('/search/suggestions', function (\Illuminate\Http\Request $request, \App\Services\Storefront\StorefrontListingExpander $expander) {
     $q = trim($request->get('q', ''));
     if (strlen($q) < 2)
         return response()->json([]);
@@ -41,29 +41,38 @@ Route::get('/search/suggestions', function (\Illuminate\Http\Request $request) {
     $products = \App\Models\Product::where('status', true)
         ->where(function ($sub) use ($q) {
             $sub->where('name', 'like', '%' . $q . '%')
-                ->orWhereHas('brand', fn ($bq) => $bq->where('name', 'like', '%' . $q . '%'));
+                ->orWhereHas('brand', fn ($bq) => $bq->where('name', 'like', '%' . $q . '%'))
+                ->orWhereHas('posUnits', function ($uq) use ($q) {
+                    $uq->where('is_enabled_online', true)
+                       ->where('show_in_listing', true)
+                       ->where(function ($uSub) use ($q) {
+                           $uSub->where('online_label', 'like', '%' . $q . '%')
+                                ->orWhere('unit_name', 'like', '%' . $q . '%');
+                       });
+                });
         })
-        ->with(['category:id,name,slug', 'brand:id,name,slug,logo'])
-        ->select('id', 'name', 'price', 'discount_price', 'image', 'category_id', 'brand_id', 'url_key')
-        ->limit(5)
+        ->with(array_merge(['category:id,name,slug', 'brand:id,name,slug,logo'], $expander->eagerLoad()))
+        ->limit(8)
         ->get();
+
+    $expanded = $expander->expandAndLimit($products, 6, $q);
 
     // Log the search keyword
     try {
         \App\Models\SearchLog::record(
             query: $q,
-            resultsCount: $products->count(),
+            resultsCount: $expanded->count(),
             customerId: auth('customer')->id(),
             ip: $request->ip(),
             userAgent: $request->userAgent()
         );
     } catch (\Throwable $e) {}
 
-    return response()->json($products);
+    return response()->json($expanded);
 })->name('search.suggestions');
 
 // Top trending searches & most searched products (used on search bar focus)
-Route::get('/search/trending', function () {
+Route::get('/search/trending', function (\App\Services\Storefront\StorefrontListingExpander $expander) {
     $topTerms = \App\Models\SearchLog::select('normalized_query')
         ->selectRaw('COUNT(*) as search_count')
         ->where('results_count', '>', 0)
@@ -74,11 +83,12 @@ Route::get('/search/trending', function () {
         ->pluck('normalized_query')
         ->toArray();
 
+    $eagerLoad = array_merge(['category:id,name,slug', 'brand:id,name,slug,logo'], $expander->eagerLoad());
+
     $products = collect();
     if (!empty($topTerms)) {
-        $searchedQuery = \App\Models\Product::with(['category:id,name,slug', 'brand:id,name,slug,logo'])
-            ->where('status', true)
-            ->select('id', 'name', 'price', 'discount_price', 'image', 'category_id', 'brand_id', 'url_key');
+        $searchedQuery = \App\Models\Product::with($eagerLoad)
+            ->where('status', true);
 
         $searchedQuery->where(function ($sub) use ($topTerms) {
             foreach ($topTerms as $term) {
@@ -90,19 +100,20 @@ Route::get('/search/trending', function () {
 
     if ($products->count() < 5) {
         $excludeIds = $products->pluck('id')->toArray();
-        $fallback = \App\Models\Product::with(['category:id,name,slug', 'brand:id,name,slug,logo'])
+        $fallback = \App\Models\Product::with($eagerLoad)
             ->where('status', true)
             ->whereNotIn('id', $excludeIds)
-            ->select('id', 'name', 'price', 'discount_price', 'image', 'category_id', 'brand_id', 'url_key')
             ->inRandomOrder()
             ->take(5 - $products->count())
             ->get();
         $products = $products->concat($fallback);
     }
 
+    $expanded = $expander->expandAndLimit($products, 5);
+
     return response()->json([
         'keywords' => $topTerms,
-        'products' => $products->values(),
+        'products' => $expanded->values(),
     ]);
 })->name('search.trending');
 

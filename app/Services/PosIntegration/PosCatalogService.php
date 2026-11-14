@@ -546,6 +546,7 @@ class PosCatalogService
                 'online_label' => $baseExisting?->online_label ?? $syncedItem->base_unit_name,
                 'image' => $baseExisting?->image,
                 'is_enabled_online' => true,
+                'show_in_listing' => $baseExisting ? $baseExisting->show_in_listing : true,
                 'sort_order' => 0,
                 'last_pos_sync_at' => now(),
             ]
@@ -571,6 +572,7 @@ class PosCatalogService
                     'online_label' => $exist?->online_label ?? $unit->unit_name,
                     'image' => $exist?->image,
                     'is_enabled_online' => $exist ? $exist->is_enabled_online : true,
+                    'show_in_listing' => $exist ? $exist->show_in_listing : true,
                     'sort_order' => $index + 1,
                     'last_pos_sync_at' => now(),
                 ]

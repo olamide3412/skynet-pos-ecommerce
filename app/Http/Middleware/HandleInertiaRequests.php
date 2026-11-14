@@ -247,10 +247,12 @@ class HandleInertiaRequests extends Middleware
                     ->toArray();
 
                 $products = collect();
+                $expander = app(\App\Services\Storefront\StorefrontListingExpander::class);
+                $eagerLoad = array_merge(['category:id,name,slug'], $expander->eagerLoad());
+
                 if (!empty($topTerms)) {
-                    $searchedQuery = Product::with('category:id,name,slug')
-                        ->where('status', true)
-                        ->select('id', 'name', 'price', 'discount_price', 'image', 'category_id', 'url_key');
+                    $searchedQuery = Product::with($eagerLoad)
+                        ->where('status', true);
 
                     $searchedQuery->where(function ($sub) use ($topTerms) {
                         foreach ($topTerms as $term) {
@@ -262,19 +264,20 @@ class HandleInertiaRequests extends Middleware
 
                 if ($products->count() < 5) {
                     $excludeIds = $products->pluck('id')->toArray();
-                    $fallback = Product::with('category:id,name,slug')
+                    $fallback = Product::with($eagerLoad)
                         ->where('status', true)
                         ->whereNotIn('id', $excludeIds)
-                        ->select('id', 'name', 'price', 'discount_price', 'image', 'category_id', 'url_key')
                         ->inRandomOrder()
                         ->take(5 - $products->count())
                         ->get();
                     $products = $products->concat($fallback);
                 }
 
+                $expanded = $expander->expandAndLimit($products, 5);
+
                 return [
                     'keywords' => $topTerms,
-                    'products' => $products->values()->toArray(),
+                    'products' => $expanded->values()->toArray(),
                 ];
             });
         } catch (\Throwable $e) {

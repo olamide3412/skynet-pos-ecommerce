@@ -16,9 +16,10 @@ class Product extends Model
         'sku', 'description',
         'price', 'cost_price', 'discount_price',
         'special_price', 'special_price_from', 'special_price_to',
-        'stock', 'image', 'images', 'variants', 'attributes', 'related_products', 'status',
+        'stock', 'expiry_date', 'image', 'images', 'variants', 'attributes', 'related_products', 'status',
         'is_new', 'is_featured', 'visible_individually', 'show_stock_level',
         'short_description', 'meta_title', 'meta_description', 'meta_keywords',
+        'warranty', 'return_policy',
         // POS Integration fields
         'inventory_source', 'pos_item_id', 'pos_item_name_snapshot',
         'pos_base_unit_name', 'pos_sync_status', 'pos_item_updated_at', 'last_pos_sync_at',
@@ -36,6 +37,7 @@ class Product extends Model
         'show_stock_level'     => 'boolean',
         'special_price_from'   => 'datetime',
         'special_price_to'     => 'datetime',
+        'expiry_date'          => 'date',
         'pos_item_updated_at'  => 'datetime',
         'last_pos_sync_at'     => 'datetime',
     ];
@@ -44,6 +46,8 @@ class Product extends Model
         'is_on_flash_sale',
         'is_on_sale',
         'effective_price',
+        'expiry_status',
+        'days_until_expiry',
     ];
 
     public function category(): BelongsTo
@@ -113,6 +117,10 @@ class Product extends Model
             return false;
         }
 
+        if ($this->isExpired()) {
+            return false;
+        }
+
         if ($this->isPosLinked()) {
             if (in_array($this->pos_sync_status, ['missing_pos_item', 'inactive_pos_item', 'mapping_sync_failed'], true)) {
                 return false;
@@ -120,6 +128,23 @@ class Product extends Model
         }
 
         return $this->stock > 0;
+    }
+
+    /**
+     * Scope query to products visible/active on the storefront.
+     */
+    public function scopeAvailableOnStorefront($query)
+    {
+        $query->where('status', true);
+
+        if (static::isExpiryTrackingEnabled() && StoreSetting::getBool('hide_expired_products_on_storefront', true)) {
+            $query->where(function ($q) {
+                $q->whereNull('expiry_date')
+                  ->orWhere('expiry_date', '>', now()->toDateString());
+            });
+        }
+
+        return $query;
     }
 
     /**
@@ -163,5 +188,80 @@ class Product extends Model
         return (!empty($this->discount_price) && (float) $this->discount_price < (float) $this->price)
             ? (float) $this->discount_price
             : (float) $this->price;
+    }
+
+    /**
+     * Check if product expiry tracking is globally enabled in Store Settings.
+     */
+    public static function isExpiryTrackingEnabled(): bool
+    {
+        return StoreSetting::getBool('enable_product_expiry_tracking', false);
+    }
+
+    /**
+     * Check if this product has expired.
+     */
+    public function isExpired(): bool
+    {
+        if (!static::isExpiryTrackingEnabled() || empty($this->expiry_date)) {
+            return false;
+        }
+
+        return $this->expiry_date->isPast() && !$this->expiry_date->isToday();
+    }
+
+    /**
+     * Check if this product is nearing its expiry date within the warning threshold.
+     */
+    public function isExpiringSoon(?int $thresholdDays = null): bool
+    {
+        if (!static::isExpiryTrackingEnabled() || empty($this->expiry_date) || $this->isExpired()) {
+            return false;
+        }
+
+        $threshold = $thresholdDays ?? (int) StoreSetting::get('expiry_warning_threshold_days', 30);
+        $diff = now()->startOfDay()->diffInDays($this->expiry_date->startOfDay(), false);
+
+        return $diff >= 0 && $diff <= $threshold;
+    }
+
+    /**
+     * Number of days until product expires (negative if already expired, null if unset).
+     */
+    public function daysUntilExpiry(): ?int
+    {
+        if (empty($this->expiry_date)) {
+            return null;
+        }
+
+        return (int) now()->startOfDay()->diffInDays($this->expiry_date->startOfDay(), false);
+    }
+
+    /**
+     * Get evaluated expiry status attribute: 'expired' | 'expiring_soon' | 'valid' | 'none'.
+     */
+    public function getExpiryStatusAttribute(): string
+    {
+        if (!static::isExpiryTrackingEnabled() || empty($this->expiry_date)) {
+            return 'none';
+        }
+
+        if ($this->isExpired()) {
+            return 'expired';
+        }
+
+        if ($this->isExpiringSoon()) {
+            return 'expiring_soon';
+        }
+
+        return 'valid';
+    }
+
+    /**
+     * Get computed days remaining attribute.
+     */
+    public function getDaysUntilExpiryAttribute(): ?int
+    {
+        return $this->daysUntilExpiry();
     }
 }

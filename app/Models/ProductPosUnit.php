@@ -20,12 +20,14 @@ class ProductPosUnit extends Model
         'online_label',
         'image',
         'is_enabled_online',
+        'show_in_listing',
         'sort_order',
         'last_pos_sync_at',
     ];
 
     protected $casts = [
         'is_enabled_online'      => 'boolean',
+        'show_in_listing'        => 'boolean',
         'quantity_in_base_units' => 'decimal:4',
         'synced_standard_price'  => 'decimal:2',
         'last_pos_sync_at'       => 'datetime',

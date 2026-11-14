@@ -8,12 +8,19 @@ use App\Models\Product;
 use App\Models\Category;
 use App\Models\OrderItem;
 use App\Models\Wishlist;
+use App\Services\Storefront\StorefrontListingExpander;
 use Inertia\Inertia;
 
 class HomeController extends Controller
 {
+    public function __construct(
+        protected StorefrontListingExpander $expander
+    ) {}
+
     public function index()
     {
+        $eagerLoad = array_merge(['category', 'brand:id,name,slug,logo'], $this->expander->eagerLoad());
+
         // 0. Active flash sale products (only when currently running)
         $now = now();
         $flashSales = Product::with(['category', 'brand:id,name,slug,logo'])
@@ -35,7 +42,7 @@ class HomeController extends Controller
         $flashSaleEndTime = $flashSales->whereNotNull('special_price_to')->min('special_price_to');
 
         // 1. Featured products (10 products)
-        $featured = Product::with(['category', 'brand:id,name,slug,logo'])
+        $featured = Product::with($eagerLoad)
             ->where('status', true)
             ->when(Product::where('status', true)->where('is_featured', true)->exists(), function ($q) {
                 $q->orderByDesc('is_featured');
@@ -43,6 +50,7 @@ class HomeController extends Controller
             ->inRandomOrder()
             ->take(10)
             ->get();
+        $featured = $this->expander->expandAndLimit($featured, 10);
 
         // 2. Best sellers by order volume with fallback to active products (10 products)
         $bestSellerIds = OrderItem::select('product_id')
@@ -54,7 +62,7 @@ class HomeController extends Controller
             ->pluck('product_id')
             ->toArray();
 
-        $bestSellers = Product::with(['category', 'brand:id,name,slug,logo'])
+        $bestSellers = Product::with($eagerLoad)
             ->where('status', true)
             ->whereIn('id', $bestSellerIds)
             ->get();
@@ -67,7 +75,7 @@ class HomeController extends Controller
 
         if ($bestSellers->count() < 10) {
             $existingIds = $bestSellers->pluck('id')->toArray();
-            $fillers = Product::with(['category', 'brand:id,name,slug,logo'])
+            $fillers = Product::with($eagerLoad)
                 ->where('status', true)
                 ->whereNotIn('id', $existingIds)
                 ->inRandomOrder()
@@ -75,13 +83,15 @@ class HomeController extends Controller
                 ->get();
             $bestSellers = $bestSellers->concat($fillers);
         }
+        $bestSellers = $this->expander->expandAndLimit($bestSellers, 10);
 
         // 3. New arrivals (10 products)
-        $newArrivals = Product::with(['category', 'brand:id,name,slug,logo'])
+        $newArrivals = Product::with($eagerLoad)
             ->where('status', true)
             ->latest()
             ->take(10)
             ->get();
+        $newArrivals = $this->expander->expandAndLimit($newArrivals, 10);
 
         // 4. Most searched products (10 products)
         // Find the top search terms, match products against those terms, or fallback to popular items
@@ -97,7 +107,7 @@ class HomeController extends Controller
 
         $mostSearched = collect();
         if (!empty($topTerms)) {
-            $searchedQuery = Product::with(['category', 'brand:id,name,slug,logo'])->where('status', true);
+            $searchedQuery = Product::with($eagerLoad)->where('status', true);
             $searchedQuery->where(function ($sub) use ($topTerms) {
                 foreach ($topTerms as $term) {
                     $sub->orWhere('name', 'like', '%' . $term . '%');
@@ -109,7 +119,7 @@ class HomeController extends Controller
         // Fill up to 10 if fewer match or before searches accumulate
         if ($mostSearched->count() < 10) {
             $excludeIds = $mostSearched->pluck('id')->toArray();
-            $fallback = Product::with(['category', 'brand:id,name,slug,logo'])
+            $fallback = Product::with($eagerLoad)
                 ->where('status', true)
                 ->whereNotIn('id', $excludeIds)
                 ->inRandomOrder()
@@ -117,6 +127,7 @@ class HomeController extends Controller
                 ->get();
             $mostSearched = $mostSearched->concat($fallback);
         }
+        $mostSearched = $this->expander->expandAndLimit($mostSearched, 10);
 
         $featuredBrands = Brand::active()
             ->withCount(['products' => fn ($q) => $q->where('status', true)])

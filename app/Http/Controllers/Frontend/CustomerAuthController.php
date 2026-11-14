@@ -120,7 +120,7 @@ class CustomerAuthController extends Controller
                     ->with('warning', 'Please verify your email address to log in. We have sent a verification link to your email.');
             }
 
-            Auth::guard('customer')->login($customer, $request->remember ?? false);
+            Auth::guard('customer')->login($customer, $request->boolean('remember'));
             $request->session()->regenerate();
 
             $guestSessionId = $request->session()->getId();
