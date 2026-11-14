@@ -803,6 +803,24 @@ const openCreateForm = () => {
     });
 };
 
+const getEffectiveCostPrice = (p) => {
+    if (!p) return 0;
+    const prodCost = p.cost_price !== null && p.cost_price !== undefined && p.cost_price !== '' ? Number(p.cost_price) : null;
+    const posBuying = p.synced_pos_item?.buying_price !== null && p.synced_pos_item?.buying_price !== undefined && p.synced_pos_item?.buying_price !== ''
+        ? Number(p.synced_pos_item.buying_price)
+        : null;
+
+    if (p.inventory_source === 'pos') {
+        if (posBuying !== null && posBuying > 0) return posBuying;
+        if (prodCost !== null && prodCost > 0) return prodCost;
+        return posBuying ?? prodCost ?? 0;
+    }
+
+    if (prodCost !== null && prodCost > 0) return prodCost;
+    if (posBuying !== null && posBuying > 0) return posBuying;
+    return prodCost ?? posBuying ?? 0;
+};
+
 const openEditForm = (p) => {
     resetFormState();
     isEditing.value = true;
@@ -829,7 +847,10 @@ const openEditForm = (p) => {
     form.meta_description  = p.meta_description || '';
     form.meta_keywords     = p.meta_keywords || '';
     form.price             = p.price;
-    form.cost_price        = (p.cost_price !== null && p.cost_price !== undefined && p.cost_price !== '') ? p.cost_price : (p.synced_pos_item?.buying_price ?? '');
+    const resolvedCost     = getEffectiveCostPrice(p);
+    form.cost_price        = (resolvedCost > 0 || form.inventory_source === 'pos' || (p.cost_price !== null && p.cost_price !== undefined && p.cost_price !== ''))
+        ? resolvedCost
+        : '';
     form.discount_price    = p.discount_price || '';
     form.special_price     = p.special_price || '';
     form.special_price_from = p.special_price_from ? p.special_price_from.substring(0,10) : '';
@@ -869,9 +890,12 @@ const openEditForm = (p) => {
     form.pos_units = (p.pos_units || []).map((u, idx) => ({
         _uid: 'unit_exist_' + (u.id || idx) + '_' + Math.random().toString(36).substr(2, 9),
         id: u.id,
+        pos_item_unit_id: u.pos_item_unit_id ?? null,
         unit_name: u.unit_name,
         unit_kind: u.unit_kind,
-        quantity_in_base_units: u.quantity_in_base_units,
+        quantity_in_base_units: u.quantity_in_base_units !== null && u.quantity_in_base_units !== undefined && u.quantity_in_base_units !== ''
+            ? Math.round(Number(u.quantity_in_base_units))
+            : (u.unit_kind === 'base' ? 1 : ''),
         synced_standard_price: u.synced_standard_price,
         online_label: u.online_label || '',
         is_enabled_online: u.is_enabled_online !== false && u.is_enabled_online !== 0,
@@ -1660,7 +1684,7 @@ const submitBulkMoveToEcommerce = () => {
                                 <td class="px-5 py-3">
                                     <div class="font-bold text-gray-900 dark:text-white">₦{{ parseFloat(p.price).toLocaleString() }}</div>
                                     <div class="text-xs text-gray-500 dark:text-gray-400">
-                                        Cost: <span class="font-semibold text-gray-700 dark:text-gray-300">₦{{ parseFloat(p.cost_price || 0).toLocaleString() }}</span>
+                                        Cost: <span class="font-semibold text-gray-700 dark:text-gray-300">₦{{ getEffectiveCostPrice(p).toLocaleString() }}</span>
                                     </div>
                                     <div v-if="p.discount_price" class="text-xs text-red-400 line-through">₦{{ parseFloat(p.discount_price).toLocaleString() }}</div>
                                     <div v-if="p.special_price" class="text-xs text-secondary font-semibold">Special: ₦{{ parseFloat(p.special_price).toLocaleString() }}</div>
@@ -2055,7 +2079,7 @@ const submitBulkMoveToEcommerce = () => {
                                             {{ selectedPosItem.pos_item_name }}
                                         </span>
                                         <span class="text-xs text-gray-500 dark:text-gray-400 shrink-0">
-                                            (Stock: {{ Math.round(Number(selectedPosItem.effective_availability || 0)) }} {{ selectedPosItem.base_unit_name }} | ₦{{ Number(selectedPosItem.standard_price).toLocaleString() }})
+                                            (Stock: {{ Math.round(Number(selectedPosItem.effective_availability || 0)) }} {{ selectedPosItem.base_unit_name }} | ₦{{ Number(selectedPosItem.standard_price).toLocaleString() }} | Cost: ₦{{ Number(selectedPosItem.buying_price || 0).toLocaleString() }})
                                         </span>
                                     </div>
                                     <span v-else-if="form.pos_item_id" class="text-gray-700 dark:text-gray-200 font-medium">
@@ -2144,6 +2168,9 @@ const submitBulkMoveToEcommerce = () => {
                                             <div class="text-right shrink-0">
                                                 <div class="text-sm font-bold text-emerald-600 dark:text-emerald-400">
                                                     ₦{{ Number(item.standard_price).toLocaleString('en-US', { minimumFractionDigits: 2 }) }}
+                                                </div>
+                                                <div class="text-[11px] text-gray-500 dark:text-gray-400">
+                                                    Cost: ₦{{ Number(item.buying_price || 0).toLocaleString('en-US', { minimumFractionDigits: 2 }) }}
                                                 </div>
                                                 <div
                                                     class="text-[11px] font-semibold"
@@ -2651,11 +2678,11 @@ const submitBulkMoveToEcommerce = () => {
                                                 :placeholder="u.unit_kind === 'base' ? 'Base Unit Name (e.g. Single, Sachet, Tin)' : 'Unit Name (e.g. Half Roll, 1 Roll, Pack)'"
                                                 class="h-8 px-2.5 text-xs font-bold rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-primary flex-1"
                                             />
-                                            <span v-if="u.unit_kind === 'base' || Number(u.quantity_in_base_units) === 1" class="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 shrink-0">
+                                            <span v-if="u.unit_kind === 'base' || Math.round(Number(u.quantity_in_base_units)) === 1" class="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 shrink-0">
                                                 Base Unit (1x)
                                             </span>
                                             <span v-else class="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 shrink-0">
-                                                ({{ u.quantity_in_base_units || '?' }}x base)
+                                                ({{ Math.round(Number(u.quantity_in_base_units || 1)) }}x base)
                                             </span>
                                         </div>
                                     </div>
@@ -2663,7 +2690,7 @@ const submitBulkMoveToEcommerce = () => {
                                     <!-- Top-Right Actions -->
                                     <div class="flex items-center gap-2">
                                         <button
-                                            v-if="u.unit_kind !== 'base'"
+                                            v-if="u.unit_kind !== 'base' && !u.pos_item_unit_id && form.inventory_source !== 'pos'"
                                             type="button"
                                             @click.stop.prevent="removeSellingUnit(uIdx)"
                                             class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 border border-rose-200 dark:border-rose-900/50 transition cursor-pointer"
@@ -2671,6 +2698,16 @@ const submitBulkMoveToEcommerce = () => {
                                         >
                                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                             <span>Remove</span>
+                                        </button>
+                                        <button
+                                            v-else-if="u.unit_kind !== 'base'"
+                                            type="button"
+                                            disabled
+                                            class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-75"
+                                            title="Synced from POS. To stop selling online, toggle 'Enable Online' off instead."
+                                        >
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                                            <span>POS Controlled</span>
                                         </button>
                                     </div>
                                 </div>
@@ -2684,15 +2721,15 @@ const submitBulkMoveToEcommerce = () => {
                                         </label>
                                         <input
                                             v-if="u.unit_kind !== 'base'"
-                                            v-model="u.quantity_in_base_units"
+                                            v-model.number="u.quantity_in_base_units"
                                             type="number"
                                             min="1"
-                                            step="any"
+                                            step="1"
                                             placeholder="e.g. 5, 10, 12"
-                                            class="w-full h-9 px-3 text-xs rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                            class="w-full h-9 px-3 text-xs rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white no-spinner [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                         />
                                         <div v-else class="h-9 px-3 text-xs rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 text-gray-500 flex items-center font-mono font-bold">
-                                            1.0 (Fixed Base)
+                                            1 (Fixed Base)
                                         </div>
                                     </div>
 

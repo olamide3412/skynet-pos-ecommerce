@@ -28,7 +28,7 @@ class ProductPosUnit extends Model
     protected $casts = [
         'is_enabled_online'      => 'boolean',
         'show_in_listing'        => 'boolean',
-        'quantity_in_base_units' => 'decimal:4',
+        'quantity_in_base_units' => 'integer',
         'synced_standard_price'  => 'decimal:2',
         'last_pos_sync_at'       => 'datetime',
     ];

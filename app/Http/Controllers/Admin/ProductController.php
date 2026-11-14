@@ -270,6 +270,15 @@ class ProductController extends Controller
                 }
             }
         } else {
+            // Preserve POS buying_price if converting a POS product to Ecommerce Only without a manual cost_price override
+            if ($product && (!isset($validated['cost_price']) || $validated['cost_price'] === '' || $validated['cost_price'] === null)) {
+                $fallbackCost = ($product->cost_price !== null && (float) $product->cost_price > 0)
+                    ? $product->cost_price
+                    : ($product->syncedPosItem?->buying_price ?? $product->cost_price);
+                if ($fallbackCost !== null) {
+                    $validated['cost_price'] = $fallbackCost;
+                }
+            }
             $validated['inventory_source'] = 'ecommerce';
             $validated['pos_item_id'] = null;
             $validated['pos_sync_status'] = 'synced';
@@ -743,8 +752,8 @@ class ProductController extends Controller
             }
 
             $multiplier = isset($unit['quantity_in_base_units']) && $unit['quantity_in_base_units'] !== ''
-                ? max(0.0001, (float) $unit['quantity_in_base_units'])
-                : (float) ($existing?->quantity_in_base_units ?? 1.0);
+                ? max(1, (int) round((float) $unit['quantity_in_base_units']))
+                : (int) round((float) ($existing?->quantity_in_base_units ?? 1));
 
             $price = isset($unit['price']) && $unit['price'] !== ''
                 ? (float) $unit['price']
@@ -887,7 +896,8 @@ class ProductController extends Controller
                 break;
 
             case 'move_to_ecommerce':
-                $posProducts = Product::whereIn('id', $ids)
+                $posProducts = Product::with('syncedPosItem')
+                    ->whereIn('id', $ids)
                     ->where('inventory_source', 'pos')
                     ->get();
 
@@ -900,11 +910,17 @@ class ProductController extends Controller
                 $allPosItemIds = array_values(array_unique(array_merge($posItemIds, $variantPosItemIds)));
 
                 foreach ($posProducts as $product) {
+                    $resolvedCost = ($product->cost_price !== null && (float) $product->cost_price > 0)
+                        ? $product->cost_price
+                        : ($product->syncedPosItem?->buying_price ?? $product->cost_price);
+
                     $product->posUnits()->delete();
                     $product->update([
-                        'inventory_source' => 'ecommerce',
-                        'pos_item_id'      => null,
-                        'pos_sync_status'  => 'synced',
+                        'inventory_source'       => 'ecommerce',
+                        'cost_price'             => $resolvedCost,
+                        'pos_item_name_snapshot' => $product->pos_item_name_snapshot ?: ($product->syncedPosItem?->pos_item_name ?? $product->name),
+                        'pos_item_id'            => null,
+                        'pos_sync_status'        => 'synced',
                     ]);
                 }
 
@@ -1083,6 +1099,10 @@ class ProductController extends Controller
                         })->join('; ');
                     }
 
+                    $exportCost = ($p->cost_price !== null && (float) $p->cost_price > 0)
+                        ? $p->cost_price
+                        : ($p->syncedPosItem?->buying_price ?? $p->cost_price);
+
                     fputcsv($handle, [
                         $p->id,
                         $p->name,
@@ -1093,7 +1113,7 @@ class ProductController extends Controller
                         $p->category?->name ?? 'Uncategorized',
                         $p->brand?->name ?? 'No Brand',
                         number_format((float) ($p->price ?? 0), 2, '.', ''),
-                        $p->cost_price !== null ? number_format((float) $p->cost_price, 2, '.', '') : '',
+                        $exportCost !== null ? number_format((float) $exportCost, 2, '.', '') : '',
                         $p->special_price !== null ? number_format((float) $p->special_price, 2, '.', '') : '',
                         $p->stock ?? 0,
                         $statusLabel,

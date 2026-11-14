@@ -90,15 +90,26 @@ class PosSyncService
                         }
 
                         if ($posItemId && isset($mappedLookup[(int) $posItemId])) {
-                            SyncedPosItem::where('pos_item_id', $posItemId)->update([
+                            $rawBuyingPrice = is_array($val)
+                                ? ($val['buying_price'] ?? $val['buy_price'] ?? $val['cost_price'] ?? $val['purchase_price'] ?? $val['cost'] ?? $val['unit_cost'] ?? null)
+                                : null;
+
+                            $syncedUpdate = [
                                 'effective_availability' => (int) round($numericQty),
                                 'last_synced_at'         => $now,
-                            ]);
-
-                            Product::where('pos_item_id', $posItemId)->update([
+                            ];
+                            $productUpdate = [
                                 'stock'            => (int) floor($numericQty),
                                 'last_pos_sync_at' => $now,
-                            ]);
+                            ];
+
+                            if ($rawBuyingPrice !== null && is_numeric($rawBuyingPrice)) {
+                                $syncedUpdate['buying_price'] = (float) $rawBuyingPrice;
+                                $productUpdate['cost_price'] = (float) $rawBuyingPrice;
+                            }
+
+                            SyncedPosItem::where('pos_item_id', $posItemId)->update($syncedUpdate);
+                            Product::where('pos_item_id', $posItemId)->update($productUpdate);
 
                             $updatedCount++;
                         }

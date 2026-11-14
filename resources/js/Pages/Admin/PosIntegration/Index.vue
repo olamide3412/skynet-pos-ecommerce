@@ -524,87 +524,114 @@ const confirmImport = () => {
             <!-- TAB 1: Catalog Browser -->
             <div v-if="activeTab === 'catalog'" class="space-y-4">
                 <!-- Filters & Bulk Actions -->
-                <div class="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700">
-                    <div class="flex flex-1 items-center space-x-3 w-full sm:w-auto">
-                        <div class="relative flex-1 max-w-sm">
+                <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xs space-y-3">
+                    <div class="flex flex-wrap items-center gap-2.5">
+                        <!-- Search input -->
+                        <div class="relative flex-1 min-w-[220px]">
                             <input
                                 v-model="search"
                                 @keyup.enter="handleFilter"
                                 type="text"
                                 placeholder="Search by name, barcode, SKU..."
-                                class="w-full text-sm pl-9 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary"
+                                class="w-full text-sm pl-9 pr-8 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary shadow-xs"
                             />
-                            <svg class="w-4 h-4 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                            <svg class="w-4 h-4 text-gray-400 absolute left-3 top-2.5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                            <button
+                                v-if="search"
+                                type="button"
+                                @click="search = ''; handleFilter()"
+                                class="absolute right-2.5 top-2.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
                         </div>
-                        <select
-                            v-model="mappingStatus"
-                            @change="handleFilter"
-                            class="text-sm py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-primary"
-                        >
-                            <option value="">All Statuses</option>
-                            <option value="unmapped">Unmapped</option>
-                            <option value="mapped_simple">Mapped Simple</option>
-                            <option value="mapped_variant">Mapped Variant</option>
-                            <option value="ignored">Ignored</option>
-                        </select>
-                        <select
-                            v-if="pos_categories && pos_categories.length"
-                            v-model="posCategory"
-                            @change="handleFilter"
-                            class="text-sm py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-primary"
-                        >
-                            <option value="">All POS Categories</option>
-                            <option v-for="cat in pos_categories" :key="cat" :value="cat">
-                                {{ cat }}
-                            </option>
-                        </select>
-                        <select
-                            v-if="pos_brands && pos_brands.length"
-                            v-model="posBrand"
-                            @change="handleFilter"
-                            class="text-sm py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-primary"
-                        >
-                            <option value="">All POS Brands</option>
-                            <option v-for="br in pos_brands" :key="br" :value="br">
-                                {{ br }}
-                            </option>
-                        </select>
-                        <select
-                            v-model="perPage"
-                            @change="handleFilter"
-                            class="text-sm py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-primary"
-                        >
-                            <option value="25">25 per page</option>
-                            <option value="50">50 per page</option>
-                            <option value="100">100 per page</option>
-                            <option value="all">All</option>
-                        </select>
-                        <button
-                            v-if="search || mappingStatus || posCategory || posBrand || perPage !== '25'"
-                            @click="resetFilter"
-                            class="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 underline"
-                        >
-                            Clear
-                        </button>
-                    </div>
 
-                    <div class="flex items-center space-x-2 w-full sm:w-auto justify-end">
-                        <button
-                            v-if="selectedItems.length > 0"
-                            @click="openBulkImport"
-                            :disabled="!connection.is_connected"
-                            class="px-3 py-1.5 bg-primary hover:bg-primary-dark text-white rounded-lg text-xs font-semibold shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            Import Selected ({{ selectedItems.length }})
-                        </button>
-                        <button
-                            @click="openImportAll"
-                            :disabled="!connection.is_connected"
-                            :title="!connection.is_connected ? 'Store must be connected to a POS branch to import' : 'Import all unmapped active items'"
-                            class="px-3 py-1.5 border border-primary text-primary hover:bg-primary-soft rounded-lg text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-400"
-                        >
-                            Import All Eligible
-                        </button>
+                        <!-- Status filter -->
+                        <div class="w-full sm:w-auto min-w-[140px] flex-1 sm:flex-none">
+                            <select
+                                v-model="mappingStatus"
+                                @change="handleFilter"
+                                class="w-full text-sm py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-primary shadow-xs"
+                            >
+                                <option value="">All Statuses</option>
+                                <option value="unmapped">Unmapped</option>
+                                <option value="mapped_simple">Mapped Simple</option>
+                                <option value="mapped_variant">Mapped Variant</option>
+                                <option value="ignored">Ignored</option>
+                            </select>
+                        </div>
+
+                        <!-- POS Category filter -->
+                        <div v-if="pos_categories && pos_categories.length" class="w-full sm:w-auto min-w-[160px] flex-1 sm:flex-none">
+                            <select
+                                v-model="posCategory"
+                                @change="handleFilter"
+                                class="w-full text-sm py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-primary shadow-xs"
+                            >
+                                <option value="">All POS Categories</option>
+                                <option v-for="cat in pos_categories" :key="cat" :value="cat">
+                                    {{ cat }}
+                                </option>
+                            </select>
+                        </div>
+
+                        <!-- POS Brand filter -->
+                        <div v-if="pos_brands && pos_brands.length" class="w-full sm:w-auto min-w-[150px] flex-1 sm:flex-none">
+                            <select
+                                v-model="posBrand"
+                                @change="handleFilter"
+                                class="w-full text-sm py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-primary shadow-xs"
+                            >
+                                <option value="">All POS Brands</option>
+                                <option v-for="br in pos_brands" :key="br" :value="br">
+                                    {{ br }}
+                                </option>
+                            </select>
+                        </div>
+
+                        <!-- Per Page filter -->
+                        <div class="w-full sm:w-auto min-w-[120px] flex-1 sm:flex-none">
+                            <select
+                                v-model="perPage"
+                                @change="handleFilter"
+                                class="w-full text-sm py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-primary shadow-xs"
+                            >
+                                <option value="25">25 per page</option>
+                                <option value="50">50 per page</option>
+                                <option value="100">100 per page</option>
+                                <option value="all">All</option>
+                            </select>
+                        </div>
+
+                        <!-- Clear filter button -->
+                        <div v-if="search || mappingStatus || posCategory || posBrand || perPage !== '25'" class="flex items-center">
+                            <button
+                                @click="resetFilter"
+                                class="px-3 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition"
+                            >
+                                Clear
+                            </button>
+                        </div>
+
+                        <!-- Action Buttons (Import Selected / Import All) -->
+                        <div class="flex items-center gap-2 ml-auto w-full sm:w-auto justify-end pt-1 sm:pt-0 border-t sm:border-t-0 border-gray-100 dark:border-gray-700/60">
+                            <button
+                                v-if="selectedItems.length > 0"
+                                @click="openBulkImport"
+                                :disabled="!connection.is_connected"
+                                class="px-3.5 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-xs font-semibold shadow-xs disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
+                            >
+                                Import Selected ({{ selectedItems.length }})
+                            </button>
+                            <button
+                                @click="openImportAll"
+                                :disabled="!connection.is_connected"
+                                :title="!connection.is_connected ? 'Store must be connected to a POS branch to import' : 'Import all unmapped active items'"
+                                class="px-3.5 py-2 border border-primary text-primary hover:bg-primary-soft rounded-lg text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-400 cursor-pointer whitespace-nowrap"
+                            >
+                                Import All Eligible
+                            </button>
+                        </div>
                     </div>
                 </div>
 

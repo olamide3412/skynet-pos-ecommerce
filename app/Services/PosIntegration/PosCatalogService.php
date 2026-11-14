@@ -103,7 +103,17 @@ class PosCatalogService
         // Sync brands first (if POS exposes /brands) so logos & active flags are ready before items
         $this->syncBrands($forceFull);
 
-        $since = (!$forceFull && $conn->last_catalog_sync_at)
+        // Salvage any already-cached buying_price into products before syncing or pruning
+        $this->backfillMissingProductCostPrices();
+
+        // If any POS-linked products still have NULL cost_price (e.g. synced before the buying_price migration),
+        // automatically escalate this run to a full fetch ($since = null) so all POS buying prices are populated.
+        $needsCostBackfill = Product::where('inventory_source', 'pos')
+            ->whereNotNull('pos_item_id')
+            ->whereNull('cost_price')
+            ->exists();
+
+        $since = (!$forceFull && !$needsCostBackfill && $conn->last_catalog_sync_at)
             ? $conn->last_catalog_sync_at->toIso8601String()
             : null;
 
@@ -127,6 +137,9 @@ class PosCatalogService
 
                 $page++;
             } while ($hasMore);
+
+            // Backfill any newly synced buying_price into POS and previously-moved Ecommerce products BEFORE pruning
+            $this->backfillMissingProductCostPrices();
 
             // If full sync, check for missing mapped items and prune deleted unmapped items
             $prunedCount = 0;
@@ -187,7 +200,7 @@ class PosCatalogService
                     'is_active' => (bool) ($data['is_active'] ?? true),
                     'base_unit_name' => $data['base_unit_name'] ?? $data['unit_name'] ?? 'Piece',
                     'standard_price' => floatval($data['standard_price'] ?? $data['selling_price'] ?? 0),
-                    'buying_price' => floatval($data['buying_price'] ?? $data['cost_price'] ?? $data['purchase_price'] ?? $data['cost'] ?? $data['unit_cost'] ?? 0),
+                    'buying_price' => floatval($data['buying_price'] ?? $data['buy_price'] ?? $data['cost_price'] ?? $data['purchase_price'] ?? $data['cost'] ?? $data['unit_cost'] ?? $data['wholesale_price'] ?? 0),
                     'effective_availability' => (int) round(floatval($data['effective_availability'] ?? $data['quantity'] ?? 0)),
                     'imei_tracking_enabled' => (bool) ($data['imei_tracking_enabled'] ?? false),
                     'pos_updated_at' => isset($data['updated_at']) ? \Illuminate\Support\Carbon::parse($data['updated_at']) : now(),
@@ -746,6 +759,9 @@ class PosCatalogService
                 $page++;
             } while ($hasMore);
 
+            // Salvage any cached buying_price into products before pruning stale unmapped rows
+            $this->backfillMissingProductCostPrices();
+
             $prunedCount = $this->pruneDeletedUnmappedItems($activePosIds);
 
             return [
@@ -759,6 +775,72 @@ class PosCatalogService
             Log::error('POS prune error: ' . $e->getMessage());
             return ['status' => false, 'message' => 'Failed to scan POS catalog: ' . $e->getMessage()];
         }
+    }
+
+    /**
+     * Backfill missing cost_price on POS-linked products and previously-moved Ecommerce products
+     * from synced_pos_items.buying_price before any stale synced rows are pruned.
+     */
+    public function backfillMissingProductCostPrices(): int
+    {
+        $updatedCount = 0;
+
+        // 1. Backfill POS-linked products where cost_price is NULL or 0 while synced_pos_items has buying_price
+        $posProducts = Product::with('syncedPosItem')
+            ->where('inventory_source', 'pos')
+            ->whereNotNull('pos_item_id')
+            ->where(function ($q) {
+                $q->whereNull('cost_price')->orWhere('cost_price', '<=', 0);
+            })
+            ->get();
+
+        foreach ($posProducts as $prod) {
+            if ($prod->syncedPosItem) {
+                $buyingPrice = (float) ($prod->syncedPosItem->buying_price ?? 0);
+                if ($buyingPrice > 0 || $prod->cost_price === null) {
+                    $prod->updateQuietly(['cost_price' => $buyingPrice]);
+                    $updatedCount++;
+                }
+            }
+        }
+
+        // 2. Salvage cost_price for Ecommerce Only products that were previously moved from POS
+        // and still have NULL or 0 cost_price, matching by pos_item_name_snapshot or SKU
+        $movedEcommerceProducts = Product::where('inventory_source', 'ecommerce')
+            ->where(function ($q) {
+                $q->whereNull('cost_price')->orWhere('cost_price', '<=', 0);
+            })
+            ->where(function ($q) {
+                $q->whereNotNull('pos_item_name_snapshot')->orWhereNotNull('sku');
+            })
+            ->get();
+
+        if ($movedEcommerceProducts->isNotEmpty()) {
+            $syncedWithCost = SyncedPosItem::where('buying_price', '>', 0)
+                ->get(['pos_item_id', 'pos_item_name', 'sku', 'buying_price']);
+
+            if ($syncedWithCost->isNotEmpty()) {
+                $byName = $syncedWithCost->keyBy(fn ($i) => strtolower(trim((string) $i->pos_item_name)));
+                $bySku = $syncedWithCost->filter(fn ($i) => !empty($i->sku))
+                    ->keyBy(fn ($i) => strtolower(trim((string) $i->sku)));
+
+                foreach ($movedEcommerceProducts as $ecommProd) {
+                    $matched = null;
+                    if (!empty($ecommProd->pos_item_name_snapshot)) {
+                        $matched = $byName->get(strtolower(trim((string) $ecommProd->pos_item_name_snapshot)));
+                    }
+                    if (!$matched && !empty($ecommProd->sku)) {
+                        $matched = $bySku->get(strtolower(trim((string) $ecommProd->sku)));
+                    }
+                    if ($matched && (float) $matched->buying_price > 0) {
+                        $ecommProd->updateQuietly(['cost_price' => (float) $matched->buying_price]);
+                        $updatedCount++;
+                    }
+                }
+            }
+        }
+
+        return $updatedCount;
     }
 
     /**
