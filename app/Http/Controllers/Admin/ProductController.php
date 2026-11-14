@@ -86,6 +86,8 @@ class ProductController extends Controller
                     ->where('expiry_date', '>', now()->addDays($threshold)->toDateString());
             } elseif ($expiryFilter === 'has_expiry') {
                 $query->whereNotNull('expiry_date');
+            } elseif ($expiryFilter === 'no_expiry') {
+                $query->whereNull('expiry_date');
             }
         }
 
@@ -97,6 +99,8 @@ class ProductController extends Controller
             'qty_asc', 'stock_asc'   => $query->orderBy('stock', 'asc'),
             'price_desc' => $query->orderBy('price', 'desc'),
             'price_asc'  => $query->orderBy('price', 'asc'),
+            'expiry_asc' => $query->orderByRaw('expiry_date IS NULL, expiry_date ASC'),
+            'expiry_desc'=> $query->orderByRaw('expiry_date IS NULL, expiry_date DESC'),
             'oldest'     => $query->oldest(),
             default      => $query->latest(),
         };

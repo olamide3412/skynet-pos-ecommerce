@@ -1391,6 +1391,7 @@ const submitBulkMoveToEcommerce = () => {
                         <option value="expiring_soon">🟡 Expiring Soon</option>
                         <option value="valid">🟢 Fresh / Valid</option>
                         <option value="has_expiry">⏳ Has Expiry Date</option>
+                        <option value="no_expiry">⚪ No Expiry Date Set</option>
                     </select>
                 </div>
 
@@ -1406,6 +1407,10 @@ const submitBulkMoveToEcommerce = () => {
                         <option value="qty_asc">Stock: Low to High</option>
                         <option value="price_asc">Price: Low to High</option>
                         <option value="price_desc">Price: High to Low</option>
+                        <template v-if="$page.props.store_settings?.enable_product_expiry_tracking === '1'">
+                            <option value="expiry_asc">⏳ Expiry: Soonest First</option>
+                            <option value="expiry_desc">⏳ Expiry: Furthest First</option>
+                        </template>
                     </select>
                 </div>
 
