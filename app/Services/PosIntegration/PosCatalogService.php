@@ -128,9 +128,11 @@ class PosCatalogService
                 $page++;
             } while ($hasMore);
 
-            // If full sync, check for missing mapped items
+            // If full sync, check for missing mapped items and prune deleted unmapped items
+            $prunedCount = 0;
             if ($forceFull && !empty($activePosIds)) {
                 $this->detectMissingMappedItems($activePosIds);
+                $prunedCount = $this->pruneDeletedUnmappedItems($activePosIds);
             }
 
             $conn->update([
@@ -138,12 +140,18 @@ class PosCatalogService
                 'last_successful_request_at' => now(),
             ]);
 
-            PosSyncLog::log('catalog_sync', 'success', "Catalog synchronization completed: {$totalSynced} items processed");
+            $successMsg = "Catalog synchronization completed: {$totalSynced} items processed.";
+            if ($prunedCount > 0) {
+                $successMsg .= " Cleaned up {$prunedCount} deleted POS item(s) from local sync list.";
+            }
+
+            PosSyncLog::log('catalog_sync', 'success', $successMsg);
 
             return [
                 'status' => true,
                 'total_synced' => $totalSynced,
-                'message' => "Catalog synchronization completed: {$totalSynced} items updated.",
+                'total_pruned' => $prunedCount,
+                'message' => $successMsg,
             ];
         } catch (\Throwable $e) {
             Log::error('POS Catalog sync error: ' . $e->getMessage());
@@ -656,6 +664,100 @@ class PosCatalogService
             ]);
 
             PosSyncLog::log('missing_item_detected', 'warning', "POS Item #{$prod->pos_item_id} mapped to Product #{$prod->id} ({$prod->name}) is missing from POS branch catalog.", (string) $prod->id);
+        }
+    }
+
+    /**
+     * Prune unmapped synced_pos_items that no longer exist on the POS branch.
+     * Only prunes items that have no connected online products or variants.
+     */
+    public function pruneDeletedUnmappedItems(array $activePosIds): int
+    {
+        if (empty($activePosIds)) {
+            return 0;
+        }
+
+        // 1. Gather all POS item IDs currently mapped to an active Ecommerce Product or Variant
+        $mappedProductPosIds = Product::where('inventory_source', 'pos')
+            ->whereNotNull('pos_item_id')
+            ->pluck('pos_item_id')
+            ->map(fn($id) => (int) $id)
+            ->all();
+
+        $mappedVariantPosIds = ProductVariantMapping::where('inventory_source', 'pos')
+            ->whereNotNull('pos_item_id')
+            ->pluck('pos_item_id')
+            ->map(fn($id) => (int) $id)
+            ->all();
+
+        $protectedPosIds = array_values(array_unique(array_merge($mappedProductPosIds, $mappedVariantPosIds)));
+
+        // 2. Find any synced_pos_items that are NOT in active POS IDs AND NOT in protected mapped IDs
+        $staleQuery = SyncedPosItem::whereNotIn('pos_item_id', $activePosIds);
+        if (!empty($protectedPosIds)) {
+            $staleQuery->whereNotIn('pos_item_id', $protectedPosIds);
+        }
+
+        $staleItems = $staleQuery->get();
+        $prunedCount = 0;
+
+        foreach ($staleItems as $staleItem) {
+            $staleItem->units()->delete();
+            $staleItem->delete();
+            $prunedCount++;
+        }
+
+        if ($prunedCount > 0) {
+            PosSyncLog::log(
+                'catalog_sync',
+                'info',
+                "Cleaned up {$prunedCount} deleted POS item(s) from local cache that no longer exist on the POS branch."
+            );
+        }
+
+        return $prunedCount;
+    }
+
+    /**
+     * Scan the POS branch catalog and prune unmapped deleted items directly.
+     */
+    public function pruneStaleUnmappedItemsDirect(): array
+    {
+        @set_time_limit(300);
+
+        $conn = PosConnection::active();
+        if (!$conn || empty($conn->pos_base_url)) {
+            return ['status' => false, 'message' => 'No active POS connection.'];
+        }
+
+        $page = 1;
+        $activePosIds = [];
+
+        try {
+            do {
+                $response = $this->apiClient->listItems(null, $page, 100);
+                $items = $response['data'] ?? [];
+                $hasMore = !empty($response['next_page_url']) || (!empty($response['meta']['current_page']) && $response['meta']['current_page'] < $response['meta']['last_page']);
+
+                foreach ($items as $itemData) {
+                    $activePosIds[] = (int) $itemData['id'];
+                }
+
+                $page++;
+            } while ($hasMore);
+
+            $prunedCount = $this->pruneDeletedUnmappedItems($activePosIds);
+
+            return [
+                'status' => true,
+                'pruned_count' => $prunedCount,
+                'message' => $prunedCount > 0
+                    ? "Successfully cleaned up {$prunedCount} deleted POS item(s) from local sync list."
+                    : "No deleted POS items found. All local items match your POS branch.",
+            ];
+        } catch (\Throwable $e) {
+            Log::error('POS prune error: ' . $e->getMessage());
+            return ['status' => false, 'message' => 'Failed to scan POS catalog: ' . $e->getMessage()];
         }
     }
 

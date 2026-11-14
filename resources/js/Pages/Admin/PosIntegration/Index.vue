@@ -122,6 +122,15 @@ const reconcileMappings = () => {
     });
 };
 
+const removeSyncedItem = (item) => {
+    if (!confirm(`Remove "${item.pos_item_name}" from the POS sync list? This will remove the deleted/stale record from your local catalog.`)) return;
+    isSyncing.value = true;
+    router.delete(route('admin.pos-integration.items.destroy', item.id), {
+        preserveScroll: true,
+        onFinish: () => { isSyncing.value = false; }
+    });
+};
+
 const openSingleImport = (item) => {
     if (!props.connection?.is_connected) return;
     importTargetItem.value = item;
@@ -257,11 +266,20 @@ const confirmImport = () => {
                     <button
                         @click="syncCatalog(false)"
                         :disabled="isSyncing || !connection.is_connected"
-                        :title="!connection.is_connected ? 'Store must be connected to a POS branch to sync catalog' : 'Sync catalog from connected branch'"
-                        class="inline-flex items-center px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-sm font-medium shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400"
+                        :title="!connection.is_connected ? 'Store must be connected to a POS branch to sync catalog' : 'Quick sync recently modified items from branch'"
+                        class="inline-flex items-center px-3.5 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                     >
                         <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/></svg>
-                        Sync Catalog
+                        Quick Sync
+                    </button>
+                    <button
+                        @click="syncCatalog(true)"
+                        :disabled="isSyncing || !connection.is_connected"
+                        :title="!connection.is_connected ? 'Store must be connected to a POS branch to sync catalog' : 'Full catalog sync: pulls all items from branch and automatically removes deleted/stale items'"
+                        class="inline-flex items-center px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-sm font-medium shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400 cursor-pointer"
+                    >
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        Full Sync & Clean Deleted
                     </button>
                 </div>
             </div>
@@ -690,15 +708,27 @@ const confirmImport = () => {
                                                 Edit Product #{{ item.mapped_product.id }}
                                             </Link>
                                         </div>
-                                        <button
-                                            v-else
-                                            @click="openSingleImport(item)"
-                                            :disabled="!connection.is_connected"
-                                            :title="!connection.is_connected ? 'Store must be connected to import' : 'Import item into catalog'"
-                                            class="px-2.5 py-1 text-xs font-semibold text-primary bg-primary-soft hover:bg-primary-soft rounded-md transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                            Import Item
-                                        </button>
+                                        <div v-else class="flex items-center justify-end gap-1.5">
+                                            <button
+                                                @click="openSingleImport(item)"
+                                                :disabled="!connection.is_connected"
+                                                :title="!connection.is_connected ? 'Store must be connected to import' : 'Import item into catalog'"
+                                                class="px-2.5 py-1 text-xs font-semibold text-primary bg-primary-soft hover:bg-primary-soft rounded-md transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                                            >
+                                                Import Item
+                                            </button>
+                                            <button
+                                                type="button"
+                                                @click="removeSyncedItem(item)"
+                                                :disabled="isSyncing"
+                                                title="Remove this deleted/stale item from local sync list"
+                                                class="p-1 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded-md transition hover:bg-red-50 dark:hover:bg-red-950/40 cursor-pointer"
+                                            >
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                </svg>
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                                 <tr v-if="!items.data || !items.data.length">

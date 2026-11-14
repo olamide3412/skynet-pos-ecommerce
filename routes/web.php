@@ -373,6 +373,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('pos-integration/import-simple', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'importSimple'])->name('pos-integration.import-simple');
                 Route::post('pos-integration/bulk-import', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'bulkImport'])->name('pos-integration.bulk-import');
                 Route::post('pos-integration/import-all', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'importAllEligible'])->name('pos-integration.import-all');
+                Route::post('pos-integration/prune-stale', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'pruneStaleItems'])->name('pos-integration.prune-stale');
+                Route::delete('pos-integration/items/{syncedItem}', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'destroySyncedItem'])->name('pos-integration.items.destroy');
 
                 // Roles & Permissions Management (STRICTLY Super Administrator)
                 Route::get('roles', [\App\Http\Controllers\Admin\RoleController::class, 'index'])->name('roles.index');

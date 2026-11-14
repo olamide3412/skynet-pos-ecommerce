@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\PosConnection;
 use App\Models\PosSyncLog;
 use App\Models\Product;
+use App\Models\ProductVariantMapping;
 use App\Models\SyncedPosItem;
 use App\Services\PosIntegration\PosCatalogService;
 use App\Services\PosIntegration\PosConnectionService;
@@ -343,5 +344,51 @@ class PosIntegrationController extends Controller
         }
 
         return back()->with('error', $result['message']);
+    }
+
+    /**
+     * Delete an unmapped / stale synced POS item from local cache.
+     */
+    public function destroySyncedItem(SyncedPosItem $syncedItem)
+    {
+        $isMapped = Product::where('inventory_source', 'pos')
+            ->where('pos_item_id', $syncedItem->pos_item_id)
+            ->exists()
+            || ProductVariantMapping::where('inventory_source', 'pos')
+            ->where('pos_item_id', $syncedItem->pos_item_id)
+            ->exists();
+
+        if ($isMapped) {
+            return back()->with('error', 'Cannot remove: This item is currently mapped to an active online POS product. Move or disconnect the product first.');
+        }
+
+        $name = $syncedItem->pos_item_name;
+        $syncedItem->units()->delete();
+        $syncedItem->delete();
+
+        PosSyncLog::log('item_pruned', 'info', "Removed deleted/stale POS item '{$name}' (#{$syncedItem->pos_item_id}) from local sync cache.");
+
+        return back()->with('success', "Removed '{$name}' from POS sync list.");
+    }
+
+    /**
+     * Scan POS branch catalog and prune all deleted unmapped items.
+     */
+    public function pruneStaleItems()
+    {
+        @set_time_limit(300);
+
+        $conn = PosConnection::active();
+        if (!$conn || !$conn->is_connected || empty($conn->pos_base_url)) {
+            return back()->with('error', 'Cannot prune items: store is not connected to a verified POS branch.');
+        }
+
+        $result = $this->catalogService->pruneStaleUnmappedItemsDirect();
+
+        if ($result['status']) {
+            return back()->with('success', $result['message']);
+        }
+
+        return back()->with('error', 'Cleanup failed: ' . ($result['message'] ?? 'Unknown error'));
     }
 }
