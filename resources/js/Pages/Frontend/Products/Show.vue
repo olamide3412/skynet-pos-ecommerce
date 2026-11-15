@@ -4,6 +4,7 @@ import Layout from '@/Layouts/Layout.vue';
 import StorefrontBreadcrumb from '@/Components/StorefrontBreadcrumb.vue';
 import { ref, computed, watch } from 'vue';
 import { useToast } from 'vue-toastification';
+import { useCart } from '@/Composables/useCart';
 
 const props = defineProps({
     product: Object,
@@ -52,6 +53,14 @@ const submitReview = () => {
 const wishlistEnabled = computed(() => page.props.store_settings?.wishlist_enabled === '1');
 const isWishlisted = ref(props.is_wishlisted);
 const togglingWishlist = ref(false);
+
+const {
+    getCartItemForListing,
+    addToCart: addRelatedToCart,
+    updateQuantity,
+    isUpdatingItem,
+    isAddingProduct,
+} = useCart();
 
 const effectiveWarranty = computed(() => {
     return (props.product.warranty && props.product.warranty.trim()) 
@@ -552,7 +561,7 @@ const structuredData = computed(() => {
             <div class="flex flex-col md:flex-row gap-8 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border dark:border-gray-700">
                 <div class="w-full md:w-1/2">
                     <!-- Main Product Image (Full view, no cropping or excessive zoom) -->
-                    <div class="mb-4 bg-white dark:bg-gray-900/60 rounded-xl p-4 sm:p-6 flex items-center justify-center border border-gray-100 dark:border-gray-700/80 shadow-xs h-[320px] sm:h-[420px] md:h-[480px] overflow-hidden">
+                    <div class="mb-4 bg-white dark:bg-white rounded-xl p-4 sm:p-6 flex items-center justify-center border border-gray-100 dark:border-gray-700/80 shadow-xs h-[320px] sm:h-[420px] md:h-[480px] overflow-hidden">
                         <img
                             :src="activeImage ? '/storage/' + activeImage : 'https://placehold.co/600x600?text=' + product.name"
                             :alt="product.name"
@@ -565,7 +574,7 @@ const structuredData = computed(() => {
                             v-for="(img, idx) in allImages" 
                             :key="idx" 
                             @click="activeImage = img"
-                            class="flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden border-2 bg-white dark:bg-gray-900/60 p-1 flex items-center justify-center transition-all"
+                            class="flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden border-2 bg-white dark:bg-white p-1 flex items-center justify-center transition-all"
                             :class="activeImage === img ? 'border-primary ring-2 ring-primary/30' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'"
                         >
                             <img :src="'/storage/' + img" :alt="product.name + ' thumbnail ' + (idx + 1)" class="max-w-full max-h-full w-auto h-auto object-contain" />
@@ -1105,16 +1114,69 @@ const structuredData = computed(() => {
             <div v-if="related && related.length > 0" class="mt-16">
                 <h3 class="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-black dark:text-white">You might also like</h3>
                 <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
-                    <div v-for="rel in related" :key="rel.id" class="border border-gray-100 dark:border-gray-700/80 rounded-xl overflow-hidden shadow-xs hover:shadow-md hover:border-gray-200 dark:hover:border-gray-600 transition-all bg-white dark:bg-gray-800 flex flex-col group">
+                    <div v-for="rel in related" :key="rel.listing_key || rel.id" class="border border-gray-100 dark:border-gray-700/80 rounded-xl overflow-hidden shadow-xs hover:shadow-md hover:border-gray-200 dark:hover:border-gray-600 transition-all bg-white dark:bg-gray-800 flex flex-col group">
                         <Link :href="route('shop.show', rel.url_key)" class="block flex-1 flex flex-col">
-                            <div class="overflow-hidden bg-gray-50 dark:bg-gray-900/50 flex items-center justify-center p-2 h-36 sm:h-48">
+                            <div class="relative overflow-hidden bg-white dark:bg-white flex items-center justify-center p-2 h-36 sm:h-48">
                                 <img :src="rel.image ? '/storage/' + rel.image : 'https://placehold.co/400x300?text=' + rel.name" class="max-w-full max-h-full w-auto h-auto object-contain group-hover:scale-105 transition duration-300" />
+                                <span v-if="rel.price > 0 && (rel.special_price || rel.discount_price)" class="absolute top-2 left-2 z-10 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow-xs">
+                                    -{{ Math.round(((rel.price - (rel.special_price || rel.discount_price)) / rel.price) * 100) }}%
+                                </span>
                             </div>
                             <div class="p-2.5 sm:p-4 flex-1 flex flex-col">
                                 <h4 class="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white mb-1 group-hover:text-primary transition line-clamp-2">{{ rel.name }}</h4>
-                                <p class="text-primary font-bold text-sm sm:text-base mt-auto">₦{{ parseFloat(rel.price).toLocaleString() }}</p>
+                                <div class="mt-auto pt-1">
+                                    <span v-if="rel.price > 0 && (rel.special_price || rel.discount_price)" class="text-[10px] sm:text-xs text-gray-400 line-through block leading-none">
+                                        ₦{{ parseFloat(rel.price).toLocaleString() }}
+                                    </span>
+                                    <p class="text-primary font-bold text-sm sm:text-base">
+                                        ₦{{ parseFloat(rel.effective_price || rel.special_price || rel.discount_price || rel.price).toLocaleString() }}
+                                    </p>
+                                </div>
                             </div>
                         </Link>
+
+                        <!-- Add to Cart / Quantity Stepper -->
+                        <div class="px-2.5 pb-2.5 sm:px-4 sm:pb-4 pt-0 mt-auto">
+                            <!-- In Cart: Quantity Controls -[1]+ -->
+                            <div v-if="getCartItemForListing(rel)" class="w-full inline-flex items-center justify-between border border-primary/40 bg-primary/5 dark:bg-primary/10 rounded-lg overflow-hidden shadow-xs h-8 sm:h-9">
+                                <button
+                                    type="button"
+                                    @click.prevent="updateQuantity(getCartItemForListing(rel), getCartItemForListing(rel).quantity - 1)"
+                                    :disabled="isUpdatingItem(getCartItemForListing(rel).id)"
+                                    class="w-8 sm:w-10 h-full flex items-center justify-center font-bold text-gray-700 dark:text-gray-200 hover:bg-primary hover:text-white transition disabled:opacity-50 text-xs sm:text-base cursor-pointer"
+                                    title="Decrease quantity">
+                                    -
+                                </button>
+                                <span class="px-1 sm:px-2 text-center text-xs sm:text-sm font-black text-primary">
+                                    {{ getCartItemForListing(rel).quantity }}
+                                </span>
+                                <button
+                                    type="button"
+                                    @click.prevent="updateQuantity(getCartItemForListing(rel), getCartItemForListing(rel).quantity + 1)"
+                                    :disabled="isUpdatingItem(getCartItemForListing(rel).id)"
+                                    class="w-8 sm:w-10 h-full flex items-center justify-center font-bold text-gray-700 dark:text-gray-200 hover:bg-primary hover:text-white transition disabled:opacity-50 text-xs sm:text-base cursor-pointer"
+                                    title="Increase quantity">
+                                    +
+                                </button>
+                            </div>
+
+                            <!-- Add to Cart Button -->
+                            <button v-else
+                                type="button"
+                                @click.prevent="addRelatedToCart(rel)"
+                                :disabled="isAddingProduct(rel) || (rel.stock !== undefined && rel.stock <= 0)"
+                                :class="(rel.stock !== undefined && rel.stock <= 0) ? 'opacity-50 cursor-not-allowed bg-gray-400 dark:bg-gray-600' : 'bg-primary hover:opacity-90 cursor-pointer'"
+                                class="w-full py-1.5 sm:py-2 rounded-lg text-white text-xs sm:text-sm font-bold transition flex items-center justify-center gap-1 sm:gap-2 shadow-xs h-8 sm:h-9">
+                                <svg v-if="!isAddingProduct(rel) && (rel.stock === undefined || rel.stock > 0)" class="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
+                                </svg>
+                                <svg v-else-if="isAddingProduct(rel)" class="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                                </svg>
+                                <span class="truncate">{{ (rel.stock !== undefined && rel.stock <= 0) ? 'Out of Stock' : (isAddingProduct(rel) ? '...' : 'Add to Cart') }}</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -61,14 +61,23 @@ class CartController extends Controller
 
         // Resolve selling unit (selling units apply to the base product only, not variants)
         $selectedUnit = null;
+        $baseUnit = $product->posUnits->firstWhere('unit_kind', 'base');
         if (!$variantMapping && !$request->variant && $request->product_pos_unit_id) {
             $selectedUnit = $product->posUnits->firstWhere('id', $request->product_pos_unit_id);
             if (!$selectedUnit || !$selectedUnit->is_enabled_online) {
                 return back()->with('error', 'The selected purchasing unit is not available.');
             }
+            // Normalize the base (1x) unit to null so adding from Product Show page and
+            // adding from Home / Catalog / Related cards merge into the same cart line.
+            if ($selectedUnit->unit_kind === 'base') {
+                $baseUnit = $selectedUnit;
+                $selectedUnit = null;
+            }
         }
 
-        $unitName = $selectedUnit ? $selectedUnit->display_label : ($product->pos_base_unit_name ?? 'Piece');
+        $unitName = $selectedUnit
+            ? $selectedUnit->display_label
+            : ($baseUnit?->display_label ?? $product->pos_base_unit_name ?? 'Piece');
         $price = $product->getEffectivePriceForUnit($selectedUnit);
 
         // Check stock availability if product is ecommerce-managed
@@ -111,7 +120,16 @@ class CartController extends Controller
 
         $cartItem = $cart->items()
             ->where('product_id', $product->id)
-            ->where('product_pos_unit_id', $selectedUnit?->id)
+            ->where(function ($q) use ($selectedUnit, $baseUnit) {
+                if ($selectedUnit) {
+                    $q->where('product_pos_unit_id', $selectedUnit->id);
+                } elseif ($baseUnit) {
+                    $q->whereNull('product_pos_unit_id')
+                      ->orWhere('product_pos_unit_id', $baseUnit->id);
+                } else {
+                    $q->whereNull('product_pos_unit_id');
+                }
+            })
             ->where(function ($q) use ($request, $variantMapping) {
                 if ($variantMapping) {
                     $q->where('product_variant_mapping_id', $variantMapping->id)
@@ -137,6 +155,8 @@ class CartController extends Controller
             $cartItem->update([
                 'quantity'                   => $newQuantity,
                 'price'                      => $price,
+                'unit_name'                  => $unitName,
+                'product_pos_unit_id'        => $selectedUnit?->id,
                 'product_variant_mapping_id' => $variantMapping?->id,
             ]);
         } else {

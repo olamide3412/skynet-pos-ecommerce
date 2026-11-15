@@ -294,7 +294,7 @@ class ProductController extends Controller
 
     private function getRelated(Product $product): \Illuminate\Support\Collection
     {
-        $eagerLoad = array_merge(['category', 'brand:id,name,slug,logo'], $this->expander->eagerLoad());
+        $eagerLoad = ['category', 'brand:id,name,slug,logo'];
 
         // Manually selected takes priority
         if (!empty($product->related_products)) {
@@ -305,17 +305,15 @@ class ProductController extends Controller
                 ->take(12)
                 ->get();
             if ($related->isNotEmpty()) {
-                return $this->expander->expandAndLimit($related, 12);
+                return $related;
             }
         }
         // Fallback: same category
-        $related = Product::with($eagerLoad)
+        return Product::with($eagerLoad)
             ->where('category_id', $product->category_id)
             ->where('id', '!=', $product->id)
             ->where('status', true)
             ->take(10)
             ->get();
-
-        return $this->expander->expandAndLimit($related, 10);
     }
 }

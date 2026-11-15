@@ -185,7 +185,7 @@ class HandleInertiaRequests extends Middleware
                     return [
                         'id'                  => $item->id,
                         'product_id'          => $item->product_id,
-                        'product_pos_unit_id' => $item->product_pos_unit_id,
+                        'product_pos_unit_id' => $item->posUnit?->unit_kind === 'base' ? null : $item->product_pos_unit_id,
                         'unit_name'           => $item->unit_name,
                         'quantity'            => (int) $item->quantity,
                         'price'               => (float) $item->price,
