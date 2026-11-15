@@ -300,20 +300,26 @@ onUnmounted(() => {
                 >
                     <!-- Circle Avatar with Accent Ring and Subtle Shadow -->
                     <div class="relative w-20 h-20 sm:w-24 sm:h-24 md:w-26 md:h-26 rounded-full p-1 bg-white dark:bg-gray-800 border-2 border-gray-200/80 dark:border-gray-700 group-hover:border-primary shadow-sm group-hover:shadow-md transition-all duration-300">
-                        <div class="w-full h-full rounded-full overflow-hidden bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+                        <div class="w-full h-full rounded-full overflow-hidden bg-white dark:bg-white flex items-center justify-center">
                             <img
-                                :src="category.image ? '/storage/' + category.image : 'https://placehold.co/200x200?text=' + encodeURIComponent(category.name)"
-                                class="w-full h-full object-cover transform group-hover:scale-110 transition duration-500"
+                                :src="(category.image || category.fallback_image) ? '/storage/' + (category.image || category.fallback_image) : 'https://placehold.co/200x200?text=' + encodeURIComponent(category.name)"
+                                :class="[
+                                    category.image ? 'w-full h-full object-cover' : 'max-w-full max-h-full object-contain p-2',
+                                    'transform group-hover:scale-110 transition duration-500'
+                                ]"
                                 :alt="category.name"
                                 onerror="this.src='https://placehold.co/200x200?text=Category'"
                             />
                         </div>
                     </div>
 
-                    <!-- Category Title -->
+                    <!-- Category Title & Item Count -->
                     <h3 class="mt-2 text-xs sm:text-sm font-semibold text-gray-800 dark:text-gray-200 group-hover:text-primary transition line-clamp-2 max-w-[90px] sm:max-w-[105px] leading-snug">
                         {{ category.name }}
                     </h3>
+                    <span v-if="category.products_count > 0" class="text-[10px] text-gray-400 dark:text-gray-500 font-medium mt-0.5">
+                        {{ category.products_count }} {{ category.products_count === 1 ? 'item' : 'items' }}
+                    </span>
                 </Link>
             </div>
 

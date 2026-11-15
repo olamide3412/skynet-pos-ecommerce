@@ -154,12 +154,127 @@ class HomeController extends Controller
             'best_sellers' => $bestSellers->take(10)->values(),
             'most_searched' => $mostSearched->take(10)->values(),
             'top_search_keywords' => array_slice($topTerms, 0, 6),
-            'home_categories' => Category::whereNull('parent_id')
-                ->orderBy('menu_position')
-                ->take(8)
-                ->get(['id', 'name', 'slug', 'image']),
+            'home_categories' => $this->getSmartHomeCategories(8),
             'featured_brands' => $featuredBrands,
             'wishlist_ids' => $wishlistIds,
         ]);
+    }
+
+    /**
+     * Smartly load and rank parent categories for the "Shop by Category" homepage section:
+     * 1. Only visible parent categories with active products (including subcategories).
+     * 2. Explicit manual menu_position (> 0) first.
+     * 3. Categories with custom uploaded images next.
+     * 4. Ranked by in-stock product depth (DESC), then total active products (DESC), then ID (ASC).
+     * 5. Populates a fallback product thumbnail when a category does not have its own image uploaded yet.
+     */
+    private function getSmartHomeCategories(int $limit = 8): array
+    {
+        $parents = Category::whereNull('parent_id')
+            ->where('visible_in_menu', true)
+            ->with('children:id,parent_id')
+            ->get(['id', 'name', 'slug', 'image', 'menu_position']);
+
+        if ($parents->isEmpty()) {
+            return [];
+        }
+
+        // Map every parent & child category ID to its root parent ID
+        $catToParent = [];
+        foreach ($parents as $parent) {
+            $catToParent[$parent->id] = $parent->id;
+            foreach ($parent->children as $child) {
+                $catToParent[$child->id] = $parent->id;
+            }
+        }
+
+        // Aggregate active and in-stock product counts in a single query
+        $countsByCat = Product::query()
+            ->whereIn('category_id', array_keys($catToParent))
+            ->where('status', true)
+            ->selectRaw('category_id, COUNT(*) as active_count, SUM(CASE WHEN stock > 0 THEN 1 ELSE 0 END) as in_stock_count')
+            ->groupBy('category_id')
+            ->get();
+
+        $parentStats = [];
+        foreach ($countsByCat as $row) {
+            $rootId = $catToParent[$row->category_id] ?? null;
+            if (!$rootId) {
+                continue;
+            }
+            if (!isset($parentStats[$rootId])) {
+                $parentStats[$rootId] = ['active' => 0, 'in_stock' => 0];
+            }
+            $parentStats[$rootId]['active'] += (int) $row->active_count;
+            $parentStats[$rootId]['in_stock'] += (int) $row->in_stock_count;
+        }
+
+        // Filter to non-empty categories (fallback to all visible if store has no products yet)
+        $eligible = $parents->filter(fn ($c) => ($parentStats[$c->id]['active'] ?? 0) > 0);
+        if ($eligible->isEmpty()) {
+            $eligible = $parents;
+        }
+
+        // Sort by smart merchandising tiers
+        $sorted = $eligible->sort(function ($a, $b) use ($parentStats) {
+            // Tier 1: Explicit manual menu_position (> 0)
+            $aPinned = ($a->menu_position ?? 0) > 0 ? 0 : 1;
+            $bPinned = ($b->menu_position ?? 0) > 0 ? 0 : 1;
+            if ($aPinned !== $bPinned) {
+                return $aPinned <=> $bPinned;
+            }
+            if ($aPinned === 0 && $a->menu_position !== $b->menu_position) {
+                return $a->menu_position <=> $b->menu_position;
+            }
+
+            // Tier 2: Has custom category image
+            $aHasImg = !empty($a->image) ? 1 : 0;
+            $bHasImg = !empty($b->image) ? 1 : 0;
+            if ($aHasImg !== $bHasImg) {
+                return $bHasImg <=> $aHasImg;
+            }
+
+            // Tier 3: In-stock product depth (DESC)
+            $aInStock = $parentStats[$a->id]['in_stock'] ?? 0;
+            $bInStock = $parentStats[$b->id]['in_stock'] ?? 0;
+            if ($aInStock !== $bInStock) {
+                return $bInStock <=> $aInStock;
+            }
+
+            // Tier 4: Total active product count (DESC)
+            $aActive = $parentStats[$a->id]['active'] ?? 0;
+            $bActive = $parentStats[$b->id]['active'] ?? 0;
+            if ($aActive !== $bActive) {
+                return $bActive <=> $aActive;
+            }
+
+            // Tier 5: Deterministic ID tie-breaker
+            return $a->id <=> $b->id;
+        })->take($limit)->values();
+
+        // Populate a representative product image for categories missing a dedicated category image
+        return $sorted->map(function ($cat) use ($parentStats) {
+            $fallbackImage = null;
+            if (empty($cat->image)) {
+                $familyIds = array_merge([$cat->id], $cat->children->pluck('id')->all());
+                $fallbackImage = Product::whereIn('category_id', $familyIds)
+                    ->where('status', true)
+                    ->whereNotNull('image')
+                    ->where('image', '!=', '')
+                    ->orderByRaw('CASE WHEN stock > 0 THEN 1 ELSE 0 END DESC')
+                    ->orderByDesc('is_featured')
+                    ->orderByDesc('id')
+                    ->value('image');
+            }
+
+            return [
+                'id'             => $cat->id,
+                'name'           => $cat->name,
+                'slug'           => $cat->slug,
+                'image'          => $cat->image,
+                'fallback_image' => $fallbackImage,
+                'products_count' => $parentStats[$cat->id]['active'] ?? 0,
+            ];
+        })->all();
     }
 }

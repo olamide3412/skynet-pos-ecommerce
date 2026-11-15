@@ -2,7 +2,7 @@
 import { Head, Link, useForm, usePage, router } from '@inertiajs/vue3';
 import Layout from '@/Layouts/Layout.vue';
 import StorefrontBreadcrumb from '@/Components/StorefrontBreadcrumb.vue';
-import { ref, computed, watch } from 'vue';
+import { ref, reactive, computed, watch } from 'vue';
 import { useToast } from 'vue-toastification';
 import { useCart } from '@/Composables/useCart';
 
@@ -12,6 +12,10 @@ const props = defineProps({
     is_wishlisted: {
         type: Boolean,
         default: false,
+    },
+    wishlist_ids: {
+        type: Array,
+        default: () => [],
     },
     reviews: {
         type: Array,
@@ -382,6 +386,41 @@ const toggleWishlist = () => {
         },
         onError: () => toast.error('Could not update wishlist.'),
         onFinish: () => { togglingWishlist.value = false; },
+    });
+};
+
+const wishlistIds = ref([...(props.wishlist_ids || [])]);
+const togglingRelatedWishlist = reactive({});
+const comparingRelated = reactive({});
+
+const isRelatedWishlisted = (id) => wishlistIds.value.includes(id);
+
+const toggleRelatedWishlist = (rel) => {
+    if (!page.props.auth.customer) {
+        router.visit(route('login'));
+        return;
+    }
+    togglingRelatedWishlist[rel.id] = true;
+    useForm({ product_id: rel.id }).post(route('wishlist.toggle'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            if (isRelatedWishlisted(rel.id)) {
+                wishlistIds.value = wishlistIds.value.filter(id => id !== rel.id);
+            } else {
+                wishlistIds.value.push(rel.id);
+            }
+        },
+        onError: () => toast.error('Could not update wishlist.'),
+        onFinish: () => { togglingRelatedWishlist[rel.id] = false; },
+    });
+};
+
+const addRelatedToCompare = (rel) => {
+    comparingRelated[rel.id] = true;
+    useForm({ product_id: rel.id }).post(route('compare.store'), {
+        preserveScroll: true,
+        onError: () => toast.error('Could not add to compare list. It might be full.'),
+        onFinish: () => { comparingRelated[rel.id] = false; },
     });
 };
 
@@ -1114,7 +1153,23 @@ const structuredData = computed(() => {
             <div v-if="related && related.length > 0" class="mt-16">
                 <h3 class="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-black dark:text-white">You might also like</h3>
                 <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
-                    <div v-for="rel in related" :key="rel.listing_key || rel.id" class="border border-gray-100 dark:border-gray-700/80 rounded-xl overflow-hidden shadow-xs hover:shadow-md hover:border-gray-200 dark:hover:border-gray-600 transition-all bg-white dark:bg-gray-800 flex flex-col group">
+                    <div v-for="rel in related" :key="rel.listing_key || rel.id" class="border border-gray-100 dark:border-gray-700/80 rounded-xl overflow-hidden shadow-xs hover:shadow-md hover:border-gray-200 dark:hover:border-gray-600 transition-all bg-white dark:bg-gray-800 flex flex-col relative group">
+                        <!-- Wishlist Heart Button -->
+                        <button
+                            v-if="wishlistEnabled"
+                            type="button"
+                            @click.prevent="toggleRelatedWishlist(rel)"
+                            :disabled="togglingRelatedWishlist[rel.id]"
+                            :title="isRelatedWishlisted(rel.id) ? 'Remove from wishlist' : 'Save to wishlist'"
+                            class="absolute top-2 right-2 sm:top-3 sm:right-3 z-10 w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-white/90 dark:bg-gray-700/90 backdrop-blur-xs shadow-xs flex items-center justify-center border border-gray-200/80 dark:border-gray-600 hover:scale-110 transition-transform disabled:opacity-60 cursor-pointer">
+                            <svg class="w-3.5 h-3.5 sm:w-5 sm:h-5 transition-colors"
+                                :class="isRelatedWishlisted(rel.id) ? 'text-red-500 fill-red-500' : 'text-gray-400 dark:text-gray-300 fill-none'"
+                                stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+                            </svg>
+                        </button>
+
                         <Link :href="route('shop.show', rel.url_key)" class="block flex-1 flex flex-col">
                             <div class="relative overflow-hidden bg-white dark:bg-white flex items-center justify-center p-2 h-36 sm:h-48">
                                 <img :src="rel.image ? '/storage/' + rel.image : 'https://placehold.co/400x300?text=' + rel.name" class="max-w-full max-h-full w-auto h-auto object-contain group-hover:scale-105 transition duration-300" />
@@ -1135,15 +1190,15 @@ const structuredData = computed(() => {
                             </div>
                         </Link>
 
-                        <!-- Add to Cart / Quantity Stepper -->
-                        <div class="px-2.5 pb-2.5 sm:px-4 sm:pb-4 pt-0 mt-auto">
+                        <!-- Add to Cart / Quantity Stepper & Compare -->
+                        <div class="px-2.5 pb-2.5 sm:px-4 sm:pb-4 pt-0 mt-auto flex items-center gap-1.5 sm:gap-2">
                             <!-- In Cart: Quantity Controls -[1]+ -->
-                            <div v-if="getCartItemForListing(rel)" class="w-full inline-flex items-center justify-between border border-primary/40 bg-primary/5 dark:bg-primary/10 rounded-lg overflow-hidden shadow-xs h-8 sm:h-9">
+                            <div v-if="getCartItemForListing(rel)" class="flex-1 inline-flex items-center justify-between border border-primary/40 bg-primary/5 dark:bg-primary/10 rounded-lg overflow-hidden shadow-xs h-8 sm:h-9">
                                 <button
                                     type="button"
                                     @click.prevent="updateQuantity(getCartItemForListing(rel), getCartItemForListing(rel).quantity - 1)"
                                     :disabled="isUpdatingItem(getCartItemForListing(rel).id)"
-                                    class="w-8 sm:w-10 h-full flex items-center justify-center font-bold text-gray-700 dark:text-gray-200 hover:bg-primary hover:text-white transition disabled:opacity-50 text-xs sm:text-base cursor-pointer"
+                                    class="w-7 sm:w-10 h-full flex items-center justify-center font-bold text-gray-700 dark:text-gray-200 hover:bg-primary hover:text-white transition disabled:opacity-50 text-xs sm:text-base cursor-pointer"
                                     title="Decrease quantity">
                                     -
                                 </button>
@@ -1154,7 +1209,7 @@ const structuredData = computed(() => {
                                     type="button"
                                     @click.prevent="updateQuantity(getCartItemForListing(rel), getCartItemForListing(rel).quantity + 1)"
                                     :disabled="isUpdatingItem(getCartItemForListing(rel).id)"
-                                    class="w-8 sm:w-10 h-full flex items-center justify-center font-bold text-gray-700 dark:text-gray-200 hover:bg-primary hover:text-white transition disabled:opacity-50 text-xs sm:text-base cursor-pointer"
+                                    class="w-7 sm:w-10 h-full flex items-center justify-center font-bold text-gray-700 dark:text-gray-200 hover:bg-primary hover:text-white transition disabled:opacity-50 text-xs sm:text-base cursor-pointer"
                                     title="Increase quantity">
                                     +
                                 </button>
@@ -1166,7 +1221,7 @@ const structuredData = computed(() => {
                                 @click.prevent="addRelatedToCart(rel)"
                                 :disabled="isAddingProduct(rel) || (rel.stock !== undefined && rel.stock <= 0)"
                                 :class="(rel.stock !== undefined && rel.stock <= 0) ? 'opacity-50 cursor-not-allowed bg-gray-400 dark:bg-gray-600' : 'bg-primary hover:opacity-90 cursor-pointer'"
-                                class="w-full py-1.5 sm:py-2 rounded-lg text-white text-xs sm:text-sm font-bold transition flex items-center justify-center gap-1 sm:gap-2 shadow-xs h-8 sm:h-9">
+                                class="flex-1 py-1.5 sm:py-2 rounded-lg text-white text-xs sm:text-sm font-bold transition flex items-center justify-center gap-1 sm:gap-2 shadow-xs h-8 sm:h-9">
                                 <svg v-if="!isAddingProduct(rel) && (rel.stock === undefined || rel.stock > 0)" class="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
                                 </svg>
@@ -1174,7 +1229,23 @@ const structuredData = computed(() => {
                                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
                                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                                 </svg>
-                                <span class="truncate">{{ (rel.stock !== undefined && rel.stock <= 0) ? 'Out of Stock' : (isAddingProduct(rel) ? '...' : 'Add to Cart') }}</span>
+                                <span class="truncate">{{ (rel.stock !== undefined && rel.stock <= 0) ? 'Out of Stock' : (isAddingProduct(rel) ? '...' : 'Add') }}</span>
+                            </button>
+
+                            <!-- Add to Compare Button -->
+                            <button
+                                type="button"
+                                @click.prevent="addRelatedToCompare(rel)"
+                                :disabled="comparingRelated[rel.id]"
+                                title="Compare Product"
+                                class="py-1.5 px-2 sm:py-2 sm:px-3 rounded-lg bg-gray-100 hover:bg-primary/10 text-gray-700 hover:text-primary dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200 dark:hover:text-primary transition disabled:opacity-60 flex items-center justify-center border border-gray-200 dark:border-gray-600 cursor-pointer h-8 sm:h-9 shrink-0">
+                                <svg v-if="!comparingRelated[rel.id]" class="w-3.5 h-3.5 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+                                </svg>
+                                <svg v-else class="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                                </svg>
                             </button>
                         </div>
                     </div>

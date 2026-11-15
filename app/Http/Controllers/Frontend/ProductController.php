@@ -247,14 +247,16 @@ class ProductController extends Controller
             })
             ->firstOrFail();
 
-        // Check if this product is in the authenticated customer's wishlist
+        // Check if this product and related products are in the authenticated customer's wishlist
         $isWishlisted = false;
+        $wishlistIds = [];
         $userReview = null;
         if (auth('customer')->check()) {
             $customerId = auth('customer')->id();
-            $isWishlisted = Wishlist::where('customer_id', $customerId)
-                ->where('product_id', $product->id)
-                ->exists();
+            $wishlistIds = Wishlist::where('customer_id', $customerId)
+                ->pluck('product_id')
+                ->toArray();
+            $isWishlisted = in_array($product->id, $wishlistIds);
             $userReview = $product->reviews()->where('customer_id', $customerId)->first();
         }
 
@@ -283,6 +285,7 @@ class ProductController extends Controller
                 'variantMappings' => fn($q) => $q->where('is_active', true)->with('syncedPosItem')->orderBy('sort_order'),
             ]),
             'is_wishlisted'       => $isWishlisted,
+            'wishlist_ids'        => $wishlistIds,
             'related'             => $this->getRelated($product),
             'reviews'             => $reviews,
             'average_rating'      => $avgRating,
