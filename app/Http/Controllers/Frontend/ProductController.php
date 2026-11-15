@@ -145,23 +145,23 @@ class ProductController extends Controller
             }
         }
 
-        // Standard e-commerce sorting: A-Z, Z-A, Price Low-High, Price High-Low, Newest, Best Selling
+        // Standard e-commerce sorting: A-Z, Z-A, Price Low-High, Price High-Low, Newest, Best Selling, Default/Recommended
         $sort = $request->input('sort', 'default');
         switch ($sort) {
             case 'name_asc':
-                $query->orderBy('name', 'asc');
+                $query->orderBy('name', 'asc')->orderBy('id', 'desc');
                 break;
             case 'name_desc':
-                $query->orderBy('name', 'desc');
+                $query->orderBy('name', 'desc')->orderBy('id', 'desc');
                 break;
             case 'price_asc':
-                $query->orderByRaw('COALESCE(NULLIF(discount_price, 0), price) ASC');
+                $query->orderByRaw('COALESCE(NULLIF(discount_price, 0), price) ASC')->orderBy('id', 'desc');
                 break;
             case 'price_desc':
-                $query->orderByRaw('COALESCE(NULLIF(discount_price, 0), price) DESC');
+                $query->orderByRaw('COALESCE(NULLIF(discount_price, 0), price) DESC')->orderBy('id', 'desc');
                 break;
             case 'newest':
-                $query->latest();
+                $query->latest('id');
                 break;
             case 'popular':
             case 'best_selling':
@@ -171,7 +171,20 @@ class ProductController extends Controller
                 break;
             default:
                 if (!$collection) {
-                    $query->latest();
+                    // Smart Merchandising for "Default / Recommended":
+                    // 1. In-stock products first (stock > 0)
+                    // 2. Featured items next
+                    // 3. Products with active discount/special price next
+                    // 4. Products with photos ahead of placeholder images
+                    // 5. Popularity by order sales volume
+                    // 6. Primary key deterministic tie-breaker (id DESC) - guaranteed zero pagination duplicates
+                    $query->withSum('orderItems', 'quantity')
+                        ->orderByRaw('CASE WHEN stock > 0 THEN 1 ELSE 0 END DESC')
+                        ->orderByDesc('is_featured')
+                        ->orderByRaw('CASE WHEN (discount_price > 0 OR special_price > 0) THEN 1 ELSE 0 END DESC')
+                        ->orderByRaw('CASE WHEN (image IS NOT NULL AND image != "") THEN 1 ELSE 0 END DESC')
+                        ->orderByDesc('order_items_sum_quantity')
+                        ->orderByDesc('id');
                 }
                 break;
         }

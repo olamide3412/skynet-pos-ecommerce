@@ -11,6 +11,14 @@ const props = defineProps({
     type: Array,
     default: () => null,
   },
+  preserveScroll: {
+    type: Boolean,
+    default: false,
+  },
+  scrollToTop: {
+    type: Boolean,
+    default: true,
+  },
 });
 
 // Normalized links from either props.links or props.paginator.links
@@ -71,6 +79,19 @@ const lastPage = computed(() => {
     .filter(n => !isNaN(n));
   return numLinks.length > 0 ? Math.max(...numLinks) : null;
 });
+const handlePageClick = () => {
+  if (props.scrollToTop) {
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    if (typeof document !== 'undefined') {
+      const adminMain = document.querySelector('main div.overflow-y-auto') || document.querySelector('.overflow-y-auto');
+      if (adminMain) {
+        adminMain.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+  }
+};
 </script>
 
 <template>
@@ -90,8 +111,9 @@ const lastPage = computed(() => {
       <Link
         v-else
         :href="prevLink.url"
-        preserve-scroll
+        :preserve-scroll="preserveScroll"
         preserve-state
+        @click="handlePageClick"
         class="flex-1 inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 text-xs font-semibold rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-xs active:scale-95 transition-all select-none"
       >
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -119,8 +141,9 @@ const lastPage = computed(() => {
       <Link
         v-else
         :href="nextLink.url"
-        preserve-scroll
+        :preserve-scroll="preserveScroll"
         preserve-state
+        @click="handlePageClick"
         class="flex-1 inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 text-xs font-semibold rounded-xl border border-primary bg-primary text-white hover:bg-primary/90 shadow-xs active:scale-95 transition-all select-none"
       >
         Next
@@ -141,8 +164,9 @@ const lastPage = computed(() => {
         <Link
           v-else
           :href="link.url"
-          preserve-scroll
+          :preserve-scroll="preserveScroll"
           preserve-state
+          @click="handlePageClick"
           :class="[
             'px-3 py-1.5 text-xs rounded-lg font-semibold transition-all select-none',
             link.active
