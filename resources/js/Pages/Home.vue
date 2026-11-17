@@ -619,7 +619,7 @@ onUnmounted(() => {
                                     />
                                 </Link>
                                 <!-- Badges -->
-                                <div v-if="product.is_unit_listing" class="absolute top-1.5 left-1.5 z-10 bg-indigo-600 text-white text-[8px] sm:text-[9px] font-bold px-1.5 py-0.5 rounded shadow-xs flex items-center gap-0.5">
+                                <div v-if="product.is_unit_listing" class="absolute top-1.5 left-1.5 z-10 bg-primary text-white text-[8px] sm:text-[9px] font-bold px-1.5 py-0.5 rounded shadow-xs flex items-center gap-0.5">
                                     📦 <span>{{ product.unit_label }}</span>
                                 </div>
                                 <div v-else-if="product.is_on_flash_sale" class="absolute top-1.5 left-1.5 z-10 bg-amber-500 text-white text-[8px] sm:text-[9px] font-black px-1.5 py-0.5 rounded shadow-xs">
@@ -810,7 +810,7 @@ onUnmounted(() => {
                                     />
                                 </Link>
                                 <!-- Badges -->
-                                <div v-if="product.is_unit_listing" class="absolute top-1.5 left-1.5 z-10 bg-indigo-600 text-white text-[8px] sm:text-[9px] font-bold px-1.5 py-0.5 rounded shadow-xs flex items-center gap-0.5">
+                                <div v-if="product.is_unit_listing" class="absolute top-1.5 left-1.5 z-10 bg-primary text-white text-[8px] sm:text-[9px] font-bold px-1.5 py-0.5 rounded shadow-xs flex items-center gap-0.5">
                                     📦 <span>{{ product.unit_label }}</span>
                                 </div>
                                 <div v-else-if="product.is_on_flash_sale" class="absolute top-1.5 left-1.5 z-10 bg-amber-500 text-white text-[8px] sm:text-[9px] font-black px-1.5 py-0.5 rounded shadow-xs">
@@ -1004,7 +1004,7 @@ onUnmounted(() => {
                                     />
                                 </Link>
                                 <!-- Badges -->
-                                <div v-if="product.is_unit_listing" class="absolute top-1.5 left-1.5 z-10 bg-indigo-600 text-white text-[8px] sm:text-[9px] font-bold px-1.5 py-0.5 rounded shadow-xs flex items-center gap-0.5">
+                                <div v-if="product.is_unit_listing" class="absolute top-1.5 left-1.5 z-10 bg-primary text-white text-[8px] sm:text-[9px] font-bold px-1.5 py-0.5 rounded shadow-xs flex items-center gap-0.5">
                                     📦 <span>{{ product.unit_label }}</span>
                                 </div>
                                 <div v-else-if="product.is_on_flash_sale" class="absolute top-1.5 left-1.5 z-10 bg-amber-500 text-white text-[8px] sm:text-[9px] font-black px-1.5 py-0.5 rounded shadow-xs">
@@ -1292,7 +1292,7 @@ onUnmounted(() => {
                                     />
                                 </Link>
                                 <!-- Badges -->
-                                <div v-if="product.is_unit_listing" class="absolute top-1.5 left-1.5 z-10 bg-indigo-600 text-white text-[8px] sm:text-[9px] font-bold px-1.5 py-0.5 rounded shadow-xs flex items-center gap-0.5">
+                                <div v-if="product.is_unit_listing" class="absolute top-1.5 left-1.5 z-10 bg-primary text-white text-[8px] sm:text-[9px] font-bold px-1.5 py-0.5 rounded shadow-xs flex items-center gap-0.5">
                                     📦 <span>{{ product.unit_label }}</span>
                                 </div>
                                 <div v-else-if="product.is_on_flash_sale" class="absolute top-1.5 left-1.5 z-10 bg-amber-500 text-white text-[8px] sm:text-[9px] font-black px-1.5 py-0.5 rounded shadow-xs">

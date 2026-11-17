@@ -35,7 +35,7 @@ class FlutterwaveService
         $response = Http::withToken($this->secretKey)
             ->post("{$this->baseUrl}/payments", [
                 'tx_ref' => $tx_ref,
-                'amount' => $order->total_amount,
+                'amount' => round((float) $order->total_amount, 2),
                 'currency' => 'NGN',
                 'redirect_url' => route('payment.callback', ['provider' => 'flutterwave']),
                 'customer' => [
@@ -44,17 +44,29 @@ class FlutterwaveService
                 ],
                 'customizations' => [
                     'title' => config('app.name'),
-                    'description' => 'Payment for Order #' . $order->id,
+                    'description' => 'Payment for Order #' . $order->tracking_number,
                 ]
             ]);
 
-        return $response->json();
+        $json = $response->json();
+        if (is_array($json)) {
+            $json['data']['tx_ref'] = $tx_ref;
+        }
+
+        return $json;
     }
 
-    public function verifyPayment($transactionId)
+    public function verifyPayment($transactionIdOrRef)
     {
-        $response = Http::withToken($this->secretKey)
-            ->get("{$this->baseUrl}/transactions/{$transactionId}/verify");
+        if (is_numeric($transactionIdOrRef)) {
+            $response = Http::withToken($this->secretKey)
+                ->get("{$this->baseUrl}/transactions/{$transactionIdOrRef}/verify");
+        } else {
+            $response = Http::withToken($this->secretKey)
+                ->get("{$this->baseUrl}/transactions/verify_by_reference", [
+                    'tx_ref' => $transactionIdOrRef,
+                ]);
+        }
 
         return $response->json();
     }

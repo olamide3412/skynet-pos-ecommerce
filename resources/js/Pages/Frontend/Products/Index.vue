@@ -653,7 +653,7 @@ const seoDescription = computed(() => {
                     </button>
 
                     <!-- Unit Badge, Flash Sale, or Regular Sale Badge -->
-                    <div v-if="product.is_unit_listing" class="absolute top-2 left-2 sm:top-3 sm:left-3 z-10 bg-indigo-600 text-white text-[9px] sm:text-[10px] font-bold px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full shadow-md flex items-center gap-1">
+                    <div v-if="product.is_unit_listing" class="absolute top-2 left-2 sm:top-3 sm:left-3 z-10 bg-primary text-white text-[9px] sm:text-[10px] font-bold px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full shadow-md flex items-center gap-1">
                         📦 <span>{{ product.unit_label }}</span>
                     </div>
                     <div v-else-if="product.is_on_flash_sale" class="absolute top-2 left-2 sm:top-3 sm:left-3 z-10 bg-amber-500 text-white text-[9px] sm:text-[10px] font-black px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full shadow-md animate-pulse flex items-center gap-1">

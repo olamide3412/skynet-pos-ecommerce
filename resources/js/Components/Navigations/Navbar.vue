@@ -446,7 +446,7 @@ const openMegaMenu = (e) => {
               <div class="flex-1 min-w-0">
                 <p class="text-sm font-semibold text-gray-900 dark:text-white truncate group-hover:text-primary transition flex items-center gap-1.5">
                   <span class="truncate">{{ product.name }}</span>
-                  <span v-if="product.is_unit_listing" class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-bold shrink-0">📦 {{ product.unit_label }}</span>
+                  <span v-if="product.is_unit_listing" class="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold shrink-0">📦 {{ product.unit_label }}</span>
                 </p>
                 <p v-if="product.category" class="text-xs text-gray-400 dark:text-gray-500">{{ product.category.name }}</p>
               </div>

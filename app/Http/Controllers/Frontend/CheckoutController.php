@@ -435,12 +435,15 @@ class CheckoutController extends Controller
 
         $order = Order::where('payment_reference', $reference)->first();
 
-        // If not found by reference, try finding by payment record or ID
+        // If not found by reference, try finding by payment record or order ID embedded in reference (e.g. fw_<uniqid>_<orderId>)
         if (!$order && $transactionId) {
             $payment = Payment::where('reference', $transactionId)->first();
             if ($payment) {
                 $order = $payment->order;
             }
+        }
+        if (!$order && $reference && preg_match('/^(?:fw|ps)_[a-zA-Z0-9]+_(\d+)$/', $reference, $matches)) {
+            $order = Order::find((int) $matches[1]);
         }
 
         if (!$order) {
@@ -462,6 +465,13 @@ class CheckoutController extends Controller
 
         // If the order has already been verified and processed (e.g. via asynchronous webhook)
         if ($order->status !== 'pending') {
+            $sessionCart = Cart::where('session_id', $request->session()->getId())->first();
+            if ($sessionCart) {
+                $sessionCart->items()->delete();
+                $sessionCart->delete();
+            }
+            $request->session()->forget('applied_coupon');
+
             return redirect()->route('checkout.success', $order->tracking_number)
                 ->with('success', 'Payment confirmed! Please keep your tracking number.');
         }
@@ -474,15 +484,26 @@ class CheckoutController extends Controller
             $flutterwave = new FlutterwaveService();
             $verifyId = $transactionId ?: $reference;
             $verify = $flutterwave->verifyPayment($verifyId);
+
+            // If verification by transaction_id failed or was empty, also try verifying by tx_ref ($reference)
+            if (
+                (!is_array($verify) || ($verify['status'] ?? '') !== 'success') &&
+                $transactionId &&
+                $reference &&
+                $transactionId !== $reference
+            ) {
+                $verify = $flutterwave->verifyPayment($reference);
+            }
+
             $verificationData = $verify;
 
             if (
                 is_array($verify) &&
                 ($verify['status'] ?? '') === 'success' &&
                 isset($verify['data']['status']) &&
-                $verify['data']['status'] === 'successful' &&
-                ($verify['data']['currency'] ?? '') === 'NGN' &&
-                floatval($verify['data']['amount'] ?? 0) >= floatval($order->total_amount)
+                in_array(strtolower((string) $verify['data']['status']), ['successful', 'completed'], true) &&
+                strtoupper((string) ($verify['data']['currency'] ?? 'NGN')) === 'NGN' &&
+                round(floatval($verify['data']['amount'] ?? 0), 2) >= round(floatval($order->total_amount), 2)
             ) {
                 $verified = true;
             }
@@ -497,7 +518,7 @@ class CheckoutController extends Controller
                 ($verify['status'] ?? false) === true &&
                 isset($verify['data']['status']) &&
                 $verify['data']['status'] === 'success' &&
-                floatval(($verify['data']['amount'] ?? 0) / 100) >= floatval($order->total_amount)
+                round(floatval(($verify['data']['amount'] ?? 0) / 100), 2) >= round(floatval($order->total_amount), 2)
             ) {
                 $verified = true;
             }
@@ -613,9 +634,12 @@ class CheckoutController extends Controller
             $reference = $data['reference'] ?? null;
             if ($reference) {
                 $order = Order::where('payment_reference', $reference)->first();
+                if (!$order && preg_match('/^ps_[a-zA-Z0-9]+_(\d+)$/', $reference, $matches)) {
+                    $order = Order::find((int) $matches[1]);
+                }
 
                 if ($order && $order->status === 'pending') {
-                    if (($data['amount'] ?? 0) >= ($order->total_amount * 100)) {
+                    if ((int) round(floatval($data['amount'] ?? 0)) >= (int) round(floatval($order->total_amount) * 100)) {
                         $order->update([
                             'status'         => 'processing',
                             'payment_method' => 'paystack',
@@ -710,13 +734,16 @@ class CheckoutController extends Controller
         $event = $request->input('event');
         $data = $request->input('data');
 
-        if ($event === 'charge.completed' && isset($data['status']) && $data['status'] === 'successful') {
+        if ($event === 'charge.completed' && isset($data['status']) && in_array(strtolower((string) $data['status']), ['successful', 'completed'], true)) {
             $txRef = $data['tx_ref'] ?? null;
             if ($txRef) {
                 $order = Order::where('payment_reference', $txRef)->first();
+                if (!$order && preg_match('/^fw_[a-zA-Z0-9]+_(\d+)$/', $txRef, $matches)) {
+                    $order = Order::find((int) $matches[1]);
+                }
 
                 if ($order && $order->status === 'pending') {
-                    if (($data['amount'] ?? 0) >= $order->total_amount) {
+                    if (round(floatval($data['amount'] ?? 0), 2) >= round(floatval($order->total_amount), 2)) {
                         $order->update([
                             'status'         => 'processing',
                             'payment_method' => 'flutterwave',

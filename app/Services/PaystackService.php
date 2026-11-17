@@ -31,16 +31,21 @@ class PaystackService
 
     public function initializePayment($order, $email)
     {
+        $reference = 'ps_' . uniqid() . '_' . $order->id;
         $response = Http::withToken($this->secretKey)
             ->post("{$this->baseUrl}/transaction/initialize", [
                 'email' => $email,
-                'amount' => $order->total_amount * 100, // amount in kobo
-                'reference' => 'ps_' . uniqid() . '_' . $order->id,
-                // Make sure to define payment.callback route later
+                'amount' => (int) round(floatval($order->total_amount) * 100), // integer amount in kobo
+                'reference' => $reference,
                 'callback_url' => route('payment.callback', ['provider' => 'paystack']),
             ]);
 
-        return $response->json();
+        $json = $response->json();
+        if (is_array($json) && !empty($json['status'])) {
+            $json['data']['reference'] = $json['data']['reference'] ?? $reference;
+        }
+
+        return $json;
     }
 
     public function verifyPayment($reference)
