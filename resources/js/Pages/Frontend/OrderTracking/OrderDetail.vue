@@ -6,20 +6,22 @@ const props = defineProps({
     order: Object,
 });
 
-const steps = ['pending', 'paid', 'shipped', 'completed'];
-const stepLabels = { pending: 'Order Placed', paid: 'Payment Confirmed', shipped: 'Shipped', completed: 'Delivered' };
+const steps = ['pending', 'processing', 'shipped', 'completed'];
+const stepLabels = { pending: 'Order Placed', processing: 'Processing', shipped: 'Shipped', completed: 'Delivered' };
 
 const getStepIndex = (status) => {
     if (status === 'cancelled') return -1;
+    if (status === 'paid') return 1;
     return steps.indexOf(status);
 };
 
 const statusBadgeClass = (status) => ({
-    pending:   'bg-yellow-100 text-yellow-800 border-yellow-200',
-    paid:      'bg-primary/10 text-primary border-primary/20',
-    shipped:   'bg-purple-100 text-purple-800 border-purple-200',
-    completed: 'bg-green-100 text-green-800 border-green-200',
-    cancelled: 'bg-red-100 text-red-800 border-red-200',
+    pending:    'bg-yellow-100 text-yellow-800 border-yellow-200',
+    processing: 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800',
+    paid:       'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800',
+    shipped:    'bg-purple-100 text-purple-800 border-purple-200',
+    completed:  'bg-green-100 text-green-800 border-green-200',
+    cancelled:  'bg-red-100 text-red-800 border-red-200',
 }[status] || '');
 </script>
 
@@ -28,7 +30,7 @@ const statusBadgeClass = (status) => ({
     <Layout>
         <div class="container mx-auto px-4 py-12 max-w-5xl">
             <!-- Header -->
-            <div class="flex items-center gap-4 mb-8">
+            <div class="flex flex-wrap items-center gap-4 mb-8">
                 <Link :href="route('customer.orders')" class="text-gray-400 hover:text-primary transition">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
                 </Link>
@@ -38,9 +40,19 @@ const statusBadgeClass = (status) => ({
                         Placed {{ new Date(order.created_at).toLocaleDateString('en-NG', { day:'numeric', month:'long', year:'numeric' }) }}
                     </p>
                 </div>
-                <span :class="['px-4 py-2 rounded-full font-bold text-sm uppercase tracking-wider border', statusBadgeClass(order.status)]">
-                    {{ order.status }}
-                </span>
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="px-3.5 py-2 rounded-full font-bold text-xs uppercase tracking-wider border"
+                        :class="{
+                            'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800': order.payment_status === 'paid',
+                            'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800': order.payment_status === 'pending',
+                            'bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800': order.payment_status === 'failed'
+                        }">
+                        {{ order.payment_status === 'paid' ? '✓ Payment: Paid' : (order.payment_status === 'failed' ? '✕ Payment: Failed' : (['cod', 'pod'].includes(order.payment_method) ? '💵 Pay on Delivery' : '⏳ Payment: Pending')) }}
+                    </span>
+                    <span :class="['px-4 py-2 rounded-full font-bold text-sm uppercase tracking-wider border', statusBadgeClass(order.status)]">
+                        {{ order.status === 'paid' ? 'processing' : order.status }}
+                    </span>
+                </div>
             </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -55,7 +67,10 @@ const statusBadgeClass = (status) => ({
                                  :style="{ width: ['0%','33%','66%','100%'][getStepIndex(order.status)] || '0%' }"></div>
                             <div v-for="(step, i) in steps" :key="step" class="relative z-10 flex flex-col items-center flex-1">
                                 <div :class="['w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all font-bold text-sm', i <= getStepIndex(order.status) ? 'bg-primary border-primary text-white shadow-md' : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-400']">
-                                    {{ i + 1 }}
+                                    <svg v-if="i <= getStepIndex(order.status)" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                    </svg>
+                                    <span v-else>{{ i + 1 }}</span>
                                 </div>
                                 <p class="mt-2 text-xs font-semibold text-center leading-tight px-1" :class="i <= getStepIndex(order.status) ? 'text-primary font-bold' : 'text-gray-400'">
                                     {{ stepLabels[step] }}
@@ -78,8 +93,17 @@ const statusBadgeClass = (status) => ({
                                 <img :src="item.product?.image ? '/storage/'+item.product.image : 'https://placehold.co/64x64?text=P'"
                                     class="w-16 h-16 object-cover rounded-lg border dark:border-gray-700" />
                                 <div class="flex-1">
-                                    <p class="font-semibold">{{ item.product?.name ?? 'Product' }}</p>
-                                    <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Unit price: ₦{{ parseFloat(item.price).toLocaleString() }}</p>
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <p class="font-semibold">{{ item.product?.name ?? 'Product' }}</p>
+                                        <span v-if="item.unit_name" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-primary/10 text-primary border border-primary/20">
+                                            {{ item.unit_name }}
+                                        </span>
+                                    </div>
+                                    <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        <span>Unit price: ₦{{ parseFloat(item.price).toLocaleString() }}</span>
+                                        <span v-if="item.unit_name">• Selling Unit: <strong class="text-gray-700 dark:text-gray-300">{{ item.unit_name }}</strong></span>
+                                        <span v-if="item.variant || item.variant_label">• Variant: {{ item.variant_label || item.variant }}</span>
+                                    </div>
                                 </div>
                                 <div class="text-right">
                                     <p class="text-sm text-gray-500 dark:text-gray-400">Qty: {{ item.quantity }}</p>
@@ -146,8 +170,16 @@ const statusBadgeClass = (status) => ({
 
                     <!-- Payment Info -->
                     <div class="bg-white dark:bg-gray-800 rounded-2xl border dark:border-gray-700 overflow-hidden">
-                        <div class="p-4 border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+                        <div class="p-4 border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex items-center justify-between">
                             <h2 class="font-bold">Payment</h2>
+                            <span class="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase tracking-wider border"
+                                :class="{
+                                    'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800': order.payment_status === 'paid',
+                                    'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800': order.payment_status === 'pending',
+                                    'bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800': order.payment_status === 'failed'
+                                }">
+                                {{ order.payment_status === 'paid' ? '✓ Paid' : (order.payment_status === 'failed' ? '✕ Failed' : '⏳ Pending') }}
+                            </span>
                         </div>
                         <div class="p-5 space-y-3 text-sm">
                             <div>

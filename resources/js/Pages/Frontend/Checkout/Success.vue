@@ -173,8 +173,17 @@ const downloadPdf = async () => {
                                     <span class="absolute -top-1.5 -right-1.5 bg-gray-600 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white dark:border-gray-800">{{ item.quantity }}</span>
                                 </div>
                                 <div class="flex-1 min-w-0">
-                                    <h4 class="font-semibold text-gray-900 dark:text-white leading-tight break-words pr-4">{{ item.product?.name || 'Unknown Item' }}</h4>
-                                    <p v-if="item.variant" class="text-sm text-gray-500 dark:text-gray-400 mt-1">Variant: {{ item.variant }}</p>
+                                    <div class="flex flex-wrap items-center gap-2 pr-4">
+                                        <h4 class="font-semibold text-gray-900 dark:text-white leading-tight break-words">{{ item.product?.name || 'Unknown Item' }}</h4>
+                                        <span v-if="item.unit_name" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-primary/10 text-primary border border-primary/20">
+                                            {{ item.unit_name }}
+                                        </span>
+                                    </div>
+                                    <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        <span v-if="item.variant || item.variant_label">Variant: {{ item.variant_label || item.variant }}</span>
+                                        <span v-if="item.unit_name && (item.variant || item.variant_label)">•</span>
+                                        <span v-if="item.unit_name">Selling Unit: <strong class="text-gray-700 dark:text-gray-300">{{ item.unit_name }}</strong></span>
+                                    </div>
                                 </div>
                                 <div class="text-right">
                                     <p class="font-bold text-gray-900 dark:text-white">₦{{ (parseFloat(item.price) * item.quantity).toLocaleString() }}</p>

@@ -17,7 +17,6 @@ const props = defineProps({
             all: 0,
             pending: 0,
             processing: 0,
-            paid: 0,
             shipped: 0,
             completed: 0,
             cancelled: 0,
@@ -31,6 +30,7 @@ const props = defineProps({
 
 const search = ref(props.filters.search || '');
 const status = ref(props.filters.status || '');
+const paymentStatus = ref(props.filters.payment_status || '');
 const startDate = ref(props.filters.start_date || '');
 const endDate = ref(props.filters.end_date || '');
 
@@ -60,14 +60,6 @@ const statusOptions = [
         activeClass: 'bg-blue-600 text-white border-blue-600 ring-2 ring-blue-400/50 shadow-sm',
     },
     {
-        key: 'paid',
-        label: 'Paid',
-        countKey: 'paid',
-        badgeClass: 'bg-teal-600 text-white',
-        pillClass: 'border-teal-200 dark:border-teal-800/80 text-teal-800 dark:text-teal-300 bg-teal-50/80 dark:bg-teal-950/40',
-        activeClass: 'bg-teal-600 text-white border-teal-600 ring-2 ring-teal-400/50 shadow-sm',
-    },
-    {
         key: 'shipped',
         label: 'Shipped',
         countKey: 'shipped',
@@ -93,6 +85,16 @@ const statusOptions = [
     },
 ];
 
+const formatPaymentMethodLabel = (method) => {
+    if (!method) return 'Online';
+    const m = String(method).toLowerCase();
+    if (m === 'pod' || m === 'cod') return 'POD';
+    if (m === 'bank_transfer') return 'Bank Transfer';
+    if (m === 'flutterwave') return 'Flutterwave';
+    if (m === 'paystack') return 'Paystack';
+    return method;
+};
+
 const visibleStatusOptions = computed(() => {
     return statusOptions.filter(st => (props.statusCounts?.[st.countKey] || 0) > 0);
 });
@@ -101,16 +103,18 @@ const applyFilters = debounce(() => {
     router.get(route('admin.orders.index'), {
         search: search.value || undefined,
         status: status.value || undefined,
+        payment_status: paymentStatus.value || undefined,
         start_date: startDate.value || undefined,
         end_date: endDate.value || undefined,
     }, { preserveState: true, replace: true });
 }, 300);
 
-watch([search, status, startDate, endDate], applyFilters);
+watch([search, status, paymentStatus, startDate, endDate], applyFilters);
 
 const clearFilters = () => {
     search.value = '';
     status.value = '';
+    paymentStatus.value = '';
     startDate.value = '';
     endDate.value = '';
 };
@@ -182,16 +186,26 @@ const clearFilters = () => {
                 </div>
                 
                 <div class="w-full md:w-auto">
-                    <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Status</label>
+                    <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Fulfillment Status</label>
                     <select v-model="status" 
                         class="w-full md:w-44 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary focus:border-primary">
                         <option value="">All Statuses</option>
                         <option value="pending">Pending</option>
                         <option value="processing">Processing</option>
-                        <option value="paid">Paid</option>
                         <option value="shipped">Shipped</option>
                         <option value="completed">Completed</option>
                         <option value="cancelled">Cancelled</option>
+                    </select>
+                </div>
+
+                <div class="w-full md:w-auto">
+                    <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Payment Status</label>
+                    <select v-model="paymentStatus" 
+                        class="w-full md:w-40 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary focus:border-primary">
+                        <option value="">All Payments</option>
+                        <option value="paid">Paid</option>
+                        <option value="pending">Pending / Unpaid</option>
+                        <option value="failed">Failed</option>
                     </select>
                 </div>
 
@@ -208,7 +222,7 @@ const clearFilters = () => {
                     </div>
                 </div>
 
-                <div v-if="search || status || startDate || endDate" class="w-full md:w-auto">
+                <div v-if="search || status || paymentStatus || startDate || endDate" class="w-full md:w-auto">
                     <button @click="clearFilters" class="w-full md:w-auto px-4 py-2 text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition">
                         Clear
                     </button>
@@ -218,14 +232,15 @@ const clearFilters = () => {
             <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xs overflow-hidden border dark:border-gray-700">
                 <!-- Desktop Table View (md and above) -->
                 <div class="hidden md:block overflow-x-auto">
-                    <table class="w-full text-left border-collapse min-w-[800px]">
+                    <table class="w-full text-left border-collapse min-w-[850px]">
                         <thead>
                             <tr class="bg-gray-100 dark:bg-gray-900 border-b dark:border-gray-700 text-sm text-gray-600 dark:text-gray-400">
                                 <th class="p-4 font-semibold uppercase">Order ID</th>
                                 <th class="p-4 font-semibold uppercase">Tracking #</th>
                                 <th class="p-4 font-semibold uppercase">Customer</th>
                                 <th class="p-4 font-semibold uppercase">Total</th>
-                                <th class="p-4 font-semibold uppercase text-center">Status</th>
+                                <th class="p-4 font-semibold uppercase text-center">Payment</th>
+                                <th class="p-4 font-semibold uppercase text-center">Order Status</th>
                                 <th class="p-4 font-semibold uppercase text-right">Date</th>
                                 <th class="p-4 font-semibold uppercase text-right">Actions</th>
                             </tr>
@@ -271,16 +286,30 @@ const clearFilters = () => {
                                     </div>
                                 </td>
                                 <td class="p-4 text-center">
+                                    <div class="inline-flex flex-col items-center gap-1">
+                                        <span class="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase tracking-wider border"
+                                            :class="{
+                                                'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800': order.payment_status === 'paid',
+                                                'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800': order.payment_status === 'pending',
+                                                'bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800': order.payment_status === 'failed'
+                                            }">
+                                            {{ order.payment_status === 'paid' ? '✓ Paid' : (order.payment_status === 'failed' ? '✕ Failed' : '⏳ Pending') }}
+                                        </span>
+                                        <span class="text-[10px] font-semibold text-gray-500 dark:text-gray-400">
+                                            {{ formatPaymentMethodLabel(order.payment_method) }}
+                                        </span>
+                                    </div>
+                                </td>
+                                <td class="p-4 text-center">
                                     <span class="px-3 py-1 rounded text-xs font-bold uppercase tracking-wider" 
                                           :class="{
                                             'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300': order.status === 'pending',
-                                            'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300': order.status === 'processing',
-                                            'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300': order.status === 'paid',
+                                            'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300': order.status === 'processing' || order.status === 'paid',
                                             'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300': order.status === 'shipped',
                                             'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300': order.status === 'completed',
                                             'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300': order.status === 'cancelled'
                                           }">
-                                        {{ order.status }}
+                                        {{ order.status === 'paid' ? 'processing' : order.status }}
                                     </span>
                                 </td>
                                 <td class="p-4 text-right text-gray-500">{{ new Date(order.created_at).toLocaleDateString() }}</td>
@@ -289,7 +318,7 @@ const clearFilters = () => {
                                 </td>
                             </tr>
                             <tr v-if="!orders.data || orders.data.length === 0">
-                                <td colspan="7" class="p-8 text-center text-gray-500 font-medium">No orders found.</td>
+                                <td colspan="8" class="p-8 text-center text-gray-500 font-medium">No orders found.</td>
                             </tr>
                         </tbody>
                     </table>
@@ -313,17 +342,26 @@ const clearFilters = () => {
                                 </span>
                             </div>
 
-                            <span class="px-2.5 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider" 
-                                  :class="{
-                                    'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300': order.status === 'pending',
-                                    'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300': order.status === 'processing',
-                                    'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300': order.status === 'paid',
-                                    'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300': order.status === 'shipped',
-                                    'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300': order.status === 'completed',
-                                    'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300': order.status === 'cancelled'
-                                  }">
-                                {{ order.status }}
-                            </span>
+                            <div class="flex items-center gap-1.5">
+                                <span class="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider border"
+                                    :class="{
+                                        'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800': order.payment_status === 'paid',
+                                        'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800': order.payment_status === 'pending',
+                                        'bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800': order.payment_status === 'failed'
+                                    }">
+                                    {{ order.payment_status === 'paid' ? '✓ Paid' : (order.payment_status === 'failed' ? '✕ Failed' : '⏳ Unpaid') }}
+                                </span>
+                                <span class="px-2.5 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider" 
+                                      :class="{
+                                        'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300': order.status === 'pending',
+                                        'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300': order.status === 'processing' || order.status === 'paid',
+                                        'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300': order.status === 'shipped',
+                                        'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300': order.status === 'completed',
+                                        'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300': order.status === 'cancelled'
+                                      }">
+                                    {{ order.status === 'paid' ? 'processing' : order.status }}
+                                </span>
+                            </div>
                         </div>
 
                         <!-- Customer & Date Info -->

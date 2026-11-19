@@ -43,6 +43,59 @@ class Order extends Model
         'pod_reconciled_at'            => 'datetime',
     ];
 
+    protected $appends = [
+        'payment_status',
+    ];
+
+    /**
+     * Resolve unified payment status ('paid', 'pending', 'failed') for this order.
+     */
+    public function getPaymentStatusAttribute(): string
+    {
+        $payments = $this->relationLoaded('payments') ? $this->payments : $this->payments()->get();
+
+        if ($payments->isNotEmpty()) {
+            if ($payments->contains(fn ($p) => in_array(strtolower((string) $p->status), ['completed', 'paid', 'successful'], true))) {
+                return 'paid';
+            }
+
+            $latestPayment = $payments->sortByDesc('id')->first();
+            if ($latestPayment && strtolower((string) $latestPayment->status) === 'failed') {
+                return 'failed';
+            }
+        }
+
+        if (in_array($this->status, ['paid', 'completed'], true)) {
+            return 'paid';
+        }
+
+        if (in_array($this->payment_method, ['pod', 'cod'], true)) {
+            if (in_array($this->pod_status, ['cash_collected', 'remitted_to_store', 'reconciled'], true)) {
+                return 'paid';
+            }
+            if ($this->status === 'cancelled') {
+                return 'failed';
+            }
+            return 'pending';
+        }
+
+        if (in_array($this->payment_method, ['flutterwave', 'paystack'], true)) {
+            if (in_array($this->status, ['processing', 'shipped', 'completed', 'paid'], true)) {
+                return 'paid';
+            }
+            if ($this->status === 'cancelled') {
+                return 'failed';
+            }
+            return 'pending';
+        }
+
+        if ($this->status === 'cancelled') {
+            return 'failed';
+        }
+
+        return 'pending';
+    }
+
     /**
      * Check if POS reservation is active.
      */
@@ -66,9 +119,17 @@ class Order extends Model
     {
         static::creating(function (Order $order) {
             if (empty($order->tracking_number)) {
+                $rawPrefix = trim((string) StoreSetting::get('tracking_number_prefix', 'SKY-'));
+                if ($rawPrefix === '') {
+                    $rawPrefix = 'SKY-';
+                }
+                if (!str_ends_with($rawPrefix, '-') && !str_ends_with($rawPrefix, '_')) {
+                    $rawPrefix .= '-';
+                }
+                $prefix = strtoupper($rawPrefix);
+
                 do {
-                    // Format: SKY-XXXXXXXX  (alphanumeric, uppercase)
-                    $tracking = 'SKY-' . strtoupper(Str::random(8));
+                    $tracking = $prefix . strtoupper(Str::random(8));
                 } while (self::where('tracking_number', $tracking)->exists());
 
                 $order->tracking_number = $tracking;

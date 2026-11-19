@@ -479,22 +479,22 @@ onUnmounted(() => {
                                     </div>
 
                                     <!-- Add to Cart or Quantity Controls -->
-                                    <div v-if="cartItemsByProductId[product.id]" class="w-full inline-flex items-center justify-between border border-red-500/40 bg-red-500/5 dark:bg-red-500/10 rounded-md overflow-hidden shadow-2xs h-7">
+                                    <div v-if="getCartItemForListing(product)" class="w-full inline-flex items-center justify-between border border-red-500/40 bg-red-500/5 dark:bg-red-500/10 rounded-md overflow-hidden shadow-2xs h-7">
                                         <button
                                             type="button"
-                                            @click.prevent="updateQuantity(cartItemsByProductId[product.id], cartItemsByProductId[product.id].quantity - 1)"
-                                            :disabled="isUpdatingItem(cartItemsByProductId[product.id].id)"
+                                            @click.prevent="updateQuantity(getCartItemForListing(product), getCartItemForListing(product).quantity - 1)"
+                                            :disabled="isUpdatingItem(getCartItemForListing(product).id)"
                                             class="w-6 h-full flex items-center justify-center font-bold text-gray-700 dark:text-gray-200 hover:bg-red-600 hover:text-white transition disabled:opacity-50 text-xs cursor-pointer"
                                             title="Decrease quantity">
                                             -
                                         </button>
                                         <span class="px-1 text-center text-xs font-black text-red-600 dark:text-red-400">
-                                            {{ cartItemsByProductId[product.id].quantity }}
+                                            {{ getCartItemForListing(product).quantity }}
                                         </span>
                                         <button
                                             type="button"
-                                            @click.prevent="updateQuantity(cartItemsByProductId[product.id], cartItemsByProductId[product.id].quantity + 1)"
-                                            :disabled="isUpdatingItem(cartItemsByProductId[product.id].id)"
+                                            @click.prevent="updateQuantity(getCartItemForListing(product), getCartItemForListing(product).quantity + 1)"
+                                            :disabled="isUpdatingItem(getCartItemForListing(product).id)"
                                             class="w-6 h-full flex items-center justify-center font-bold text-gray-700 dark:text-gray-200 hover:bg-red-600 hover:text-white transition disabled:opacity-50 text-xs cursor-pointer"
                                             title="Increase quantity">
                                             +
@@ -503,17 +503,17 @@ onUnmounted(() => {
                                     <button
                                         v-else
                                         @click="addToCart(product)"
-                                        :disabled="isAddingProduct(product.id)"
+                                        :disabled="isAddingProduct(product)"
                                         class="w-full py-1 sm:py-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white text-[11px] sm:text-xs font-bold transition disabled:opacity-60 flex items-center justify-center gap-1 shadow-2xs cursor-pointer h-7"
                                     >
-                                        <svg v-if="!isAddingProduct(product.id)" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <svg v-if="!isAddingProduct(product)" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
                                         </svg>
                                         <svg v-else class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
                                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
                                             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                                         </svg>
-                                        <span>{{ isAddingProduct(product.id) ? '...' : 'Claim Deal' }}</span>
+                                        <span>{{ isAddingProduct(product) ? '...' : 'Claim Deal' }}</span>
                                     </button>
                                 </div>
                             </div>
@@ -693,18 +693,18 @@ onUnmounted(() => {
                                     <button
                                         v-else
                                         @click="addToCart(product)"
-                                        :disabled="isAddingProduct(product.id) || product.stock <= 0"
+                                        :disabled="isAddingProduct(product) || product.stock <= 0"
                                         :class="product.stock <= 0 ? 'opacity-50 cursor-not-allowed bg-gray-400 dark:bg-gray-600' : 'bg-primary hover:opacity-90 cursor-pointer'"
                                         class="w-full py-1 sm:py-1.5 rounded-md text-white text-[11px] sm:text-xs font-bold transition flex items-center justify-center gap-1 shadow-2xs h-7"
                                     >
-                                        <svg v-if="!isAddingProduct(product.id) && product.stock > 0" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <svg v-if="!isAddingProduct(product) && product.stock > 0" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                                         </svg>
-                                        <svg v-else-if="isAddingProduct(product.id)" class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                                        <svg v-else-if="isAddingProduct(product)" class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
                                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
                                             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                                         </svg>
-                                        <span>{{ product.stock <= 0 ? 'Out of Stock' : (isAddingProduct(product.id) ? '...' : '+ Add') }}</span>
+                                        <span>{{ product.stock <= 0 ? 'Out of Stock' : (isAddingProduct(product) ? '...' : '+ Add') }}</span>
                                     </button>
                                 </div>
                             </div>
@@ -887,18 +887,18 @@ onUnmounted(() => {
                                     <button
                                         v-else
                                         @click="addToCart(product)"
-                                        :disabled="isAddingProduct(product.id) || product.stock <= 0"
+                                        :disabled="isAddingProduct(product) || product.stock <= 0"
                                         :class="product.stock <= 0 ? 'opacity-50 cursor-not-allowed bg-gray-400 dark:bg-gray-600' : 'bg-primary hover:opacity-90 cursor-pointer'"
                                         class="w-full py-1 sm:py-1.5 rounded-md text-white text-[11px] sm:text-xs font-bold transition flex items-center justify-center gap-1 shadow-2xs h-7"
                                     >
-                                        <svg v-if="!isAddingProduct(product.id) && product.stock > 0" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <svg v-if="!isAddingProduct(product) && product.stock > 0" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                                         </svg>
-                                        <svg v-else-if="isAddingProduct(product.id)" class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                                        <svg v-else-if="isAddingProduct(product)" class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
                                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
                                             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                                         </svg>
-                                        <span>{{ product.stock <= 0 ? 'Out of Stock' : (isAddingProduct(product.id) ? '...' : '+ Add') }}</span>
+                                        <span>{{ product.stock <= 0 ? 'Out of Stock' : (isAddingProduct(product) ? '...' : '+ Add') }}</span>
                                     </button>
                                 </div>
                             </div>
@@ -1081,18 +1081,18 @@ onUnmounted(() => {
                                     <button
                                         v-else
                                         @click="addToCart(product)"
-                                        :disabled="isAddingProduct(product.id) || product.stock <= 0"
+                                        :disabled="isAddingProduct(product) || product.stock <= 0"
                                         :class="product.stock <= 0 ? 'opacity-50 cursor-not-allowed bg-gray-400 dark:bg-gray-600' : 'bg-primary hover:opacity-90 cursor-pointer'"
                                         class="w-full py-1 sm:py-1.5 rounded-md text-white text-[11px] sm:text-xs font-bold transition flex items-center justify-center gap-1 shadow-2xs h-7"
                                     >
-                                        <svg v-if="!isAddingProduct(product.id) && product.stock > 0" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <svg v-if="!isAddingProduct(product) && product.stock > 0" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                                         </svg>
-                                        <svg v-else-if="isAddingProduct(product.id)" class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                                        <svg v-else-if="isAddingProduct(product)" class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
                                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
                                             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                                         </svg>
-                                        <span>{{ product.stock <= 0 ? 'Out of Stock' : (isAddingProduct(product.id) ? '...' : '+ Add') }}</span>
+                                        <span>{{ product.stock <= 0 ? 'Out of Stock' : (isAddingProduct(product) ? '...' : '+ Add') }}</span>
                                     </button>
                                 </div>
                             </div>
@@ -1369,18 +1369,18 @@ onUnmounted(() => {
                                     <button
                                         v-else
                                         @click="addToCart(product)"
-                                        :disabled="isAddingProduct(product.id) || product.stock <= 0"
+                                        :disabled="isAddingProduct(product) || product.stock <= 0"
                                         :class="product.stock <= 0 ? 'opacity-50 cursor-not-allowed bg-gray-400 dark:bg-gray-600' : 'bg-primary hover:opacity-90 cursor-pointer'"
                                         class="w-full py-1 sm:py-1.5 rounded-md text-white text-[11px] sm:text-xs font-bold transition flex items-center justify-center gap-1 shadow-2xs h-7"
                                     >
-                                        <svg v-if="!isAddingProduct(product.id) && product.stock > 0" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <svg v-if="!isAddingProduct(product) && product.stock > 0" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                                         </svg>
-                                        <svg v-else-if="isAddingProduct(product.id)" class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                                        <svg v-else-if="isAddingProduct(product)" class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
                                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
                                             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                                         </svg>
-                                        <span>{{ product.stock <= 0 ? 'Out of Stock' : (isAddingProduct(product.id) ? '...' : '+ Add') }}</span>
+                                        <span>{{ product.stock <= 0 ? 'Out of Stock' : (isAddingProduct(product) ? '...' : '+ Add') }}</span>
                                     </button>
                                 </div>
                             </div>

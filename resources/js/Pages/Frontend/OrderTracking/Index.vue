@@ -1,7 +1,7 @@
 <script setup>
 import { Head, useForm } from '@inertiajs/vue3';
 import Layout from '@/Layouts/Layout.vue';
-import { ref, computed } from 'vue';
+import { ref, computed, nextTick, watch, onMounted } from 'vue';
 
 const props = defineProps({
     order: Object,
@@ -15,7 +15,67 @@ const form = useForm({
     email: '',
 });
 
-const submit = () => form.post(route('order.track.search'));
+const doScroll = () => {
+    const el = document.getElementById('tracking-result') || document.getElementById('tracking-error');
+    if (!el) return false;
+
+    const nav = document.querySelector('header') || document.querySelector('nav');
+    const navHeight = nav ? (nav.offsetHeight + 20) : 90;
+    const rect = el.getBoundingClientRect();
+    const currentScroll = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+    const targetTop = rect.top + currentScroll - navHeight;
+
+    window.scrollTo({
+        top: Math.max(0, targetTop),
+        behavior: 'smooth'
+    });
+
+    if (typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    return true;
+};
+
+const triggerScrollSweep = () => {
+    nextTick(() => {
+        doScroll();
+        setTimeout(doScroll, 80);
+        setTimeout(doScroll, 200);
+        setTimeout(doScroll, 400);
+        setTimeout(doScroll, 800);
+    });
+};
+
+const submit = () => {
+    form.post(route('order.track.search'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            triggerScrollSweep();
+        },
+        onError: () => {
+            triggerScrollSweep();
+        },
+        onFinish: () => {
+            triggerScrollSweep();
+        },
+    });
+};
+
+watch(
+    () => [props.order, props.error],
+    ([newOrder, newError]) => {
+        if (newOrder || newError) {
+            triggerScrollSweep();
+        }
+    },
+    { deep: true }
+);
+
+onMounted(() => {
+    if (props.order || props.error) {
+        triggerScrollSweep();
+    }
+});
 
 // Copy tracking link to clipboard
 const copied = ref(false);
@@ -29,17 +89,24 @@ const copyLink = () => {
 };
 
 // Progress steps
-const steps = ['pending', 'paid', 'shipped', 'completed'];
-const stepLabels = { pending: 'Order Placed', paid: 'Payment Confirmed', shipped: 'Shipped', completed: 'Delivered' };
+const steps = ['pending', 'processing', 'shipped', 'completed'];
+const stepLabels = { pending: 'Order Placed', processing: 'Processing', shipped: 'Shipped', completed: 'Delivered' };
 
 const getStepIndex = (status) => {
     if (status === 'cancelled') return -1;
+    if (status === 'paid') return 1;
     return steps.indexOf(status);
 };
 
 const progressWidth = computed(() => {
     const idx = getStepIndex(props.order?.status);
     return ['0%', '33%', '66%', '100%'][idx] || '0%';
+});
+
+const trackingPrefix = computed(() => {
+    let p = String(props.settings?.tracking_number_prefix || 'SKY-').trim();
+    if (!p.endsWith('-') && !p.endsWith('_')) p += '-';
+    return p.toUpperCase();
 });
 </script>
 
@@ -57,7 +124,7 @@ const progressWidth = computed(() => {
                         </svg>
                     </div>
                     <h1 class="text-4xl font-extrabold text-gray-900 dark:text-white mb-2">Track Your Order</h1>
-                    <p class="text-gray-600 dark:text-gray-400">Enter your Tracking Number (e.g. SKY-AB12CD34) or Order ID</p>
+                    <p class="text-gray-600 dark:text-gray-400">Enter your Tracking Number (e.g. {{ trackingPrefix }}AB12CD34) or Order ID</p>
                 </div>
 
                 <!-- Search Form -->
@@ -68,7 +135,7 @@ const progressWidth = computed(() => {
                                 Tracking Number or Order ID *
                             </label>
                             <input type="text" v-model="form.tracking_input" required
-                                placeholder="e.g. SKY-AB12CD34  or  1234"
+                                :placeholder="'e.g. ' + trackingPrefix + 'AB12CD34  or  1234'"
                                 class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-4 py-3 text-lg font-mono uppercase tracking-widest focus:ring-primary focus:border-primary" />
                             <p v-if="form.errors.tracking_input" class="text-red-500 text-xs mt-1">{{ form.errors.tracking_input }}</p>
                         </div>
@@ -88,14 +155,14 @@ const progressWidth = computed(() => {
                 </form>
 
                 <!-- Error -->
-                <div v-if="error" class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 text-red-700 dark:text-red-400 rounded-xl p-6 text-center mb-8">
+                <div v-if="error" id="tracking-error" class="scroll-mt-24 sm:scroll-mt-28 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 text-red-700 dark:text-red-400 rounded-xl p-6 text-center mb-8">
                     <svg class="w-8 h-8 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                     <p class="font-semibold">{{ error }}</p>
                     <p class="text-sm mt-1 opacity-75">Make sure you're entering the correct tracking number or Order ID.</p>
                 </div>
 
                 <!-- Order Result -->
-                <div v-if="order" class="space-y-6">
+                <div v-if="order" id="tracking-result" class="scroll-mt-24 sm:scroll-mt-28 space-y-6">
 
                     <!-- Tracking Number Card -->
                     <div class="bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary-500,var(--color-primary))] text-white rounded-2xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg">
@@ -119,16 +186,26 @@ const progressWidth = computed(() => {
                     <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border dark:border-gray-700 overflow-hidden">
                         <div class="p-6 border-b dark:border-gray-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                             <h2 class="text-xl font-bold text-gray-900 dark:text-white">Order Status</h2>
-                            <span class="px-4 py-2 rounded-full font-bold text-sm uppercase tracking-wider"
-                                :class="{
-                                    'bg-yellow-100 text-yellow-800': order.status === 'pending',
-                                    'bg-primary/10 text-primary border border-primary/20': order.status === 'paid',
-                                    'bg-purple-100 text-purple-800': order.status === 'shipped',
-                                    'bg-green-100 text-green-800': order.status === 'completed',
-                                    'bg-red-100 text-red-800': order.status === 'cancelled',
-                                }">
-                                {{ order.status }}
-                            </span>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="px-3.5 py-1.5 rounded-full font-bold text-xs uppercase tracking-wider border"
+                                    :class="{
+                                        'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800': order.payment_status === 'paid',
+                                        'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800': order.payment_status === 'pending',
+                                        'bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800': order.payment_status === 'failed'
+                                    }">
+                                    {{ order.payment_status === 'paid' ? '✓ Payment: Paid' : (order.payment_status === 'failed' ? '✕ Payment: Failed' : (['cod', 'pod'].includes(order.payment_method) ? '💵 Pay on Delivery' : '⏳ Payment: Pending')) }}
+                                </span>
+                                <span class="px-4 py-1.5 rounded-full font-bold text-sm uppercase tracking-wider"
+                                    :class="{
+                                        'bg-yellow-100 text-yellow-800': order.status === 'pending',
+                                        'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300': order.status === 'processing' || order.status === 'paid',
+                                        'bg-purple-100 text-purple-800': order.status === 'shipped',
+                                        'bg-green-100 text-green-800': order.status === 'completed',
+                                        'bg-red-100 text-red-800': order.status === 'cancelled',
+                                    }">
+                                    {{ order.status === 'paid' ? 'processing' : order.status }}
+                                </span>
+                            </div>
                         </div>
 
                         <!-- Cancelled -->
@@ -143,7 +220,10 @@ const progressWidth = computed(() => {
                                 <div class="absolute top-5 left-0 h-1 bg-primary z-0 transition-all duration-700 rounded-full" :style="{ width: progressWidth }"></div>
                                 <div v-for="(step, i) in steps" :key="step" class="relative z-10 flex flex-col items-center flex-1">
                                     <div :class="['w-10 h-10 rounded-full flex items-center justify-center border-2 text-sm font-bold transition-all', i <= getStepIndex(order.status) ? 'bg-primary border-primary text-white shadow-lg' : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-400']">
-                                        {{ i + 1 }}
+                                        <svg v-if="i <= getStepIndex(order.status)" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <span v-else>{{ i + 1 }}</span>
                                     </div>
                                     <p class="mt-2 text-xs font-semibold text-center px-1 leading-tight"
                                         :class="i <= getStepIndex(order.status) ? 'text-primary font-bold' : 'text-gray-400'">
@@ -164,8 +244,17 @@ const progressWidth = computed(() => {
                                 <img :src="item.product?.image ? '/storage/' + item.product.image : 'https://placehold.co/64x64?text=P'"
                                     class="w-16 h-16 object-cover rounded-lg border dark:border-gray-700 flex-shrink-0" />
                                 <div class="flex-1 min-w-0">
-                                    <p class="font-semibold truncate">{{ item.product?.name ?? 'Product' }}</p>
-                                    <p class="text-sm text-gray-500 dark:text-gray-400">Qty: {{ item.quantity }}</p>
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <p class="font-semibold">{{ item.product?.name ?? 'Product' }}</p>
+                                        <span v-if="item.unit_name" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-primary/10 text-primary border border-primary/20">
+                                            {{ item.unit_name }}
+                                        </span>
+                                    </div>
+                                    <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        <span>Qty: {{ item.quantity }}</span>
+                                        <span v-if="item.unit_name">• Selling Unit: <strong class="text-gray-700 dark:text-gray-300">{{ item.unit_name }}</strong></span>
+                                        <span v-if="item.variant || item.variant_label">• Variant: {{ item.variant_label || item.variant }}</span>
+                                    </div>
                                 </div>
                                 <p class="font-bold text-primary whitespace-nowrap">₦{{ (item.price * item.quantity).toLocaleString() }}</p>
                             </div>

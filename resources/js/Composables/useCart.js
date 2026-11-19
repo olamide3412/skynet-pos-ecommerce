@@ -15,12 +15,14 @@ export function useCart() {
   const cartCount = computed(() => page.props.cart_count ?? cart.value?.count ?? 0);
   const cartItems = computed(() => cart.value?.items || []);
 
-  // Map of productId -> first matching cart item (for quick card lookups)
+  // Map of productId -> first matching cart item that is the base product (no specific packaging unit or variant)
   const cartItemsByProductId = computed(() => {
     const map = {};
     for (const item of cartItems.value) {
-      if (!map[item.product_id]) {
-        map[item.product_id] = item;
+      if (!item.product_pos_unit_id && !item.variant && !item.product_variant_mapping_id) {
+        if (!map[item.product_id]) {
+          map[item.product_id] = item;
+        }
       }
     }
     return map;
@@ -47,20 +49,20 @@ export function useCart() {
     if (typeof productOrKey === 'string') {
       return cartItemsByListingKey.value[productOrKey] || null;
     }
-    const hasSpecificUnit = Boolean(productOrKey.unit_id || productOrKey.product_pos_unit_id);
+    const unitId = productOrKey.unit_id ?? productOrKey.product_pos_unit_id ?? null;
+    const hasSpecificUnit = Boolean(unitId || productOrKey.is_unit_listing);
     const key = productOrKey.listing_key 
-      || (productOrKey.unit_id ? `p${productOrKey.id}-u${productOrKey.unit_id}` : null)
-      || (productOrKey.product_pos_unit_id ? `p${productOrKey.id}-u${productOrKey.product_pos_unit_id}` : null)
+      || (unitId ? `p${productOrKey.id}-u${unitId}` : null)
       || `p${productOrKey.id}`;
 
-    // Direct exact match by listing key
+    // Direct exact match by listing key (either p{id}-u{unit_id} or p{id})
     if (cartItemsByListingKey.value[key]) {
       return cartItemsByListingKey.value[key];
     }
 
-    // Only fallback to productId lookup if this is a general base product without a specific packaging unit
+    // Only fallback for base product without a specific packaging unit
     if (!hasSpecificUnit && (!productOrKey.listing_key || productOrKey.listing_key === `p${productOrKey.id}`)) {
-      return cartItemsByListingKey.value[`p${productOrKey.id}`] || cartItemsByProductId.value[productOrKey.id] || null;
+      return cartItemsByProductId.value[productOrKey.id] || null;
     }
 
     return null;
@@ -74,7 +76,9 @@ export function useCart() {
       || `p${productId}`;
 
     addingProduct[key] = true;
-    addingProduct[productId] = true;
+    if (!unitId && (!product.listing_key || product.listing_key === `p${productId}`)) {
+      addingProduct[productId] = true;
+    }
 
     const payload = {
       product_id: productId,
@@ -96,8 +100,8 @@ export function useCart() {
         toast.error(msg);
       },
       onFinish: () => {
-        addingProduct[key] = false;
-        addingProduct[productId] = false;
+        delete addingProduct[key];
+        delete addingProduct[productId];
       },
     });
   };
@@ -140,13 +144,13 @@ export function useCart() {
   const isAddingProduct = (productOrId) => {
     if (!productOrId) return false;
     if (typeof productOrId === 'object') {
+      const unitId = productOrId.unit_id ?? productOrId.product_pos_unit_id ?? null;
       const key = productOrId.listing_key 
-        || (productOrId.unit_id ? `p${productOrId.id}-u${productOrId.unit_id}` : null)
-        || (productOrId.product_pos_unit_id ? `p${productOrId.id}-u${productOrId.product_pos_unit_id}` : null)
+        || (unitId ? `p${productOrId.id}-u${unitId}` : null)
         || `p${productOrId.id}`;
-      return Boolean(addingProduct[key] || (key === `p${productOrId.id}` && addingProduct[productOrId.id]));
+      return Boolean(addingProduct[key] || (!unitId && !productOrId.is_unit_listing && addingProduct[productOrId.id]));
     }
-    return Boolean(addingProduct[productOrId]);
+    return Boolean(addingProduct[productOrId] || addingProduct[`p${productOrId}`]);
   };
 
   return {

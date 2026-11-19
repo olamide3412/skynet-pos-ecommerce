@@ -710,17 +710,17 @@ const seoDescription = computed(() => {
 
                         <button v-else
                             @click="addToCart(product)"
-                            :disabled="isAddingProduct(product.id) || product.stock <= 0"
+                            :disabled="isAddingProduct(product) || product.stock <= 0"
                             :class="product.stock <= 0 ? 'opacity-50 cursor-not-allowed bg-gray-400 dark:bg-gray-600' : 'bg-primary hover:opacity-90 cursor-pointer'"
                             class="flex-1 py-1.5 sm:py-2 rounded-lg text-white text-xs sm:text-sm font-bold transition flex items-center justify-center gap-1 sm:gap-2 shadow-xs h-8 sm:h-9.5">
-                            <svg v-if="!isAddingProduct(product.id) && product.stock > 0" class="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg v-if="!isAddingProduct(product) && product.stock > 0" class="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
                             </svg>
-                            <svg v-else-if="isAddingProduct(product.id)" class="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
+                            <svg v-else-if="isAddingProduct(product)" class="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
                                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
                                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                             </svg>
-                            <span class="truncate">{{ product.stock <= 0 ? 'Out of Stock' : (isAddingProduct(product.id) ? '...' : 'Add') }}</span>
+                            <span class="truncate">{{ product.stock <= 0 ? 'Out of Stock' : (isAddingProduct(product) ? '...' : 'Add') }}</span>
                         </button>
 
                         <button @click="addToCompare(product)" :disabled="comparing[product.id]"

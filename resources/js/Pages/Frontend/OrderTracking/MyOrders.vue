@@ -8,11 +8,12 @@ defineProps({
 });
 
 const statusBadge = (status) => ({
-    pending:   'bg-yellow-100 text-yellow-800',
-    paid:      'bg-primary/10 text-primary border border-primary/20',
-    shipped:   'bg-purple-100 text-purple-800',
-    completed: 'bg-green-100 text-green-800',
-    cancelled: 'bg-red-100 text-red-800',
+    pending:    'bg-yellow-100 text-yellow-800',
+    processing: 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300',
+    paid:       'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300',
+    shipped:    'bg-purple-100 text-purple-800',
+    completed:  'bg-green-100 text-green-800',
+    cancelled:  'bg-red-100 text-red-800',
 }[status] || 'bg-gray-100 text-gray-800');
 </script>
 
@@ -49,9 +50,19 @@ const statusBadge = (status) => ({
                             <h3 class="text-xl font-extrabold text-gray-900 dark:text-white">#{{ order.id }}</h3>
                         </div>
                         <div class="text-right">
-                            <span :class="['px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider', statusBadge(order.status)]">
-                                {{ order.status }}
-                            </span>
+                            <div class="flex items-center justify-end gap-1.5">
+                                <span class="px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider border"
+                                    :class="{
+                                        'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800': order.payment_status === 'paid',
+                                        'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800': order.payment_status === 'pending',
+                                        'bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800': order.payment_status === 'failed'
+                                    }">
+                                    {{ order.payment_status === 'paid' ? '✓ Paid' : (order.payment_status === 'failed' ? '✕ Failed' : '⏳ Unpaid') }}
+                                </span>
+                                <span :class="['px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider', statusBadge(order.status)]">
+                                    {{ order.status === 'paid' ? 'processing' : order.status }}
+                                </span>
+                            </div>
                             <p class="text-xs text-gray-400 mt-1">{{ new Date(order.created_at).toLocaleDateString('en-NG', { day:'numeric', month:'short', year:'numeric' }) }}</p>
                         </div>
                     </div>
@@ -61,6 +72,7 @@ const statusBadge = (status) => ({
                         <div v-for="item in order.items.slice(0, 3)" :key="item.id" class="flex items-center gap-2 bg-gray-50 dark:bg-gray-700 rounded-lg px-3 py-2">
                             <img :src="item.product?.image ? '/storage/' + item.product.image : 'https://placehold.co/32x32?text=P'" class="w-8 h-8 object-cover rounded" />
                             <span class="text-sm font-medium line-clamp-1 max-w-[120px]">{{ item.product?.name }}</span>
+                            <span v-if="item.unit_name" class="text-[11px] font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded border border-primary/20">({{ item.unit_name }})</span>
                             <span class="text-xs text-gray-400">×{{ item.quantity }}</span>
                         </div>
                         <span v-if="order.items.length > 3" class="text-sm text-gray-500 dark:text-gray-400">+{{ order.items.length - 3 }} more</span>

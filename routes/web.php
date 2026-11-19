@@ -272,6 +272,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('orders/{order}', [OrderController::class , 'show'])->name('orders.show');
             Route::get('orders/{order}/invoice', [OrderController::class , 'invoice'])->name('orders.invoice');
             Route::put('orders/{order}/status', [OrderController::class , 'updateStatus'])->name('orders.status');
+            Route::put('orders/{order}/payment-status', [OrderController::class , 'updatePaymentStatus'])->name('orders.payment-status');
             Route::post('orders/{order}/add-note', [OrderController::class, 'addNote'])->name('orders.add-note');
 
             Route::get('revenue', [\App\Http\Controllers\Admin\RevenueController::class, 'index'])->name('revenue.index');

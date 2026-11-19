@@ -45,7 +45,7 @@ class OrderTrackingController extends Controller
 
         // Try tracking number first (alphanumeric like SKY-XXXXXXXX),
         // then fall back to numeric order ID
-        $query = Order::with('items.product');
+        $query = Order::with(['items.product', 'payments']);
 
         if (is_numeric($input)) {
             $query->where('id', (int) $input);
@@ -83,7 +83,7 @@ class OrderTrackingController extends Controller
             return redirect()->route('home')->with('info', 'Order tracking is currently unavailable.');
         }
 
-        $order = Order::with('items.product')
+        $order = Order::with(['items.product', 'payments'])
             ->where('tracking_number', strtoupper($tracking))
             ->first();
 
@@ -100,7 +100,7 @@ class OrderTrackingController extends Controller
      */
     public function myOrders()
     {
-        $orders = Order::with('items.product')
+        $orders = Order::with(['items.product', 'payments'])
             ->where('customer_id', auth('customer')->id())
             ->latest()
             ->paginate(10);
@@ -120,7 +120,7 @@ class OrderTrackingController extends Controller
         }
 
         return Inertia::render('Frontend/OrderTracking/OrderDetail', [
-            'order' => $order->load('items.product', 'customer'),
+            'order' => $order->load('items.product', 'customer', 'payments'),
         ]);
     }
 }

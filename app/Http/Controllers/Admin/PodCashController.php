@@ -306,6 +306,8 @@ class PodCashController extends Controller
             'pod_reconciliation_note' => "Collected via {$channelLabel}",
         ]);
 
+        $order->payments()->update(['status' => 'completed']);
+
         $order->recordStatusHistory(
             toStatus: $order->status,
             fromStatus: $order->status,

@@ -50,11 +50,18 @@ defineProps({
                             <div v-for="item in order.items" :key="item.id" class="flex gap-6 items-center">
                                 <img :src="item.product && item.product.image ? '/storage/' + item.product.image : 'https://placehold.co/100x100?text=Product'" class="w-20 h-20 object-cover rounded shadow-sm border dark:border-gray-600" />
                                 <div class="flex-1 border-b dark:border-gray-700 pb-4 last:border-0 last:pb-0">
-                                    <h4 class="font-bold text-lg">
+                                    <h4 class="font-bold text-lg flex flex-wrap items-center gap-2">
                                         <Link v-if="item.product" :href="route('shop.show', item.product?.url_key)" class="hover:text-blue-600 transition">{{ item.product.name }}</Link>
                                         <span v-else>Unknown Product</span>
+                                        <span v-if="item.unit_name" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-primary/10 text-primary border border-primary/20">
+                                            {{ item.unit_name }}
+                                        </span>
                                     </h4>
-                                    <p class="text-gray-500 text-sm mt-1">₦{{ parseFloat(item.price).toLocaleString() }} x {{ item.quantity }}</p>
+                                    <div class="flex flex-wrap items-center gap-2 text-gray-500 text-sm mt-1">
+                                        <span>₦{{ parseFloat(item.price).toLocaleString() }} x {{ item.quantity }}</span>
+                                        <span v-if="item.unit_name">• Unit: {{ item.unit_name }}</span>
+                                        <span v-if="item.variant || item.variant_label">• {{ item.variant_label || item.variant }}</span>
+                                    </div>
                                     <p class="font-semibold text-blue-600 dark:text-blue-400 mt-2">Sum: ₦{{ (item.price * item.quantity).toLocaleString() }}</p>
                                 </div>
                             </div>

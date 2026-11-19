@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
+use App\Models\Payment;
 use App\Models\StoreSetting;
 use App\Services\ActivityLogger;
 use App\Services\InventoryService;
@@ -25,7 +26,7 @@ class OrderController extends Controller
     public function index(Request $request)
     {
         $currentUser = auth('web')->user();
-        $query = Order::with('customer')->latest();
+        $query = Order::with(['customer', 'payments'])->latest();
 
         $canViewAll = $currentUser->isSuperAdmin()
             || in_array($currentUser->role, ['administrator', 'super administrator'], true)
@@ -48,7 +49,47 @@ class OrderController extends Controller
         }
 
         if ($status = $request->input('status')) {
-            $query->where('status', $status);
+            if ($status === 'processing') {
+                $query->whereIn('status', ['processing', 'paid']);
+            } else {
+                $query->where('status', $status);
+            }
+        }
+
+        if ($paymentStatus = $request->input('payment_status')) {
+            if ($paymentStatus === 'paid') {
+                $query->where(function ($q) {
+                    $q->whereHas('payments', fn ($p) => $p->whereIn('status', ['completed', 'paid', 'successful']))
+                      ->orWhereIn('status', ['paid', 'completed'])
+                      ->orWhere(function ($sub) {
+                          $sub->whereIn('payment_method', ['flutterwave', 'paystack'])
+                              ->whereIn('status', ['processing', 'shipped', 'completed', 'paid']);
+                      })
+                      ->orWhere(function ($sub) {
+                          $sub->whereIn('payment_method', ['pod', 'cod'])
+                              ->whereIn('pod_status', ['cash_collected', 'remitted_to_store', 'reconciled']);
+                      });
+                });
+            } elseif ($paymentStatus === 'failed') {
+                $query->where(function ($q) {
+                    $q->where('status', 'cancelled')
+                      ->orWhereHas('payments', fn ($p) => $p->where('status', 'failed'));
+                });
+            } elseif ($paymentStatus === 'pending') {
+                $query->where('status', '!=', 'cancelled')
+                      ->where('status', '!=', 'completed')
+                      ->where('status', '!=', 'paid')
+                      ->whereDoesntHave('payments', fn ($p) => $p->whereIn('status', ['completed', 'paid', 'successful']))
+                      ->where(function ($q) {
+                          $q->whereNotIn('payment_method', ['flutterwave', 'paystack'])
+                            ->orWhere('status', 'pending');
+                      })
+                      ->where(function ($q) {
+                          $q->whereNotIn('payment_method', ['pod', 'cod'])
+                            ->orWhereNotIn('pod_status', ['cash_collected', 'remitted_to_store', 'reconciled'])
+                            ->orWhereNull('pod_status');
+                      });
+            }
         }
 
         if ($posStatus = $request->input('pos_reservation_status')) {
@@ -94,8 +135,7 @@ class OrderController extends Controller
         $statusCounts = [
             'all'        => (int) array_sum($rawCounts),
             'pending'    => (int) ($rawCounts['pending'] ?? 0),
-            'processing' => (int) ($rawCounts['processing'] ?? 0),
-            'paid'       => (int) ($rawCounts['paid'] ?? 0),
+            'processing' => (int) (($rawCounts['processing'] ?? 0) + ($rawCounts['paid'] ?? 0)),
             'shipped'    => (int) ($rawCounts['shipped'] ?? 0),
             'completed'  => (int) ($rawCounts['completed'] ?? 0),
             'cancelled'  => (int) ($rawCounts['cancelled'] ?? 0),
@@ -108,7 +148,7 @@ class OrderController extends Controller
                 'count'        => $podCashInHandCount,
             ],
             'statusCounts' => $statusCounts,
-            'filters'      => $request->only(['search', 'status', 'pos_reservation_status', 'start_date', 'end_date'])
+            'filters'      => $request->only(['search', 'status', 'payment_status', 'pos_reservation_status', 'start_date', 'end_date'])
         ]);
     }
 
@@ -119,7 +159,7 @@ class OrderController extends Controller
         $canUpdateStatus = $currentUser && ($currentUser->isSuperAdmin() || $currentUser->can('orders.update_status') || in_array($currentUser->role, ['administrator', 'super administrator'], true));
 
         return Inertia::render('Admin/Orders/Show', [
-            'order' => $order->load(['items.product', 'customer', 'assignedStaff', 'createdByStaff', 'remittedByStaff', 'reconciledByAdmin', 'statusHistories.user']),
+            'order' => $order->load(['items.product', 'customer', 'payments', 'assignedStaff', 'createdByStaff', 'remittedByStaff', 'reconciledByAdmin', 'statusHistories.user']),
             'allStaff' => \App\Models\User::whereIn('role', ['staff', 'administrator', 'super administrator'])
                 ->select('id', 'name', 'role')
                 ->orderBy('name')
@@ -132,7 +172,7 @@ class OrderController extends Controller
     public function invoice(Order $order)
     {
         return Inertia::render('Admin/Orders/Invoice', [
-            'order'    => $order->load('items.product', 'customer'),
+            'order'    => $order->load('items.product', 'customer', 'payments'),
             'settings' => StoreSetting::allAsArray(),
         ]);
     }
@@ -156,7 +196,7 @@ class OrderController extends Controller
         }
 
         $validated = $request->validate([
-            'status' => 'required|string|in:pending,paid,processing,shipped,completed,cancelled'
+            'status' => 'required|string|in:pending,processing,shipped,completed,cancelled'
         ]);
 
         $newStatus = $validated['status'];
@@ -226,6 +266,77 @@ class OrderController extends Controller
         ]);
 
         return back()->with('success', 'Order status updated.');
+    }
+
+    /**
+     * Update the payment status independently of order fulfillment status.
+     */
+    public function updatePaymentStatus(Request $request, Order $order)
+    {
+        $user = $request->user();
+        $canUpdate = $user && (
+            $user->isSuperAdmin() ||
+            $user->can('orders.update_status') ||
+            in_array($user->role, ['administrator', 'super administrator'], true)
+        );
+
+        if (!$canUpdate) {
+            return back()->with('error', 'Unauthorized. You do not have permission to modify payment status.');
+        }
+
+        $validated = $request->validate([
+            'payment_status' => 'required|string|in:pending,paid,failed',
+        ]);
+
+        $newPaymentStatus = $validated['payment_status'];
+        $dbStatus = $newPaymentStatus === 'paid' ? 'completed' : $newPaymentStatus;
+
+        $payment = $order->payments()->latest('id')->first();
+        if ($payment) {
+            $payment->update([
+                'status' => $dbStatus,
+            ]);
+        } else {
+            Payment::create([
+                'order_id'  => $order->id,
+                'provider'  => $order->payment_method ?: 'manual',
+                'reference' => $order->payment_reference ?: ('man_' . $order->id . '_' . uniqid()),
+                'amount'    => $order->total_amount,
+                'status'    => $dbStatus,
+                'response'  => ['updated_by' => $user->name, 'manual_status' => $newPaymentStatus],
+            ]);
+        }
+
+        $userName = $user ? $user->name : 'System';
+        $statusLabel = ucfirst($newPaymentStatus);
+
+        // If a pending order (e.g. Bank Transfer) is marked Paid, automatically transition fulfillment to Processing
+        $oldOrderStatus = $order->status;
+        if ($newPaymentStatus === 'paid' && $order->status === 'pending') {
+            $order->update(['status' => 'processing']);
+            if ($order->pos_reservation_status === 'reserved') {
+                $this->reservationService->confirmReservation($order);
+            }
+        }
+
+        $order->recordStatusHistory(
+            toStatus: $order->status,
+            fromStatus: $oldOrderStatus,
+            event: 'payment_verified',
+            comment: "Payment status updated to {$statusLabel} by {$userName}." . ($oldOrderStatus !== $order->status ? " Order fulfillment moved to Processing." : ""),
+            metadata: [
+                'payment_status' => $newPaymentStatus,
+                'channel_label'  => ucfirst($order->payment_method ?: 'Manual'),
+            ]
+        );
+
+        ActivityLogger::order("Updated order #{$order->tracking_number} payment status to '{$newPaymentStatus}'", [
+            'order_id'        => $order->id,
+            'tracking_number' => $order->tracking_number,
+            'payment_status'  => $newPaymentStatus,
+        ]);
+
+        return back()->with('success', "Payment status updated to {$statusLabel}.");
     }
 
     /**

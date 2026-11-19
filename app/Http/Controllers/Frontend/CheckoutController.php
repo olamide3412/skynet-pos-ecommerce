@@ -342,6 +342,13 @@ class CheckoutController extends Controller
                 'status'         => 'pending',
             ]);
 
+            $order->recordStatusHistory(
+                toStatus: 'pending',
+                fromStatus: null,
+                event: 'order_placed',
+                comment: 'Order placed by customer with Direct Bank Transfer (awaiting payment confirmation).'
+            );
+
             Payment::create([
                 'order_id'  => $order->id,
                 'provider'  => 'bank_transfer',
@@ -367,6 +374,18 @@ class CheckoutController extends Controller
                     'payment_reference' => $ref,
                 ]);
 
+                $order->recordStatusHistory(
+                    toStatus: 'pending',
+                    fromStatus: null,
+                    event: 'order_placed',
+                    comment: 'Order placed by customer awaiting Paystack online payment.',
+                    metadata: [
+                        'gateway'   => 'paystack',
+                        'reference' => $ref,
+                        'total'     => $order->total_amount,
+                    ]
+                );
+
                 Payment::updateOrCreate(
                     ['reference' => $ref],
                     [
@@ -389,6 +408,18 @@ class CheckoutController extends Controller
                     'payment_method'    => 'flutterwave',
                     'payment_reference' => $txRef,
                 ]);
+
+                $order->recordStatusHistory(
+                    toStatus: 'pending',
+                    fromStatus: null,
+                    event: 'order_placed',
+                    comment: 'Order placed by customer awaiting Flutterwave online payment.',
+                    metadata: [
+                        'gateway'   => 'flutterwave',
+                        'reference' => $txRef,
+                        'total'     => $order->total_amount,
+                    ]
+                );
 
                 Payment::updateOrCreate(
                     ['reference' => $txRef],
@@ -525,16 +556,33 @@ class CheckoutController extends Controller
         }
 
         if ($verified) {
+            $resolvedProvider = $provider ?: ($order->payment_method ?: 'paystack');
+            $providerLabel = ucfirst($resolvedProvider);
+
             $order->update([
                 'status'         => 'processing',
-                'payment_method' => $provider ?: $order->payment_method,
+                'payment_method' => $resolvedProvider,
             ]);
+
+            $order->recordStatusHistory(
+                toStatus: 'processing',
+                fromStatus: 'pending',
+                event: 'payment_verified',
+                comment: "Online payment of ₦" . number_format($order->total_amount, 2) . " verified via {$providerLabel} (Ref: {$reference}). Order moved to Processing.",
+                metadata: [
+                    'gateway'       => $resolvedProvider,
+                    'reference'     => $reference,
+                    'amount'        => $order->total_amount,
+                    'channel_label' => $providerLabel,
+                    'type'          => 'online',
+                ]
+            );
 
             Payment::updateOrCreate(
                 ['reference' => $reference],
                 [
                     'order_id' => $order->id,
-                    'provider' => $provider ?: 'paystack',
+                    'provider' => $resolvedProvider,
                     'amount'   => $order->total_amount,
                     'status'   => 'completed',
                     'response' => $verificationData,
@@ -645,6 +693,20 @@ class CheckoutController extends Controller
                             'payment_method' => 'paystack',
                         ]);
 
+                        $order->recordStatusHistory(
+                            toStatus: 'processing',
+                            fromStatus: 'pending',
+                            event: 'payment_verified',
+                            comment: "Online payment of ₦" . number_format($order->total_amount, 2) . " verified via Paystack Webhook (Ref: {$reference}). Order moved to Processing.",
+                            metadata: [
+                                'gateway'       => 'paystack',
+                                'reference'     => $reference,
+                                'amount'        => $order->total_amount,
+                                'channel_label' => 'Paystack',
+                                'type'          => 'online',
+                            ]
+                        );
+
                         Payment::updateOrCreate(
                             ['reference' => $reference],
                             [
@@ -748,6 +810,20 @@ class CheckoutController extends Controller
                             'status'         => 'processing',
                             'payment_method' => 'flutterwave',
                         ]);
+
+                        $order->recordStatusHistory(
+                            toStatus: 'processing',
+                            fromStatus: 'pending',
+                            event: 'payment_verified',
+                            comment: "Online payment of ₦" . number_format($order->total_amount, 2) . " verified via Flutterwave Webhook (tx_ref: {$txRef}). Order moved to Processing.",
+                            metadata: [
+                                'gateway'       => 'flutterwave',
+                                'reference'     => $txRef,
+                                'amount'        => $order->total_amount,
+                                'channel_label' => 'Flutterwave',
+                                'type'          => 'online',
+                            ]
+                        );
 
                         Payment::updateOrCreate(
                             ['reference' => $txRef],

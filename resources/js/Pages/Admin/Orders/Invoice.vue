@@ -108,8 +108,17 @@ const statusBadgeClass = (status) => ({
                 <tbody class="divide-y divide-gray-100">
                     <tr v-for="item in order.items" :key="item.id">
                         <td class="py-4 px-4">
-                            <p class="font-semibold">{{ item.product?.name ?? 'Product' }}</p>
-                            <p v-if="item.variant" class="text-xs text-gray-400 mt-0.5">{{ item.variant }}</p>
+                            <div class="flex items-center gap-2">
+                                <p class="font-semibold">{{ item.product?.name ?? 'Product' }}</p>
+                                <span v-if="item.unit_name" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-gray-100 text-gray-800 border border-gray-300">
+                                    {{ item.unit_name }}
+                                </span>
+                            </div>
+                            <div class="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
+                                <span v-if="item.variant || item.variant_label">{{ item.variant_label || item.variant }}</span>
+                                <span v-if="item.unit_name && (item.variant || item.variant_label)">•</span>
+                                <span v-if="item.unit_name">Selling Unit: {{ item.unit_name }}</span>
+                            </div>
                         </td>
                         <td class="py-4 px-4 text-center text-gray-600">{{ item.quantity }}</td>
                         <td class="py-4 px-4 text-right text-gray-600">₦{{ parseFloat(item.price).toLocaleString() }}</td>

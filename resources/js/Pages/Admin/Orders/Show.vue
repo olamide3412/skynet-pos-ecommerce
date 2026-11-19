@@ -34,8 +34,18 @@ const userCanUpdateStatus = computed(() => {
 });
 
 const form = useForm({
-    status: props.order.status
+    status: props.order.status === 'paid' ? 'processing' : props.order.status
 });
+
+const paymentForm = useForm({
+    payment_status: props.order.payment_status || 'pending'
+});
+
+const updatePaymentStatus = () => {
+    paymentForm.put(route('admin.orders.payment-status', props.order.id), {
+        preserveScroll: true,
+    });
+};
 
 const selectedStaffId = ref(props.order.assigned_staff_id || '');
 const assignStaff = () => {
@@ -171,6 +181,8 @@ const getEventBadgeClass = (event, item = null) => {
     switch (event) {
         case 'order_placed':
             return 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300 border border-blue-200 dark:border-blue-800';
+        case 'payment_verified':
+            return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800';
         case 'payment_collected':
             return 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300 border border-amber-200 dark:border-amber-800';
         case 'reconciled':
@@ -197,6 +209,14 @@ const getPaymentMethod = (item) => {
     if (item.metadata?.channel_label) {
         return item.metadata.channel_label;
     }
+    if (item.metadata?.gateway) {
+        const gw = String(item.metadata.gateway).toLowerCase();
+        if (gw === 'flutterwave') return 'Flutterwave';
+        if (gw === 'paystack') return 'Paystack';
+        if (gw === 'bank_transfer') return 'Instant Bank Transfer';
+        if (gw === 'pod' || gw === 'cod') return 'Payment on Delivery';
+        return item.metadata.gateway;
+    }
     if (item.metadata?.channel) {
         const ch = String(item.metadata.channel).toLowerCase();
         if (ch === 'bank_transfer' || ch === 'transfer') return 'Instant Bank Transfer';
@@ -205,6 +225,8 @@ const getPaymentMethod = (item) => {
         return item.metadata.channel;
     }
     if (item.comment) {
+        if (/flutterwave/i.test(item.comment)) return 'Flutterwave';
+        if (/paystack/i.test(item.comment)) return 'Paystack';
         if (/bank\s*transfer|instant\s*bank/i.test(item.comment)) return 'Instant Bank Transfer';
         if (/pos\s*terminal|handheld\s*pos|\bpos\b/i.test(item.comment)) return 'Handheld POS Terminal';
         if (/physical\s*cash|\bcash\b/i.test(item.comment)) return 'Physical Cash';
@@ -220,12 +242,14 @@ const getPaymentMethodIcon = (method) => {
     const m = String(method).toLowerCase();
     if (m.includes('transfer')) return '🏦';
     if (m.includes('pos')) return '💳';
+    if (m.includes('flutterwave') || m.includes('paystack') || m.includes('online') || m.includes('card')) return '💳';
     return '💵';
 };
 
 const getEventIcon = (event, item = null) => {
     switch (event) {
         case 'order_placed': return '🛍️';
+        case 'payment_verified': return '✅';
         case 'payment_collected':
             return getPaymentMethodIcon(getPaymentMethod(item));
         case 'reconciled': return '🔒';
@@ -239,8 +263,18 @@ const getEventIcon = (event, item = null) => {
 const formatEventTitle = (event, item) => {
     switch (event) {
         case 'order_placed': return 'Order Placed';
+        case 'payment_verified': {
+            const method = getPaymentMethod(item) || item?.metadata?.channel_label || 'Online Gateway';
+            return `Payment Confirmed (${method})`;
+        }
         case 'payment_collected': {
             const method = getPaymentMethod(item);
+            if (item?.metadata?.type === 'online' || ['flutterwave', 'paystack'].includes(String(item?.metadata?.gateway).toLowerCase())) {
+                return `Online Payment Verified (${method || 'Gateway'})`;
+            }
+            if (item?.metadata?.gateway === 'bank_transfer' || (item?.comment && /bank\s*transfer/i.test(item.comment))) {
+                return `Bank Transfer Confirmed`;
+            }
             return method ? `Payment Collected at Doorstep (${method})` : 'Payment Collected at Doorstep';
         }
         case 'reconciled': return 'Payment Remitted & Reconciled (Order Completed)';
@@ -288,20 +322,28 @@ const formatEventTitle = (event, item) => {
                         </span>
                     </div>
                 </div>
-                <div class="flex items-center gap-3">
+                <div class="flex flex-wrap items-center gap-3">
                     <Link :href="route('admin.orders.invoice', order.id)" class="flex items-center gap-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold px-4 py-2 rounded-lg transition">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
                         Print Invoice
                     </Link>
+                    <span class="px-3.5 py-2 rounded-lg font-bold text-xs uppercase tracking-wider shadow-sm border"
+                          :class="{
+                            'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800': order.payment_status === 'paid',
+                            'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800': order.payment_status === 'pending',
+                            'bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800': order.payment_status === 'failed'
+                          }">
+                        {{ order.payment_status === 'paid' ? '✓ Payment: Paid' : (order.payment_status === 'failed' ? '✕ Payment: Failed' : '⏳ Payment: Pending') }}
+                    </span>
                     <span class="px-4 py-2 rounded-lg font-bold uppercase tracking-wider shadow-sm"
                           :class="{
                             'bg-yellow-100 text-yellow-800 border border-yellow-200': order.status === 'pending',
-                            'theme-primary-badge border border-primary-soft': order.status === 'paid',
+                            'bg-blue-100 text-blue-800 border border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800': order.status === 'processing' || order.status === 'paid',
                             'theme-secondary-badge border border-secondary-soft': order.status === 'shipped',
                             'bg-green-100 text-green-800 border border-green-200': order.status === 'completed',
                             'bg-red-100 text-red-800 border border-red-200': order.status === 'cancelled'
                           }">
-                        {{ order.status }}
+                        {{ order.status === 'paid' ? 'processing' : order.status }}
                     </span>
                 </div>
             </div>
@@ -681,11 +723,12 @@ const formatEventTitle = (event, item) => {
                                                     {{ formatEventTitle(history.event, history) }}
                                                 </span>
                                                 <span
-                                                    v-if="history.event === 'payment_collected' && getPaymentMethod(history)"
-                                                    class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700 shadow-xs"
+                                                    v-if="(history.event === 'payment_collected' || history.event === 'payment_verified') && getPaymentMethod(history)"
+                                                    class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold shadow-xs"
+                                                    :class="history.event === 'payment_verified' ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-900 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700' : 'bg-amber-100 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700'"
                                                 >
                                                     <span>{{ getPaymentMethodIcon(getPaymentMethod(history)) }}</span>
-                                                    <span>Rider Collection Method: <strong class="underline decoration-amber-400">{{ getPaymentMethod(history) }}</strong></span>
+                                                    <span>{{ history.event === 'payment_verified' ? 'Payment Method:' : 'Rider Collection Method:' }} <strong class="underline" :class="history.event === 'payment_verified' ? 'decoration-emerald-400' : 'decoration-amber-400'">{{ getPaymentMethod(history) }}</strong></span>
                                                 </span>
                                             </div>
                                             <span class="text-[11px] font-mono text-gray-500 dark:text-gray-400">
@@ -702,12 +745,12 @@ const formatEventTitle = (event, item) => {
                                         <div class="mt-2.5 pt-2 border-t border-gray-200/60 dark:border-gray-700/40 flex items-center justify-between text-[11px] text-gray-500">
                                             <div class="flex items-center gap-1.5">
                                                 <span class="w-4 h-4 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-[9px] font-bold">
-                                                    {{ history.event === 'order_placed' ? '⚙️' : '👤' }}
+                                                    {{ ['order_placed', 'payment_verified'].includes(history.event) && !history.user ? '⚙️' : '👤' }}
                                                 </span>
                                                 <span class="font-semibold text-gray-800 dark:text-gray-200">
-                                                    {{ history.event === 'order_placed' ? 'System' : (history.user ? history.user.name : 'System') }}
+                                                    {{ ['order_placed', 'payment_verified'].includes(history.event) && !history.user ? 'System' : (history.user ? history.user.name : 'System') }}
                                                 </span>
-                                                <span v-if="history.event !== 'order_placed' && history.user?.role" class="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider bg-gray-200/80 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                                                <span v-if="!['order_placed', 'payment_verified'].includes(history.event) && history.user?.role" class="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider bg-gray-200/80 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
                                                     {{ history.user.role }}
                                                 </span>
                                             </div>
@@ -814,10 +857,64 @@ const formatEventTitle = (event, item) => {
                         </div>
                     </div>
                     
+                    <!-- Payment Status Card -->
+                    <div class="bg-white dark:bg-gray-800 shadow-sm rounded-xl overflow-hidden border dark:border-gray-700">
+                        <div class="p-6 border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex items-center justify-between">
+                            <h2 class="text-xl font-bold">Payment Status</h2>
+                            <span class="px-2.5 py-1 rounded-full text-xs font-extrabold uppercase tracking-wider border"
+                                :class="{
+                                    'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800': order.payment_status === 'paid',
+                                    'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800': order.payment_status === 'pending',
+                                    'bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800': order.payment_status === 'failed'
+                                }">
+                                {{ order.payment_status === 'paid' ? '✓ Paid' : (order.payment_status === 'failed' ? '✕ Failed' : '⏳ Pending') }}
+                            </span>
+                        </div>
+                        <div class="p-6 space-y-4">
+                            <div class="p-3.5 rounded-xl bg-gray-50 dark:bg-gray-900/40 border border-gray-200/80 dark:border-gray-700/60 text-xs space-y-1.5">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-gray-500">Method:</span>
+                                    <span class="font-bold capitalize text-gray-900 dark:text-white">
+                                        {{ ['cod', 'pod'].includes(order.payment_method) ? 'Payment on Delivery (POD)' : (order.payment_method === 'bank_transfer' ? 'Direct Bank Transfer' : order.payment_method) }}
+                                    </span>
+                                </div>
+                                <div v-if="order.payment_reference" class="flex items-center justify-between gap-2">
+                                    <span class="text-gray-500 shrink-0">Reference:</span>
+                                    <span class="font-mono text-[11px] truncate text-gray-700 dark:text-gray-300">{{ order.payment_reference }}</span>
+                                </div>
+                            </div>
+
+                            <!-- Verified Online Gateway Lock -->
+                            <div v-if="['flutterwave', 'paystack'].includes(order.payment_method) && order.payment_status === 'paid'" class="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 text-emerald-800 dark:text-emerald-300 space-y-1">
+                                <div class="font-bold flex items-center gap-2 text-sm">
+                                    <span>✅</span> Online Payment Verified
+                                </div>
+                                <p class="text-xs text-emerald-700/80 dark:text-emerald-400/80 leading-relaxed">
+                                    Payment of ₦{{ Number(order.total_amount).toLocaleString('en-NG', { minimumFractionDigits: 2 }) }} was automatically verified via <strong class="capitalize">{{ order.payment_method }}</strong>.
+                                </p>
+                            </div>
+
+                            <!-- Update Payment Status Form (for Bank Transfer / Manual / Unpaid orders) -->
+                            <form v-else-if="userCanUpdateStatus && !['completed', 'cancelled'].includes(order.status)" @submit.prevent="updatePaymentStatus" class="space-y-3">
+                                <label class="block text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                                    Change Payment Status
+                                </label>
+                                <select v-model="paymentForm.payment_status" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md font-medium text-gray-700 dark:text-gray-200 py-2.5 text-sm">
+                                    <option value="pending">Pending / Unpaid</option>
+                                    <option value="paid">Paid (Confirmed)</option>
+                                    <option value="failed">Failed</option>
+                                </select>
+                                <button type="submit" :disabled="paymentForm.processing" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-md text-sm transition shadow-xs disabled:opacity-50 cursor-pointer">
+                                    {{ paymentForm.processing ? 'Updating...' : 'Update Payment Status' }}
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
                     <!-- Actions -->
                     <div class="bg-white dark:bg-gray-800 shadow-sm rounded-xl overflow-hidden border dark:border-gray-700">
                         <div class="p-6 border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
-                            <h2 class="text-xl font-bold">Update Status</h2>
+                            <h2 class="text-xl font-bold">Update Order Status</h2>
                         </div>
                         <div class="p-6">
                             <!-- Locked if already cancelled -->
@@ -851,7 +948,6 @@ const formatEventTitle = (event, item) => {
                                 <select v-model="form.status" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md font-medium text-gray-700 dark:text-gray-200 py-3">
                                     <option value="pending">Pending</option>
                                     <option value="processing">Processing</option>
-                                    <option value="paid">Paid</option>
                                     <option value="shipped">Shipped</option>
                                     <option value="completed">Completed</option>
                                     <option value="cancelled">Cancelled</option>
