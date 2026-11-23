@@ -437,6 +437,13 @@ class CheckoutController extends Controller
         }
 
         // If gateway initialization failed, release the POS reservation and restore local stock
+        Log::warning('Checkout payment initialization failed', [
+            'order_id' => $order->id,
+            'tracking_number' => $order->tracking_number,
+            'gateway' => $request->gateway,
+            'total_amount' => $order->total_amount,
+        ]);
+
         $this->reservationService->releaseReservation($order);
         $this->inventoryService->restoreOrderInventory($order);
         $order->update(['status' => 'cancelled']);
