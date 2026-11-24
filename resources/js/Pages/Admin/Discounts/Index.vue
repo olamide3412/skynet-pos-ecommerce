@@ -100,7 +100,7 @@ watch(search, () => {
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(() => {
         applyFilters();
-    }, 300);
+    }, 600);
 });
 
 // Autocomplete search for products inside Apply Modal

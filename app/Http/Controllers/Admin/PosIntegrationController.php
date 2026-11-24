@@ -13,6 +13,7 @@ use App\Services\PosIntegration\PosConnectionService;
 use App\Services\PosIntegration\PosSyncService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PosIntegrationController extends Controller
 {
@@ -69,9 +70,16 @@ class PosIntegrationController extends Controller
             $perPage = in_array((int)$perPageInput, [25, 50, 100], true) ? (int)$perPageInput : 25;
         }
 
-        $syncedItems = $query->paginate($perPage)->withQueryString();
+        $syncedItems = $query->paginate($perPage)
+            ->appends(array_merge($request->except(['page', 'tab']), ['tab' => 'catalog']));
 
-        $logs = PosSyncLog::latest()->limit(25)->get();
+        $logs = PosSyncLog::latest()
+            ->paginate(25, ['*'], 'logs_page')
+            ->appends(array_merge($request->except(['logs_page', 'tab']), ['tab' => 'logs']));
+
+        $activeTab = ($request->input('tab') === 'logs' || ($request->has('logs_page') && $request->input('tab') !== 'catalog'))
+            ? 'logs'
+            : 'catalog';
 
         $stats = [
             'total_synced'    => SyncedPosItem::count(),
@@ -106,6 +114,7 @@ class PosIntegrationController extends Controller
             'connection'           => $connectionSummary,
             'items'                => $syncedItems,
             'logs'                 => $logs,
+            'active_tab'           => $activeTab,
             'stats'                => $stats,
             'filters'              => array_merge($request->only(['search', 'mapping_status', 'pos_category', 'pos_brand']), [
                 'per_page' => (string) $perPageInput,
@@ -390,5 +399,62 @@ class PosIntegrationController extends Controller
         }
 
         return back()->with('error', 'Cleanup failed: ' . ($result['message'] ?? 'Unknown error'));
+    }
+
+    /**
+     * Clear synchronization logs older than 3, 7, or 30 days.
+     */
+    public function clearLogs(Request $request)
+    {
+        $validated = $request->validate([
+            'days' => 'required|integer|in:3,7,30',
+        ]);
+
+        $days = (int) $validated['days'];
+        $cutoff = now()->subDays($days);
+
+        $deleted = PosSyncLog::where('created_at', '<', $cutoff)->delete();
+
+        if ($deleted === 0) {
+            return redirect()->route('admin.pos-integration.index', ['tab' => 'logs'])
+                ->with('success', "No synchronization logs older than {$days} days were found.");
+        }
+
+        return redirect()->route('admin.pos-integration.index', ['tab' => 'logs'])
+            ->with('success', "Cleared {$deleted} synchronization log(s) older than {$days} days.");
+    }
+
+    /**
+     * Export synchronization logs as CSV.
+     */
+    public function exportLogs(): StreamedResponse
+    {
+        $filename = 'pos-synchronization-logs-' . now()->format('Y-m-d_H-i') . '.csv';
+
+        return response()->streamDownload(function () {
+            $handle = fopen('php://output', 'w');
+            // UTF-8 BOM for Excel compatibility
+            fwrite($handle, "\xEF\xBB\xBF");
+
+            fputcsv($handle, ['ID', 'Timestamp', 'Type', 'Status', 'Reference', 'Message', 'Context']);
+
+            PosSyncLog::latest()->chunk(500, function ($logs) use ($handle) {
+                foreach ($logs as $log) {
+                    fputcsv($handle, [
+                        $log->id,
+                        optional($log->created_at)->format('Y-m-d H:i:s'),
+                        $log->type,
+                        $log->status,
+                        $log->reference ?? '',
+                        $log->message ?? '',
+                        $log->context ? json_encode($log->context, JSON_UNESCAPED_UNICODE) : '',
+                    ]);
+                }
+            });
+
+            fclose($handle);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
     }
 }

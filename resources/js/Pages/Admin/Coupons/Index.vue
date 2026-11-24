@@ -3,6 +3,7 @@ import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import AdminLayout from '@/Layouts/AdminLayout.vue';
 import Pagination from '@/Components/Pagination.vue';
 import { ref, watch } from 'vue';
+import debounce from 'lodash/debounce';
 
 const props = defineProps({
     coupons: Object,
@@ -94,7 +95,11 @@ const applyFilter = () => {
     }, { preserveState: true, replace: true });
 };
 
-watch([search, status], () => {
+const applySearchFilter = debounce(applyFilter, 600);
+
+watch(search, applySearchFilter);
+watch(status, () => {
+    applySearchFilter.cancel();
     applyFilter();
 });
 </script>

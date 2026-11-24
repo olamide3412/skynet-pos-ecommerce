@@ -7,6 +7,8 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Auth\Middleware\RedirectIfAuthenticated;
+use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -39,5 +41,18 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->respond(function (Response $response, \Throwable $exception, Request $request) {
+            if ($response->getStatusCode() === 419) {
+                if ($request->expectsJson() && !$request->header('X-Inertia')) {
+                    return response()->json([
+                        'message' => 'Your session token expired. Refreshing page — please try again.',
+                        'expired' => true,
+                    ], 419);
+                }
+
+                return back()->with('warning', 'The page expired due to inactivity or a session update. It has been refreshed — please try again.');
+            }
+
+            return $response;
+        });
     })->create();

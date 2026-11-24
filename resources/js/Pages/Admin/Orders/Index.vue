@@ -99,7 +99,7 @@ const visibleStatusOptions = computed(() => {
     return statusOptions.filter(st => (props.statusCounts?.[st.countKey] || 0) > 0);
 });
 
-const applyFilters = debounce(() => {
+const runFilterQuery = () => {
     router.get(route('admin.orders.index'), {
         search: search.value || undefined,
         status: status.value || undefined,
@@ -107,9 +107,16 @@ const applyFilters = debounce(() => {
         start_date: startDate.value || undefined,
         end_date: endDate.value || undefined,
     }, { preserveState: true, replace: true });
+};
+
+const applySearchFilter = debounce(runFilterQuery, 600);
+const applyFilters = debounce(() => {
+    applySearchFilter.cancel();
+    runFilterQuery();
 }, 300);
 
-watch([search, status, paymentStatus, startDate, endDate], applyFilters);
+watch(search, applySearchFilter);
+watch([status, paymentStatus, startDate, endDate], applyFilters);
 
 const clearFilters = () => {
     search.value = '';

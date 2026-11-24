@@ -27,6 +27,20 @@ const isRepairing = ref(!props.pos_connection?.is_connected);
 const showApiSecret = ref(false);
 const isTesting = ref(false);
 const isReconciling = ref(false);
+const clearLogsDays = ref(3);
+const isClearingLogs = ref(false);
+
+const clearConnectionLogs = () => {
+    if (!confirm(`Delete all connection & webhook audit logs older than ${clearLogsDays.value} days? This action cannot be undone.`)) return;
+    isClearingLogs.value = true;
+    router.delete(route('admin.pos-connection.logs.clear'), {
+        data: { days: clearLogsDays.value },
+        preserveScroll: true,
+        onFinish: () => {
+            isClearingLogs.value = false;
+        },
+    });
+};
 
 const pairingForm = useForm({
     pos_base_url: props.pos_connection?.pos_base_url || '',
@@ -319,18 +333,46 @@ const reconcileLocks = () => {
 
             <!-- Recent Connection & Webhook Audit Trails -->
             <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-xs">
-                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                        <h3 class="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">
-                            Recent Connection & Webhook Audit Logs
-                        </h3>
+                        <div class="flex items-center gap-2.5">
+                            <h3 class="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">
+                                Recent Connection & Webhook Audit Logs
+                            </h3>
+                            <span v-if="totalLogsCount > 0" class="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                                {{ totalLogsCount }} Total
+                            </span>
+                        </div>
                         <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                             Recent test pings, connection tests, and incoming webhook events received from the POS.
                         </p>
                     </div>
-                    <span v-if="totalLogsCount > 0" class="px-2.5 py-1 text-xs font-semibold rounded-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-                        {{ totalLogsCount }} Total Events
-                    </span>
+                    <div class="flex flex-wrap items-center gap-2 shrink-0">
+                        <select
+                            v-model="clearLogsDays"
+                            class="text-xs rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 py-1.5 pl-2.5 pr-7 focus:ring-2 focus:ring-primary"
+                        >
+                            <option :value="3">Older than 3 days</option>
+                            <option :value="7">Older than 7 days</option>
+                            <option :value="30">Older than 30 days</option>
+                        </select>
+                        <button
+                            type="button"
+                            @click="clearConnectionLogs"
+                            :disabled="isClearingLogs || totalLogsCount === 0"
+                            class="px-3 py-1.5 rounded-lg text-xs font-semibold border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-900/30 hover:bg-rose-100 dark:hover:bg-rose-900/50 transition inline-flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                            {{ isClearingLogs ? 'Clearing...' : 'Clear Logs' }}
+                        </button>
+                        <a
+                            :href="route('admin.pos-connection.logs.export')"
+                            class="px-3 py-1.5 rounded-lg text-xs font-semibold border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 transition inline-flex items-center gap-1.5"
+                        >
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                            Export CSV
+                        </a>
+                    </div>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-left text-xs">
@@ -382,7 +424,7 @@ const reconcileLocks = () => {
 
                 <!-- Pagination -->
                 <div v-if="connection_logs?.links && connection_logs.links.length > 3" class="p-4 border-t border-gray-100 dark:border-gray-700/60">
-                    <Pagination :links="connection_logs.links" />
+                    <Pagination :paginator="connection_logs" :preserve-scroll="true" />
                 </div>
             </div>
 

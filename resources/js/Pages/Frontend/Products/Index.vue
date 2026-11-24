@@ -86,8 +86,8 @@ const activeCategoryParams = computed(() => {
 });
 const activeAttributes = computed(() => activeCategoryParams.value?.attributes || []);
 
-// Debounced search + category filter + brand + attributes + collection + sort -> router call
-const applyFilters = debounce(() => {
+// Debounced search (600ms) + category filter + brand + attributes + collection + sort -> router call
+const runFilterQuery = () => {
     // Filter out empty/null values
     const cleanAttrs = Object.fromEntries(
         Object.entries(attrs.value).filter(([_, v]) => v !== '' && v !== null)
@@ -101,9 +101,15 @@ const applyFilters = debounce(() => {
         sort:       (sort.value && sort.value !== 'default') ? sort.value : undefined,
         attrs:      Object.keys(cleanAttrs).length ? cleanAttrs : undefined,
     }, { preserveState: true, replace: true });
+};
+
+const applySearchFilter = debounce(runFilterQuery, 600);
+const applyFilters = debounce(() => {
+    applySearchFilter.cancel();
+    runFilterQuery();
 }, 300);
 
-watch(search, applyFilters);
+watch(search, applySearchFilter);
 watch(collection, applyFilters);
 watch(sort, applyFilters);
 watch(brand, applyFilters);

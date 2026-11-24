@@ -32,14 +32,16 @@ const applyFilters = () => {
 
 watch(search, () => {
     clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(applyFilters, 350);
+    searchTimeout = setTimeout(applyFilters, 600);
 });
 
 watch(status, () => {
+    clearTimeout(searchTimeout);
     applyFilters();
 });
 
 const clearFilters = () => {
+    clearTimeout(searchTimeout);
     search.value = '';
     status.value = 'all';
     applyFilters();

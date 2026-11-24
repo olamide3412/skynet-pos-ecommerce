@@ -175,7 +175,7 @@ const submit = () => {
                         Adjust Stock (Ecommerce Only)
                     </h1>
                     <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        Increase, reduce, or recount local ecommerce inventory. Every adjustment is immutably logged to the ledger.
+                        Increase, reduce, or recount local ecommerce inventory. Every adjustment is recorded in Inventory Logs.
                     </p>
                 </div>
                 <div class="flex items-center gap-2.5">
@@ -186,7 +186,7 @@ const submit = () => {
                         <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                         </svg>
-                        View Ledger
+                        Inventory Logs
                     </Link>
                     <Link
                         :href="route('admin.purchases.create')"
@@ -503,13 +503,13 @@ const submit = () => {
                 <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
                     <div>
                         <h2 class="text-base font-bold text-gray-900 dark:text-white">Recent Stock Adjustments</h2>
-                        <p class="text-xs text-gray-500 dark:text-gray-400">Last 15 manual adjustment ledger events.</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">Last 15 manual stock adjustments.</p>
                     </div>
                     <Link
                         :href="route('admin.inventory.logs.index', { action_type: 'adjustment' })"
                         class="text-xs font-semibold text-primary hover:underline"
                     >
-                        View All in Ledger →
+                        View All in Inventory Logs →
                     </Link>
                 </div>
 

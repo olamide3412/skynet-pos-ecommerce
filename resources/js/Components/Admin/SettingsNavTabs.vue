@@ -1,60 +1,79 @@
 <script setup>
 import { Link, usePage } from '@inertiajs/vue3';
-import { ref, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 
 const page = usePage();
 const navRef = ref(null);
 
-const tabs = [
+const allTabs = [
     {
         label: 'General Store Config',
         icon: '⚙️',
         route: 'admin.settings.index',
         match: 'Admin/Settings',
+        permission: 'settings.store',
     },
     {
         label: 'AI Assistant',
         icon: '🤖',
         route: 'admin.ai-settings.index',
         match: 'Admin/AiSettings',
+        superAdminOnly: true,
     },
     {
         label: 'POS Connection & Pairing',
         icon: '🔗',
         route: 'admin.pos-connection.index',
         match: 'Admin/PosConnection',
+        permission: 'pos.manage_connection',
     },
     {
         label: 'Shipping Zones & Rates',
         icon: '🚚',
         route: 'admin.shipping-zones.index',
         match: 'Admin/ShippingZones',
+        permission: 'settings.shipping_zones',
     },
     {
         label: 'Branding & Themes',
         icon: '🎨',
         route: 'admin.themes.index',
         match: 'Admin/Themes',
+        permission: 'settings.themes',
     },
     {
         label: 'Homepage & Sliders',
         icon: '🖼️',
         route: 'admin.sliders.index',
         match: 'Admin/Sliders',
+        permission: 'settings.sliders',
     },
     {
         label: 'Promo Flyers & Popups',
         icon: '🎉',
         route: 'admin.promo-flyers.index',
         match: 'Admin/PromoFlyers',
+        permission: 'settings.sliders',
     },
     {
         label: 'Database Backups',
         icon: '💾',
         route: 'admin.backups.index',
         match: 'Admin/Backups',
+        superAdminOnly: true,
     },
 ];
+
+const tabs = computed(() => {
+    const isSuper = !!page.props.auth?.isSuperAdmin;
+    const perms = page.props.auth?.permissions || {};
+    return allTabs.filter((tab) => {
+        if (isSuper) return true;
+        if (tab.superAdminOnly) return false;
+        if (tab.permission) return !!perms[tab.permission];
+        return true;
+    });
+});
 
 const canScrollLeft = ref(false);
 const canScrollRight = ref(false);

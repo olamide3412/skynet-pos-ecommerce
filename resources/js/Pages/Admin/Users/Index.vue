@@ -42,16 +42,23 @@ const filterRole   = ref(props.filters?.role || '');
 const filterStatus = ref(props.filters?.status || '');
 const perPage      = ref(props.filters?.per_page || '25');
 
-const applyFilters = debounce(() => {
+const runFilterQuery = () => {
     router.get(route('admin.users.index'), {
         search:   search.value || undefined,
         role:     filterRole.value || undefined,
         status:   filterStatus.value || undefined,
         per_page: perPage.value !== '25' ? perPage.value : undefined,
     }, { preserveState: true, replace: true });
+};
+
+const applySearchFilter = debounce(runFilterQuery, 600);
+const applyFilters = debounce(() => {
+    applySearchFilter.cancel();
+    runFilterQuery();
 }, 300);
 
-watch([search, filterRole, filterStatus, perPage], applyFilters);
+watch(search, applySearchFilter);
+watch([filterRole, filterStatus, perPage], applyFilters);
 
 const hasActiveFilters = computed(() => {
     return Boolean(search.value || filterRole.value || filterStatus.value || perPage.value !== '25');

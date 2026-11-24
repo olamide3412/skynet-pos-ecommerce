@@ -16,11 +16,11 @@ class UserController extends Controller
     public function index(Request $request)
     {
         $currentUser = auth('web')->user();
-        if (!$currentUser || !$currentUser->isSuperAdmin()) {
-            abort(403, 'Access denied. Only the Super Administrator can manage system users.');
+        if (!$currentUser || (!$currentUser->isSuperAdmin() && !$currentUser->can('users.view'))) {
+            abort(403, 'Access denied. You do not have permission to view system users.');
         }
 
-        $isSuperAdmin = true; // Guaranteed by check above
+        $isSuperAdmin = $currentUser->isSuperAdmin();
 
         $query = User::with('roles:id,name')->latest();
 
@@ -100,6 +100,11 @@ class UserController extends Controller
         $rolesToSync = $validated['roles'] ?? [];
         unset($validated['roles']);
 
+        // Prevent non-Super Admin from creating a Super Administrator
+        if (!$currentUser->isSuperAdmin() && $validated['role'] === RoleEnums::SuperAdministrator->value) {
+            abort(403, 'Only a Super Administrator can create a Super Administrator account.');
+        }
+
         $validated['password'] = Hash::make($validated['password']);
 
         $user = User::create($validated);
@@ -117,6 +122,11 @@ class UserController extends Controller
         $currentUser = auth('web')->user();
         if (!$currentUser->isSuperAdmin() && !$currentUser->can('users.edit')) {
             abort(403, 'You do not have permission to edit users.');
+        }
+
+        // Prevent non-Super Admin from editing a Super Admin or promoting to Super Admin
+        if (!$currentUser->isSuperAdmin() && ($user->isSuperAdmin() || $request->role === RoleEnums::SuperAdministrator->value)) {
+            abort(403, 'Only a Super Administrator can modify Super Administrator accounts.');
         }
 
         if ($user->id === auth()->id() && $request->status === StatusEnums::Disable->value) {
@@ -164,6 +174,15 @@ class UserController extends Controller
 
     public function toggleStatus(User $user)
     {
+        $currentUser = auth('web')->user();
+        if (!$currentUser || (!$currentUser->isSuperAdmin() && !$currentUser->can('users.disable'))) {
+            abort(403, 'You do not have permission to enable or disable user accounts.');
+        }
+
+        if (!$currentUser->isSuperAdmin() && $user->isSuperAdmin()) {
+            abort(403, 'Only a Super Administrator can modify a Super Administrator account.');
+        }
+
         if ($user->id === auth()->id()) {
             return redirect()->back()->with('error', 'You cannot disable your own account.');
         }
@@ -181,6 +200,15 @@ class UserController extends Controller
 
     public function resetPassword(Request $request, User $user)
     {
+        $currentUser = auth('web')->user();
+        if (!$currentUser || (!$currentUser->isSuperAdmin() && !$currentUser->can('users.reset_password'))) {
+            abort(403, 'You do not have permission to reset user passwords.');
+        }
+
+        if (!$currentUser->isSuperAdmin() && $user->isSuperAdmin()) {
+            abort(403, 'Only a Super Administrator can reset a Super Administrator password.');
+        }
+
         $validated = $request->validate([
             'password' => 'required|string|min:8|confirmed',
         ]);
@@ -194,6 +222,11 @@ class UserController extends Controller
 
     public function destroy(User $user)
     {
+        $currentUser = auth('web')->user();
+        if (!$currentUser || !$currentUser->isSuperAdmin()) {
+            abort(403, 'Only a Super Administrator can delete system users.');
+        }
+
         if ($user->id === auth()->id()) {
             return redirect()->back()->with('error', 'You cannot delete your own account.');
         }

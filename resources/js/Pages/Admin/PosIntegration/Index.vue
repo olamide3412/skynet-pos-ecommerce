@@ -1,6 +1,6 @@
 <script setup>
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useToast } from 'vue-toastification';
 import AdminLayout from '@/Layouts/AdminLayout.vue';
 import Pagination from '@/Components/Pagination.vue';
@@ -10,7 +10,11 @@ const toast = useToast();
 const props = defineProps({
     connection: Object,
     items: Object,
-    logs: Array,
+    logs: [Array, Object],
+    active_tab: {
+        type: String,
+        default: 'catalog',
+    },
     stats: Object,
     filters: Object,
     pos_categories: Array,
@@ -19,14 +23,41 @@ const props = defineProps({
     ecommerce_brands: Array,
 });
 
+const logsList = computed(() => {
+    if (Array.isArray(props.logs)) return props.logs;
+    return props.logs?.data || [];
+});
+
+const totalLogsCount = computed(() => {
+    if (props.logs?.total !== undefined) return props.logs.total;
+    return logsList.value.length;
+});
+
 const search = ref(props.filters?.search || '');
 const mappingStatus = ref(props.filters?.mapping_status || '');
 const posCategory = ref(props.filters?.pos_category || '');
 const posBrand = ref(props.filters?.pos_brand || '');
 const perPage = ref(props.filters?.per_page || '25');
-const activeTab = ref('catalog'); // 'catalog' | 'logs'
+const activeTab = ref(props.active_tab || 'catalog'); // 'catalog' | 'logs'
+watch(() => props.active_tab, (val) => {
+    if (val) activeTab.value = val;
+});
+const clearLogsDays = ref(3);
+const isClearingLogs = ref(false);
 const selectedItems = ref([]);
 const isSyncing = ref(false);
+
+const clearSyncLogs = () => {
+    if (!confirm(`Delete all synchronization logs older than ${clearLogsDays.value} days? This action cannot be undone.`)) return;
+    isClearingLogs.value = true;
+    router.delete(route('admin.pos-integration.logs.clear'), {
+        data: { days: clearLogsDays.value },
+        preserveScroll: true,
+        onFinish: () => {
+            isClearingLogs.value = false;
+        },
+    });
+};
 
 // Import Modal State
 const showImportModal = ref(false);
@@ -517,7 +548,7 @@ const confirmImport = () => {
                     class="pb-3 text-sm font-medium border-b-2 transition"
                     :class="activeTab === 'logs' ? 'border-primary text-primary font-bold' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'"
                 >
-                    Synchronization Logs ({{ logs.length }})
+                    Synchronization Logs ({{ totalLogsCount }})
                 </button>
             </div>
 
@@ -526,23 +557,34 @@ const confirmImport = () => {
                 <!-- Filters & Bulk Actions -->
                 <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xs space-y-3">
                     <div class="flex flex-wrap items-center gap-2.5">
-                        <!-- Search input -->
-                        <div class="relative flex-1 min-w-[220px]">
-                            <input
-                                v-model="search"
-                                @keyup.enter="handleFilter"
-                                type="text"
-                                placeholder="Search by name, barcode, SKU..."
-                                class="w-full text-sm pl-9 pr-8 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary shadow-xs"
-                            />
-                            <svg class="w-4 h-4 text-gray-400 absolute left-3 top-2.5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                        <!-- Search input + Search button -->
+                        <div class="flex items-center gap-2 flex-1 min-w-[260px]">
+                            <div class="relative flex-1">
+                                <input
+                                    v-model="search"
+                                    @keyup.enter="handleFilter"
+                                    type="text"
+                                    placeholder="Search by name, barcode, SKU..."
+                                    class="w-full text-sm pl-9 pr-8 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary shadow-xs"
+                                />
+                                <svg class="w-4 h-4 text-gray-400 absolute left-3 top-2.5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                <button
+                                    v-if="search"
+                                    type="button"
+                                    @click="search = ''; handleFilter()"
+                                    class="absolute right-2.5 top-2.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer"
+                                    title="Clear search"
+                                >
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                </button>
+                            </div>
                             <button
-                                v-if="search"
                                 type="button"
-                                @click="search = ''; handleFilter()"
-                                class="absolute right-2.5 top-2.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                                @click="handleFilter"
+                                class="px-3.5 py-2 rounded-lg bg-primary hover:opacity-90 text-white text-sm font-semibold transition shadow-xs inline-flex items-center gap-1.5 shrink-0 cursor-pointer"
                             >
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                <span>Search</span>
                             </button>
                         </div>
 
@@ -780,8 +822,41 @@ const confirmImport = () => {
 
             <!-- TAB 2: Sync Logs -->
             <div v-if="activeTab === 'logs'" class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden shadow-xs">
-                <div class="p-4 border-b border-gray-200 dark:border-gray-700 font-semibold text-gray-900 dark:text-white">
-                    Recent Integration Audit Trails
+                <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div class="flex items-center gap-2.5">
+                        <span class="font-semibold text-gray-900 dark:text-white">
+                            Recent Integration Audit Trails
+                        </span>
+                        <span v-if="totalLogsCount > 0" class="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                            {{ totalLogsCount }} Total
+                        </span>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <select
+                            v-model="clearLogsDays"
+                            class="text-xs rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 py-1.5 pl-2.5 pr-7 focus:ring-2 focus:ring-primary"
+                        >
+                            <option :value="3">Older than 3 days</option>
+                            <option :value="7">Older than 7 days</option>
+                            <option :value="30">Older than 30 days</option>
+                        </select>
+                        <button
+                            type="button"
+                            @click="clearSyncLogs"
+                            :disabled="isClearingLogs || totalLogsCount === 0"
+                            class="px-3 py-1.5 rounded-lg text-xs font-semibold border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-900/30 hover:bg-rose-100 dark:hover:bg-rose-900/50 transition inline-flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                            {{ isClearingLogs ? 'Clearing...' : 'Clear Logs' }}
+                        </button>
+                        <a
+                            :href="route('admin.pos-integration.logs.export')"
+                            class="px-3 py-1.5 rounded-lg text-xs font-semibold border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 transition inline-flex items-center gap-1.5"
+                        >
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                            Export CSV
+                        </a>
+                    </div>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-left text-xs">
@@ -795,9 +870,9 @@ const confirmImport = () => {
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200 dark:divide-gray-700 text-gray-800 dark:text-gray-200 font-mono">
-                            <tr v-for="log in logs" :key="log.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/60 transition">
+                            <tr v-for="log in logsList" :key="log.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/60 transition">
                                 <td class="p-3 whitespace-nowrap text-gray-500 font-sans">
-                                    {{ new Date(log.created_at).toLocaleTimeString() }}
+                                    {{ new Date(log.created_at).toLocaleString() }}
                                 </td>
                                 <td class="p-3 font-semibold text-gray-700 dark:text-gray-300">
                                     {{ log.type }}
@@ -822,13 +897,18 @@ const confirmImport = () => {
                                     {{ log.message }}
                                 </td>
                             </tr>
-                            <tr v-if="!logs || !logs.length">
+                            <tr v-if="!logsList || !logsList.length">
                                 <td colspan="5" class="p-6 text-center text-gray-500 font-sans">
                                     No synchronization logs recorded yet.
                                 </td>
                             </tr>
                         </tbody>
                     </table>
+                </div>
+
+                <!-- Pagination -->
+                <div v-if="logs?.links && logs.links.length > 3" class="p-4 border-t border-gray-100 dark:border-gray-700/60">
+                    <Pagination :paginator="logs" :preserve-scroll="true" />
                 </div>
             </div>
         </div>

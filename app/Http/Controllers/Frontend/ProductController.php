@@ -6,8 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\Brand;
 use App\Models\Product;
 use App\Models\Category;
+use App\Models\StoreSetting;
 use App\Models\Wishlist;
 use App\Services\Storefront\StorefrontListingExpander;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Illuminate\Http\Request;
 
@@ -270,13 +272,86 @@ class ProductController extends Controller
 
         // Preselect selling unit if passed via ?unit= parameter
         $preselectedUnitId = null;
+        $requestedUnit = null;
         if ($request->has('unit')) {
             $requestedUnit = $product->posUnits()->where('id', $request->query('unit'))->where('is_enabled_online', true)->first();
             if ($requestedUnit) {
                 $preselectedUnitId = (int) $requestedUnit->id;
             }
         }
-        
+
+        // Build Open Graph / WhatsApp / Social Sharing metadata (server-rendered in app.blade.php)
+        $companyName = StoreSetting::get('company_name', config('app.name'));
+        if ($requestedUnit) {
+            $unitLabel = $requestedUnit->online_label ?: $requestedUnit->unit_name;
+            $displayTitle = "{$product->name} ({$unitLabel})";
+            $displayPrice = (float) $requestedUnit->synced_standard_price;
+        } else {
+            $displayTitle = $product->meta_title ?: $product->name;
+            $displayPrice = (float) ($product->effective_price ?: $product->discount_price ?: $product->price);
+        }
+
+        $formattedPrice = $displayPrice > 0
+            ? '₦' . number_format($displayPrice, fmod($displayPrice, 1) == 0.0 ? 0 : 2)
+            : null;
+        $ogTitle = $formattedPrice ? "{$displayTitle} — {$formattedPrice}" : $displayTitle;
+
+        $rawDesc = $product->meta_description ?: $product->short_description ?: $product->description;
+        $cleanDesc = trim(preg_replace('/\s+/', ' ', html_entity_decode(strip_tags((string) $rawDesc), ENT_QUOTES | ENT_HTML5, 'UTF-8')));
+        $ogDescription = $cleanDesc !== ''
+            ? Str::limit($cleanDesc, 160)
+            : ($formattedPrice ? "Buy {$displayTitle} for {$formattedPrice} at {$companyName}." : "Shop {$displayTitle} at {$companyName}.");
+
+        $imagePath = null;
+        if ($requestedUnit && !empty($requestedUnit->image)) {
+            $imagePath = $requestedUnit->image;
+        } elseif (!empty($product->image)) {
+            $imagePath = $product->image;
+        } elseif (is_array($product->images) && !empty($product->images[0])) {
+            $imagePath = $product->images[0];
+        }
+
+        $ogImage = null;
+        $imageWidth = null;
+        $imageHeight = null;
+        $imageType = null;
+
+        if ($imagePath) {
+            if (Str::startsWith($imagePath, ['http://', 'https://'])) {
+                $ogImage = $imagePath;
+            } else {
+                $cleanImagePath = ltrim($imagePath, '/');
+                $ogImage = asset('storage/' . $cleanImagePath);
+
+                $localFile = storage_path('app/public/' . $cleanImagePath);
+                if (!is_file($localFile)) {
+                    $localFile = public_path('storage/' . $cleanImagePath);
+                }
+                if (is_file($localFile)) {
+                    $imgInfo = @getimagesize($localFile);
+                    if (is_array($imgInfo)) {
+                        $imageWidth = $imgInfo[0] ?? null;
+                        $imageHeight = $imgInfo[1] ?? null;
+                        $imageType = $imgInfo['mime'] ?? null;
+                    }
+                }
+            }
+        }
+
+        $meta = array_filter([
+            'title'        => $ogTitle,
+            'description'  => $ogDescription,
+            'keywords'     => $product->meta_keywords ?: null,
+            'image'        => $ogImage,
+            'image_width'  => $imageWidth,
+            'image_height' => $imageHeight,
+            'image_type'   => $imageType,
+            'type'         => 'product',
+            'url'          => $request->fullUrl(),
+            'price'        => $displayPrice > 0 ? number_format($displayPrice, 2, '.', '') : null,
+            'currency'     => 'NGN',
+        ], fn ($v) => $v !== null && $v !== '');
+
         return Inertia::render('Frontend/Products/Show', [
             'product'             => $product->load([
                 'category',
@@ -292,7 +367,7 @@ class ProductController extends Controller
             'reviews_count'       => $reviewsCount,
             'user_review'         => $userReview,
             'preselected_unit_id' => $preselectedUnitId,
-        ]);
+        ])->withViewData(['meta' => $meta]);
     }
 
     private function getRelated(Product $product): \Illuminate\Support\Collection

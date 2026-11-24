@@ -56,13 +56,19 @@ const formatPrice = (val) => {
 };
 
 // Filter Navigation
-const applyFilters = debounce(() => {
+const runFilterQuery = () => {
     router.get(route('admin.pod-cash.index'), {
         tab: activeTab.value,
         rider_id: selectedRiderId.value || undefined,
         search: search.value || undefined,
         date_preset: datePreset.value !== 'all' ? datePreset.value : undefined,
     }, { preserveState: true, replace: true });
+};
+
+const applySearchFilter = debounce(runFilterQuery, 600);
+const applyFilters = debounce(() => {
+    applySearchFilter.cancel();
+    runFilterQuery();
 }, 300);
 
 const switchTab = (tabName) => {
@@ -77,7 +83,8 @@ const filterByRider = (riderId) => {
     applyFilters();
 };
 
-watch([search, selectedRiderId, datePreset], applyFilters);
+watch(search, applySearchFilter);
+watch([selectedRiderId, datePreset], applyFilters);
 
 const clearFilters = () => {
     search.value = '';

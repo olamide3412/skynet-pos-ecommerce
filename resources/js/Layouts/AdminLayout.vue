@@ -35,10 +35,10 @@ const navLinks = [
         label: 'Inventory',
         icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4',
         children: [
-            { label: 'Inventory Logs', route: 'admin.inventory.logs.index', match: 'Admin/Inventory/Logs', permission: 'products.view' },
-            { label: 'Stock Adjustment', route: 'admin.inventory.adjustments.index', match: 'Admin/Inventory/Adjustments', permission: 'products.manage' },
-            { label: 'Stock Purchases', route: 'admin.purchases.index', match: 'Admin/Purchases', permission: 'products.manage' },
-            { label: 'New Purchase', route: 'admin.purchases.create', match: 'Admin/Purchases/Create', permission: 'products.manage' },
+            { label: 'Inventory Logs', route: 'admin.inventory.logs.index', match: 'Admin/Inventory/Logs', permissions: ['products.view', 'inventory.view_stock_alerts'] },
+            { label: 'Stock Adjustment', route: 'admin.inventory.adjustments.index', match: 'Admin/Inventory/Adjustments', permission: 'products.edit' },
+            { label: 'Stock Purchases', route: 'admin.purchases.index', match: ['Admin/Purchases/Index', 'Admin/Purchases/Show'], permission: 'products.edit' },
+            { label: 'New Purchase', route: 'admin.purchases.create', match: 'Admin/Purchases/Create', permission: 'products.edit' },
         ]
     },
     {
@@ -81,7 +81,7 @@ const navLinks = [
         label: 'Users',
         route: 'admin.users.index',
         match: 'Admin/Users',
-        superAdminOnly: true,
+        permission: 'users.view',
         icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z',
     },
     {
@@ -107,17 +107,16 @@ const navLinks = [
     },
     {
         label: 'Settings',
-        superAdminOnly: true,
         icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z',
         children: [
-            { label: 'Store Config', route: 'admin.settings.index', match: 'Admin/Settings', superAdminOnly: true },
+            { label: 'Store Config', route: 'admin.settings.index', match: 'Admin/Settings', permission: 'settings.store' },
             { label: 'AI Assistant', route: 'admin.ai-settings.index', match: 'Admin/AiSettings', superAdminOnly: true },
-            { label: 'Promo Flyers & Popups', route: 'admin.promo-flyers.index', match: 'Admin/PromoFlyers', superAdminOnly: true },
+            { label: 'Promo Flyers & Popups', route: 'admin.promo-flyers.index', match: 'Admin/PromoFlyers', permission: 'settings.sliders' },
             { label: 'Roles & Permissions', route: 'admin.roles.index', match: 'Admin/Roles', superAdminOnly: true },
-            { label: 'POS Connection', route: 'admin.pos-connection.index', match: 'Admin/PosConnection', superAdminOnly: true },
-            { label: 'Shipping Zones', route: 'admin.shipping-zones.index', match: 'Admin/ShippingZones', superAdminOnly: true },
-            { label: 'Color Themes', route: 'admin.themes.index', match: 'Admin/Themes', superAdminOnly: true },
-            { label: 'Homepage & Sliders', route: 'admin.sliders.index', match: 'Admin/Sliders', superAdminOnly: true },
+            { label: 'POS Connection', route: 'admin.pos-connection.index', match: 'Admin/PosConnection', permission: 'pos.manage_connection' },
+            { label: 'Shipping Zones', route: 'admin.shipping-zones.index', match: 'Admin/ShippingZones', permission: 'settings.shipping_zones' },
+            { label: 'Color Themes', route: 'admin.themes.index', match: 'Admin/Themes', permission: 'settings.themes' },
+            { label: 'Homepage & Sliders', route: 'admin.sliders.index', match: 'Admin/Sliders', permission: 'settings.sliders' },
             { label: 'Database Backups', route: 'admin.backups.index', match: 'Admin/Backups', superAdminOnly: true },
         ]
     },
@@ -173,18 +172,26 @@ const filteredNavLinks = computed(() => {
 
 const expandedMenus = ref([]);
 
+const matchesComponent = (comp, match) => {
+    if (!match) return false;
+    if (Array.isArray(match)) {
+        return match.some(m => comp === m || comp.startsWith(m));
+    }
+    return comp === match || comp.startsWith(match);
+};
+
 const isActive = (link) => {
     const comp = usePage().component;
-    if (link.match && (comp === link.match || comp.startsWith(link.match))) return true;
+    if (matchesComponent(comp, link.match)) return true;
     if (link.children) {
-        return link.children.some(child => comp === child.match || comp.startsWith(child.match));
+        return link.children.some(child => matchesComponent(comp, child.match));
     }
     return false;
 };
 
 const isChildActive = (child) => {
     const comp = usePage().component;
-    return comp === child.match || comp.startsWith(child.match);
+    return matchesComponent(comp, child.match);
 };
 
 const toggleMenu = (label) => {

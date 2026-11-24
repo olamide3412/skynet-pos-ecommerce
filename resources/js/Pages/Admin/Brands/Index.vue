@@ -29,10 +29,13 @@ const applyFilters = () => {
 
 watch(search, () => {
     clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(applyFilters, 300);
+    searchTimeout = setTimeout(applyFilters, 600);
 });
 
-watch([statusFilter, sourceFilter], applyFilters);
+watch([statusFilter, sourceFilter], () => {
+    clearTimeout(searchTimeout);
+    applyFilters();
+});
 
 const generateSlug = (text) => {
     return (text || '')

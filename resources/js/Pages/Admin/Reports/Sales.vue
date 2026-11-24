@@ -50,7 +50,7 @@ const assignStaffId = ref('');
 const reconcileNote = ref('');
 const isSubmitting = ref(false);
 
-const applyFilters = debounce(() => {
+const runFilterQuery = () => {
     router.get(route('admin.reports.sales'), {
         preset: preset.value,
         start_date: preset.value === 'custom' ? startDate.value : undefined,
@@ -61,10 +61,16 @@ const applyFilters = debounce(() => {
         status: status.value || undefined,
         search: search.value || undefined,
     }, { preserveState: true, replace: true });
+};
+
+const applySearchFilter = debounce(runFilterQuery, 600);
+const applyFilters = debounce(() => {
+    applySearchFilter.cancel();
+    runFilterQuery();
 }, 300);
 
 watch([preset, staffId, paymentMethod, podStatus, status], applyFilters);
-watch(search, applyFilters);
+watch(search, applySearchFilter);
 
 const onPresetChange = (newPreset) => {
     preset.value = newPreset;

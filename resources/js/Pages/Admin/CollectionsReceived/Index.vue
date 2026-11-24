@@ -29,7 +29,7 @@ const formatPrice = (val) => {
     return '₦' + Number(val).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
-const applyFilters = debounce(() => {
+const runFilterQuery = () => {
     router.get(route('admin.collections-received.index'), {
         preset:     preset.value,
         start_date: preset.value === 'custom' ? startDate.value : undefined,
@@ -39,6 +39,12 @@ const applyFilters = debounce(() => {
         channel:    selectedChannel.value !== 'all' ? selectedChannel.value : undefined,
         search:     search.value || undefined,
     }, { preserveState: true, replace: true });
+};
+
+const applySearchFilter = debounce(runFilterQuery, 600);
+const applyFilters = debounce(() => {
+    applySearchFilter.cancel();
+    runFilterQuery();
 }, 300);
 
 const selectPreset = (newPreset) => {
@@ -55,7 +61,8 @@ const filterByCashier = (cashierId) => {
     applyFilters();
 };
 
-watch([selectedCashierId, selectedRiderId, selectedChannel, search], applyFilters);
+watch(search, applySearchFilter);
+watch([selectedCashierId, selectedRiderId, selectedChannel], applyFilters);
 
 const clearFilters = () => {
     preset.value = 'today';

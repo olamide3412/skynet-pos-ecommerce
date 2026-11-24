@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Inertia\Inertia;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -146,7 +147,22 @@ class RevenueController extends Controller
                 return $day;
             });
 
-        // Product-level profit breakdown (Top 50 products in period)
+        // Paginate Daily Breakdown independently via ?daily_page=
+        $dailyPerPage = 15;
+        $dailyPage = max(1, (int) $request->input('daily_page', 1));
+        $dailyPaginator = new LengthAwarePaginator(
+            $dailyItems->forPage($dailyPage, $dailyPerPage)->values(),
+            $dailyItems->count(),
+            $dailyPerPage,
+            $dailyPage,
+            [
+                'path'     => $request->url(),
+                'pageName' => 'daily_page',
+                'query'    => $request->except('daily_page'),
+            ]
+        );
+
+        // Product-level profit breakdown (all products in period, paginated 15 per page via ?products_page=)
         $productProfits = (clone $filteredItemsQuery)
             ->selectRaw("
                 order_items.product_id,
@@ -165,7 +181,6 @@ class RevenueController extends Controller
                 'products.pos_item_id'
             )
             ->orderByDesc('revenue')
-            ->limit(50)
             ->get()
             ->map(function ($row) {
                 $row->revenue = (float) $row->revenue;
@@ -173,6 +188,20 @@ class RevenueController extends Controller
                 $row->profit  = $row->revenue - $row->cost;
                 return $row;
             });
+
+        $productsPerPage = 15;
+        $productsPage = max(1, (int) $request->input('products_page', 1));
+        $productProfitsPaginator = new LengthAwarePaginator(
+            $productProfits->forPage($productsPage, $productsPerPage)->values(),
+            $productProfits->count(),
+            $productsPerPage,
+            $productsPage,
+            [
+                'path'     => $request->url(),
+                'pageName' => 'products_page',
+                'query'    => $request->except('products_page'),
+            ]
+        );
 
         // Revenue by payment method (MySQL ONLY_FULL_GROUP_BY safe)
         $revenueByMethod = (clone $ordersQuery)
@@ -224,8 +253,8 @@ class RevenueController extends Controller
                     'margin'     => $ecomMargin,
                 ],
             ],
-            'chart_data'      => $dailyItems,
-            'product_profits' => $productProfits,
+            'chart_data'      => $dailyPaginator,
+            'product_profits' => $productProfitsPaginator,
             'method_stats'    => $revenueByMethod,
             'filters'         => [
                 'start_date'       => $startDate->format('Y-m-d'),

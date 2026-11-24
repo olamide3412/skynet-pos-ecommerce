@@ -1,7 +1,7 @@
 import './bootstrap';
 import '../css/app.css';
 import { createApp, h } from 'vue';
-import { createInertiaApp, Head, Link } from '@inertiajs/vue3'
+import { createInertiaApp, Head, Link, router } from '@inertiajs/vue3'
 import Layout from './Layouts/Layout.vue';
 import { ZiggyVue } from '../../vendor/tightenco/ziggy';
 import Toast from 'vue-toastification';
@@ -21,6 +21,14 @@ import FlashMessages from './Components/FlashMessages.vue';
 const pinia = createPinia();
 
 import { FontAwesomeIcon } from './fontawesome';
+
+// Prevent raw 419 Page Expired iframe modal in Inertia if a stale token response ever slips through
+router.on('invalid', (event) => {
+    if (event.detail?.response?.status === 419) {
+        event.preventDefault();
+        window.location.reload();
+    }
+});
 
 createInertiaApp({
     title: (title) => `${title}`,

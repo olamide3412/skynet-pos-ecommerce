@@ -221,45 +221,93 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/profile', [ProfileController::class , 'edit'])->name('profile.edit');
             Route::put('/profile/password', [ProfileController::class , 'updatePassword'])->name('profile.password.update');
 
-            Route::resource('categories', CategoryController::class)->except(['create', 'edit', 'show']);
+            // Catalog: Categories, Brands, Attributes, Products
+            Route::middleware('permission:categories.manage')->group(function () {
+                Route::resource('categories', CategoryController::class)->except(['create', 'edit', 'show']);
+            });
+
             Route::middleware('permission:brands.manage')->group(function () {
                 Route::get('brands/search', [\App\Http\Controllers\Admin\BrandController::class, 'search'])->name('brands.search');
                 Route::resource('brands', \App\Http\Controllers\Admin\BrandController::class)->except(['create', 'edit', 'show']);
             });
-            Route::post('sliders/settings', [SliderController::class, 'updateSettings'])->name('sliders.settings.update');
-            Route::resource('sliders', SliderController::class)->except(['create', 'edit', 'show']);
-            Route::get('products/export', [AdminProductController::class, 'export'])->name('products.export');
-            Route::post('products/import', [AdminProductController::class, 'import'])->name('products.import');
-            Route::post('products/bulk-action', [AdminProductController::class , 'bulkAction'])->name('products.bulk-action');
-            Route::resource('products', AdminProductController::class)->except(['create', 'edit', 'show']);
-            Route::get('products/search-related', [AdminProductController::class , 'searchRelated'])->name('products.search-related');
-            Route::get('products/related-by-ids', [AdminProductController::class , 'relatedByIds'])->name('products.related-by-ids');
 
-            // Inventory Adjustments & Stock Movement Ledger
-            Route::get('inventory/adjustments', [\App\Http\Controllers\Admin\InventoryAdjustmentController::class, 'index'])->name('inventory.adjustments.index');
-            Route::post('inventory/adjustments', [\App\Http\Controllers\Admin\InventoryAdjustmentController::class, 'store'])->name('inventory.adjustments.store');
-            Route::get('inventory/logs', [\App\Http\Controllers\Admin\InventoryLogController::class, 'index'])->name('inventory.logs.index');
-            Route::get('inventory/logs/export', [\App\Http\Controllers\Admin\InventoryLogController::class, 'exportCsv'])->name('inventory.logs.export');
-            Route::get('inventory/products/search', [\App\Http\Controllers\Admin\InventoryLogController::class, 'searchProducts'])->name('inventory.products.search');
-
-            // Stock Purchasing (Ecommerce Only)
-            Route::get('purchases', [\App\Http\Controllers\Admin\PurchaseController::class, 'index'])->name('purchases.index');
-            Route::get('purchases/create', [\App\Http\Controllers\Admin\PurchaseController::class, 'create'])->name('purchases.create');
-            Route::get('purchases/products/search', [\App\Http\Controllers\Admin\PurchaseController::class, 'searchProducts'])->name('purchases.products.search');
-            Route::post('purchases', [\App\Http\Controllers\Admin\PurchaseController::class, 'store'])->name('purchases.store');
-            Route::get('purchases/{purchase}', [\App\Http\Controllers\Admin\PurchaseController::class, 'show'])->name('purchases.show');
-            // AI Product Content & Assistant
-            Route::post('ai/generate-product-description', [\App\Http\Controllers\Admin\AiController::class, 'generateProductDescription'])->name('ai.generate-product-description');
-            Route::post('ai/suggest-related-products', [\App\Http\Controllers\Admin\AiController::class, 'suggestRelatedProducts'])->name('ai.suggest-related-products');
-            Route::post('ai/test-connection', [\App\Http\Controllers\Admin\AiController::class, 'testConnection'])->name('ai.test-connection');
-            Route::resource('attributes', \App\Http\Controllers\Admin\AttributeController::class)->except(['create', 'edit', 'show']);
-
-            // System Users Management (Strictly Super Administrator Only)
-            Route::middleware('super_admin')->group(function () {
-                Route::patch('users/{user}/toggle-status', [\App\Http\Controllers\Admin\UserController::class, 'toggleStatus'])->name('users.toggle-status');
-                Route::put('users/{user}/reset-password', [\App\Http\Controllers\Admin\UserController::class, 'resetPassword'])->name('users.reset-password');
-                Route::resource('users', \App\Http\Controllers\Admin\UserController::class)->except(['create', 'edit', 'show']);
+            Route::middleware('permission:attributes.manage')->group(function () {
+                Route::resource('attributes', \App\Http\Controllers\Admin\AttributeController::class)->except(['create', 'edit', 'show']);
             });
+
+            // Homepage Sliders & Promo Flyers
+            Route::middleware('permission:settings.sliders')->group(function () {
+                Route::post('sliders/settings', [SliderController::class, 'updateSettings'])->name('sliders.settings.update');
+                Route::resource('sliders', SliderController::class)->except(['create', 'edit', 'show']);
+                Route::get('promo-flyers', [\App\Http\Controllers\Admin\PromoFlyerController::class, 'index'])->name('promo-flyers.index');
+                Route::post('promo-flyers', [\App\Http\Controllers\Admin\PromoFlyerController::class, 'update'])->name('promo-flyers.update');
+            });
+
+            // Products (granular CRUD + bulk actions)
+            Route::middleware('permission:products.view')->group(function () {
+                Route::get('products', [AdminProductController::class, 'index'])->name('products.index');
+                Route::get('products/export', [AdminProductController::class, 'export'])->name('products.export');
+                Route::get('products/search-related', [AdminProductController::class, 'searchRelated'])->name('products.search-related');
+                Route::get('products/related-by-ids', [AdminProductController::class, 'relatedByIds'])->name('products.related-by-ids');
+            });
+            Route::middleware('permission:products.create')->group(function () {
+                Route::post('products', [AdminProductController::class, 'store'])->name('products.store');
+                Route::post('products/import', [AdminProductController::class, 'import'])->name('products.import');
+            });
+            Route::middleware('permission:products.edit')->group(function () {
+                Route::match(['put', 'patch'], 'products/{product}', [AdminProductController::class, 'update'])->name('products.update');
+            });
+            Route::middleware('permission:products.delete')->group(function () {
+                Route::delete('products/{product}', [AdminProductController::class, 'destroy'])->name('products.destroy');
+            });
+            Route::middleware('permission:products.bulk_actions')->group(function () {
+                Route::post('products/bulk-action', [AdminProductController::class, 'bulkAction'])->name('products.bulk-action');
+            });
+
+            // Inventory Logs, Adjustments & Stock Purchasing (Ecommerce Only)
+            Route::middleware('permission:products.view|inventory.view_stock_alerts')->group(function () {
+                Route::get('inventory/logs', [\App\Http\Controllers\Admin\InventoryLogController::class, 'index'])->name('inventory.logs.index');
+                Route::get('inventory/logs/export', [\App\Http\Controllers\Admin\InventoryLogController::class, 'exportCsv'])->name('inventory.logs.export');
+                Route::get('inventory/products/search', [\App\Http\Controllers\Admin\InventoryLogController::class, 'searchProducts'])->name('inventory.products.search');
+            });
+            Route::middleware('permission:products.edit')->group(function () {
+                Route::get('inventory/adjustments', [\App\Http\Controllers\Admin\InventoryAdjustmentController::class, 'index'])->name('inventory.adjustments.index');
+                Route::post('inventory/adjustments', [\App\Http\Controllers\Admin\InventoryAdjustmentController::class, 'store'])->name('inventory.adjustments.store');
+                Route::get('purchases', [\App\Http\Controllers\Admin\PurchaseController::class, 'index'])->name('purchases.index');
+                Route::get('purchases/create', [\App\Http\Controllers\Admin\PurchaseController::class, 'create'])->name('purchases.create');
+                Route::get('purchases/products/search', [\App\Http\Controllers\Admin\PurchaseController::class, 'searchProducts'])->name('purchases.products.search');
+                Route::post('purchases', [\App\Http\Controllers\Admin\PurchaseController::class, 'store'])->name('purchases.store');
+                Route::get('purchases/{purchase}', [\App\Http\Controllers\Admin\PurchaseController::class, 'show'])->name('purchases.show');
+            });
+
+            // AI Product Content & Assistant
+            Route::middleware('permission:products.create|products.edit')->group(function () {
+                Route::post('ai/generate-product-description', [\App\Http\Controllers\Admin\AiController::class, 'generateProductDescription'])->name('ai.generate-product-description');
+                Route::post('ai/suggest-related-products', [\App\Http\Controllers\Admin\AiController::class, 'suggestRelatedProducts'])->name('ai.suggest-related-products');
+            });
+            Route::post('ai/test-connection', [\App\Http\Controllers\Admin\AiController::class, 'testConnection'])
+                ->middleware('super_admin')
+                ->name('ai.test-connection');
+
+            // System Users Management (Permission-based, Super Admin safeguarded in controller)
+            Route::get('users', [\App\Http\Controllers\Admin\UserController::class, 'index'])
+                ->middleware('permission:users.view')
+                ->name('users.index');
+            Route::post('users', [\App\Http\Controllers\Admin\UserController::class, 'store'])
+                ->middleware('permission:users.create')
+                ->name('users.store');
+            Route::match(['put', 'patch'], 'users/{user}', [\App\Http\Controllers\Admin\UserController::class, 'update'])
+                ->middleware('permission:users.edit')
+                ->name('users.update');
+            Route::patch('users/{user}/toggle-status', [\App\Http\Controllers\Admin\UserController::class, 'toggleStatus'])
+                ->middleware('permission:users.disable')
+                ->name('users.toggle-status');
+            Route::put('users/{user}/reset-password', [\App\Http\Controllers\Admin\UserController::class, 'resetPassword'])
+                ->middleware('permission:users.reset_password')
+                ->name('users.reset-password');
+            Route::delete('users/{user}', [\App\Http\Controllers\Admin\UserController::class, 'destroy'])
+                ->middleware('super_admin')
+                ->name('users.destroy');
 
             // Customer Management (Strictly Admin and Super Admin Only)
             Route::middleware('admin_only')->group(function () {
@@ -268,54 +316,90 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::resource('customers', \App\Http\Controllers\Admin\CustomerController::class)->only(['index', 'show', 'update', 'destroy']);
             });
 
-            Route::get('orders', [OrderController::class , 'index'])->name('orders.index');
-            Route::get('orders/{order}', [OrderController::class , 'show'])->name('orders.show');
-            Route::get('orders/{order}/invoice', [OrderController::class , 'invoice'])->name('orders.invoice');
-            Route::put('orders/{order}/status', [OrderController::class , 'updateStatus'])->name('orders.status');
-            Route::put('orders/{order}/payment-status', [OrderController::class , 'updatePaymentStatus'])->name('orders.payment-status');
-            Route::post('orders/{order}/add-note', [OrderController::class, 'addNote'])->name('orders.add-note');
+            // Orders & Fulfillment
+            Route::middleware('permission:orders.view|orders.view_all')->group(function () {
+                Route::get('orders', [OrderController::class, 'index'])->name('orders.index');
+                Route::get('orders/{order}', [OrderController::class, 'show'])->name('orders.show');
+                Route::post('orders/{order}/add-note', [OrderController::class, 'addNote'])->name('orders.add-note');
+            });
+            Route::get('orders/{order}/invoice', [OrderController::class, 'invoice'])
+                ->middleware('permission:orders.print_invoice|orders.view|orders.view_all')
+                ->name('orders.invoice');
+            Route::middleware('permission:orders.update_status')->group(function () {
+                Route::put('orders/{order}/status', [OrderController::class, 'updateStatus'])->name('orders.status');
+                Route::put('orders/{order}/payment-status', [OrderController::class, 'updatePaymentStatus'])->name('orders.payment-status');
+            });
 
-            Route::get('revenue', [\App\Http\Controllers\Admin\RevenueController::class, 'index'])->name('revenue.index');
-            Route::get('reports/end-of-day', [\App\Http\Controllers\Admin\EndOfDayReportController::class, 'index'])->name('reports.end-of-day');
-            Route::get('reports/sales', [\App\Http\Controllers\Admin\SalesReportController::class, 'index'])->name('reports.sales');
-            Route::get('reports/sales/export', [\App\Http\Controllers\Admin\SalesReportController::class, 'exportCsv'])->name('reports.sales.export');
-            Route::get('reports/search-analytics', [\App\Http\Controllers\Admin\SearchAnalyticsController::class, 'index'])->name('reports.search-analytics');
-            Route::post('orders/{order}/assign-staff', [\App\Http\Controllers\Admin\SalesReportController::class, 'assignStaff'])->name('orders.assign-staff');
-            Route::post('orders/{order}/mark-cash-collected', [\App\Http\Controllers\Admin\SalesReportController::class, 'markCashCollected'])->name('orders.mark-cash-collected');
-            Route::post('orders/{order}/mark-cash-remitted', [\App\Http\Controllers\Admin\SalesReportController::class, 'markCashRemitted'])->name('orders.mark-cash-remitted');
-            Route::post('orders/{order}/reconcile-pod', [\App\Http\Controllers\Admin\SalesReportController::class, 'reconcilePod'])->name('orders.reconcile-pod');
+            // Reports & Analytics
+            Route::get('revenue', [\App\Http\Controllers\Admin\RevenueController::class, 'index'])
+                ->middleware('permission:reports.revenue_profit')
+                ->name('revenue.index');
+            Route::get('reports/end-of-day', [\App\Http\Controllers\Admin\EndOfDayReportController::class, 'index'])
+                ->middleware('permission:reports.end_of_day')
+                ->name('reports.end-of-day');
+            Route::get('reports/sales', [\App\Http\Controllers\Admin\SalesReportController::class, 'index'])
+                ->middleware('permission:reports.sales.view_own|reports.sales.view_all')
+                ->name('reports.sales');
+            Route::get('reports/sales/export', [\App\Http\Controllers\Admin\SalesReportController::class, 'exportCsv'])
+                ->middleware('permission:reports.sales.export')
+                ->name('reports.sales.export');
+            Route::get('reports/search-analytics', [\App\Http\Controllers\Admin\SearchAnalyticsController::class, 'index'])
+                ->middleware('permission:reports.sales.view_all')
+                ->name('reports.search-analytics');
+            Route::post('orders/{order}/assign-staff', [\App\Http\Controllers\Admin\SalesReportController::class, 'assignStaff'])
+                ->middleware('permission:orders.assign_staff')
+                ->name('orders.assign-staff');
+            Route::post('orders/{order}/mark-cash-collected', [\App\Http\Controllers\Admin\SalesReportController::class, 'markCashCollected'])
+                ->middleware('permission:pod.collect_cash|pod.reconcile')
+                ->name('orders.mark-cash-collected');
+            Route::post('orders/{order}/mark-cash-remitted', [\App\Http\Controllers\Admin\SalesReportController::class, 'markCashRemitted'])
+                ->middleware('permission:pod.remit_cash|pod.reconcile')
+                ->name('orders.mark-cash-remitted');
+            Route::post('orders/{order}/reconcile-pod', [\App\Http\Controllers\Admin\SalesReportController::class, 'reconcilePod'])
+                ->middleware('permission:pod.reconcile')
+                ->name('orders.reconcile-pod');
 
             // Dedicated POD Cash Management & Till Audit Station
-            Route::get('pod-cash', [\App\Http\Controllers\Admin\PodCashController::class, 'index'])->name('pod-cash.index');
-            Route::post('pod-cash/{order}/collect', [\App\Http\Controllers\Admin\PodCashController::class, 'markCollected'])->name('pod-cash.collect');
-            Route::post('pod-cash/{order}/remit', [\App\Http\Controllers\Admin\PodCashController::class, 'markRemitted'])->name('pod-cash.remit');
-            Route::post('pod-cash/bulk-remit', [\App\Http\Controllers\Admin\PodCashController::class, 'bulkRemit'])->name('pod-cash.bulk-remit');
-            Route::post('pod-cash/{order}/reconcile', [\App\Http\Controllers\Admin\PodCashController::class, 'reconcile'])->name('pod-cash.reconcile');
-            Route::post('pod-cash/bulk-reconcile', [\App\Http\Controllers\Admin\PodCashController::class, 'bulkReconcile'])->name('pod-cash.bulk-reconcile');
-            Route::get('pod-cash/export', [\App\Http\Controllers\Admin\PodCashController::class, 'exportCsv'])->name('pod-cash.export');
+            Route::middleware('permission:pod.view_assigned|pod.collect_cash|pod.remit_cash|pod.reconcile')->group(function () {
+                Route::get('pod-cash', [\App\Http\Controllers\Admin\PodCashController::class, 'index'])->name('pod-cash.index');
+                Route::post('pod-cash/{order}/collect', [\App\Http\Controllers\Admin\PodCashController::class, 'markCollected'])->name('pod-cash.collect');
+                Route::post('pod-cash/{order}/remit', [\App\Http\Controllers\Admin\PodCashController::class, 'markRemitted'])->name('pod-cash.remit');
+                Route::post('pod-cash/bulk-remit', [\App\Http\Controllers\Admin\PodCashController::class, 'bulkRemit'])->name('pod-cash.bulk-remit');
+                Route::post('pod-cash/{order}/reconcile', [\App\Http\Controllers\Admin\PodCashController::class, 'reconcile'])->name('pod-cash.reconcile');
+                Route::post('pod-cash/bulk-reconcile', [\App\Http\Controllers\Admin\PodCashController::class, 'bulkReconcile'])->name('pod-cash.bulk-reconcile');
+                Route::get('pod-cash/export', [\App\Http\Controllers\Admin\PodCashController::class, 'exportCsv'])->name('pod-cash.export');
+            });
 
             // Collections Received - Dedicated Audit & Settlement Hub by Cashier & Date Range
-            Route::get('collections-received', [\App\Http\Controllers\Admin\CollectionsReceivedController::class, 'index'])->name('collections-received.index');
-            Route::get('collections-received/export', [\App\Http\Controllers\Admin\CollectionsReceivedController::class, 'exportCsv'])->name('collections-received.export');
+            Route::middleware('permission:pod.reconcile|orders.view_all')->group(function () {
+                Route::get('collections-received', [\App\Http\Controllers\Admin\CollectionsReceivedController::class, 'index'])->name('collections-received.index');
+                Route::get('collections-received/export', [\App\Http\Controllers\Admin\CollectionsReceivedController::class, 'exportCsv'])->name('collections-received.export');
+            });
 
             // Dedicated Discounts & Flash Deals Management
-            Route::get('discounts/search-products', [\App\Http\Controllers\Admin\DiscountController::class, 'searchProducts'])->name('discounts.search-products');
-            Route::post('discounts/apply', [\App\Http\Controllers\Admin\DiscountController::class, 'apply'])->name('discounts.apply');
-            Route::post('discounts/bulk-action', [\App\Http\Controllers\Admin\DiscountController::class, 'bulkAction'])->name('discounts.bulk-action');
-            Route::put('discounts/{product}', [\App\Http\Controllers\Admin\DiscountController::class, 'update'])->name('discounts.update');
-            Route::delete('discounts/{product}', [\App\Http\Controllers\Admin\DiscountController::class, 'destroy'])->name('discounts.destroy');
-            Route::get('discounts', [\App\Http\Controllers\Admin\DiscountController::class, 'index'])->name('discounts.index');
+            Route::middleware('permission:discounts.manage')->group(function () {
+                Route::get('discounts/search-products', [\App\Http\Controllers\Admin\DiscountController::class, 'searchProducts'])->name('discounts.search-products');
+                Route::post('discounts/apply', [\App\Http\Controllers\Admin\DiscountController::class, 'apply'])->name('discounts.apply');
+                Route::post('discounts/bulk-action', [\App\Http\Controllers\Admin\DiscountController::class, 'bulkAction'])->name('discounts.bulk-action');
+                Route::put('discounts/{product}', [\App\Http\Controllers\Admin\DiscountController::class, 'update'])->name('discounts.update');
+                Route::delete('discounts/{product}', [\App\Http\Controllers\Admin\DiscountController::class, 'destroy'])->name('discounts.destroy');
+                Route::get('discounts', [\App\Http\Controllers\Admin\DiscountController::class, 'index'])->name('discounts.index');
+            });
 
             // Coupons & Discount Engine
-            Route::patch('coupons/{coupon}/toggle-status', [\App\Http\Controllers\Admin\CouponController::class, 'toggleStatus'])->name('coupons.toggle-status');
-            Route::resource('coupons', \App\Http\Controllers\Admin\CouponController::class)->except(['create', 'edit', 'show']);
+            Route::middleware('permission:coupons.manage')->group(function () {
+                Route::patch('coupons/{coupon}/toggle-status', [\App\Http\Controllers\Admin\CouponController::class, 'toggleStatus'])->name('coupons.toggle-status');
+                Route::resource('coupons', \App\Http\Controllers\Admin\CouponController::class)->except(['create', 'edit', 'show']);
+            });
 
             // Product Reviews Moderation
-            Route::get('reviews', [\App\Http\Controllers\Admin\ProductReviewController::class, 'index'])->name('reviews.index');
-            Route::patch('reviews/{review}/toggle-approval', [\App\Http\Controllers\Admin\ProductReviewController::class, 'toggleApproval'])->name('reviews.toggle-approval');
-            Route::delete('reviews/{review}', [\App\Http\Controllers\Admin\ProductReviewController::class, 'destroy'])->name('reviews.destroy');
+            Route::middleware('permission:reviews.moderate')->group(function () {
+                Route::get('reviews', [\App\Http\Controllers\Admin\ProductReviewController::class, 'index'])->name('reviews.index');
+                Route::patch('reviews/{review}/toggle-approval', [\App\Http\Controllers\Admin\ProductReviewController::class, 'toggleApproval'])->name('reviews.toggle-approval');
+                Route::delete('reviews/{review}', [\App\Http\Controllers\Admin\ProductReviewController::class, 'destroy'])->name('reviews.destroy');
+            });
 
-            // Referral Program & Affiliate Management
+            // Referral Program & Affiliate Management (enforced in controllers too)
             Route::get('affiliates', [\App\Http\Controllers\Admin\AffiliateController::class, 'index'])->name('affiliates.index');
             Route::post('affiliates/enroll', [\App\Http\Controllers\Admin\AffiliateController::class, 'enrollCustomer'])->name('affiliates.enroll');
             Route::get('affiliates/{affiliate}', [\App\Http\Controllers\Admin\AffiliateController::class, 'show'])->name('affiliates.show');
@@ -325,17 +409,56 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('affiliate-withdrawals/{withdrawal}/reject', [\App\Http\Controllers\Admin\AffiliateWithdrawalController::class, 'reject'])->name('affiliates.withdrawals.reject');
 
             // Newsletter Subscribers
-            Route::get('newsletter-subscribers', [\App\Http\Controllers\Admin\NewsletterSubscriberController::class, 'index'])->name('newsletter.index');
-            Route::delete('newsletter-subscribers/{subscriber}', [\App\Http\Controllers\Admin\NewsletterSubscriberController::class, 'destroy'])->name('newsletter.destroy');
-            Route::patch('newsletter-subscribers/{subscriber}/toggle-status', [\App\Http\Controllers\Admin\NewsletterSubscriberController::class, 'toggleStatus'])->name('newsletter.toggle-status');
-            Route::get('newsletter-subscribers/export/csv', [\App\Http\Controllers\Admin\NewsletterSubscriberController::class, 'exportCsv'])->name('newsletter.export');
+            Route::middleware('permission:settings.store')->group(function () {
+                Route::get('newsletter-subscribers', [\App\Http\Controllers\Admin\NewsletterSubscriberController::class, 'index'])->name('newsletter.index');
+                Route::delete('newsletter-subscribers/{subscriber}', [\App\Http\Controllers\Admin\NewsletterSubscriberController::class, 'destroy'])->name('newsletter.destroy');
+                Route::patch('newsletter-subscribers/{subscriber}/toggle-status', [\App\Http\Controllers\Admin\NewsletterSubscriberController::class, 'toggleStatus'])->name('newsletter.toggle-status');
+                Route::get('newsletter-subscribers/export/csv', [\App\Http\Controllers\Admin\NewsletterSubscriberController::class, 'exportCsv'])->name('newsletter.export');
+            });
 
-            // Settings, Backups, and Security (STRICTLY Super Administrator Only)
+            // Store Settings, Shipping Zones, Themes (Permission-Based)
+            Route::middleware('permission:settings.store')->group(function () {
+                Route::get('settings', [SettingsController::class, 'index'])->name('settings.index');
+                Route::put('settings', [SettingsController::class, 'update'])->name('settings.update');
+            });
+            Route::middleware('permission:settings.shipping_zones')->group(function () {
+                Route::patch('shipping-zones/{shipping_zone}/set-default', [\App\Http\Controllers\Admin\ShippingZoneController::class, 'setDefault'])->name('shipping-zones.set-default');
+                Route::patch('shipping-zones/{shipping_zone}/toggle-status', [\App\Http\Controllers\Admin\ShippingZoneController::class, 'toggleStatus'])->name('shipping-zones.toggle-status');
+                Route::resource('shipping-zones', \App\Http\Controllers\Admin\ShippingZoneController::class)->except(['create', 'edit', 'show']);
+            });
+            Route::middleware('permission:settings.themes')->group(function () {
+                Route::get('theme-settings', [\App\Http\Controllers\Admin\ThemeController::class, 'index'])->name('themes.index');
+                Route::put('theme-settings', [\App\Http\Controllers\Admin\ThemeController::class, 'update'])->name('themes.update');
+            });
+
+            // POS Integration & Connection (Permission-Based)
+            Route::middleware('permission:pos.view')->group(function () {
+                Route::get('pos-integration', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'index'])->name('pos-integration.index');
+                Route::get('pos-integration/logs/export', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'exportLogs'])->name('pos-integration.logs.export');
+            });
+            Route::middleware('permission:pos.sync')->group(function () {
+                Route::delete('pos-integration/logs/clear', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'clearLogs'])->name('pos-integration.logs.clear');
+                Route::post('pos-integration/sync-catalog', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'syncCatalog'])->name('pos-integration.sync-catalog');
+                Route::post('pos-integration/sync-availability', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'syncAvailability'])->name('pos-integration.sync-availability');
+                Route::post('pos-integration/reconcile-mappings', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'reconcileMappings'])->name('pos-integration.reconcile-mappings');
+                Route::post('pos-integration/prune-stale', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'pruneStaleItems'])->name('pos-integration.prune-stale');
+                Route::delete('pos-integration/items/{syncedItem}', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'destroySyncedItem'])->name('pos-integration.items.destroy');
+            });
+            Route::middleware('permission:pos.import')->group(function () {
+                Route::post('pos-integration/import-simple', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'importSimple'])->name('pos-integration.import-simple');
+                Route::post('pos-integration/bulk-import', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'bulkImport'])->name('pos-integration.bulk-import');
+                Route::post('pos-integration/import-all', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'importAllEligible'])->name('pos-integration.import-all');
+            });
+            Route::middleware('permission:pos.manage_connection')->group(function () {
+                Route::get('pos-connection', [\App\Http\Controllers\Admin\PosConnectionController::class, 'index'])->name('pos-connection.index');
+                Route::delete('pos-connection/logs/clear', [\App\Http\Controllers\Admin\PosConnectionController::class, 'clearLogs'])->name('pos-connection.logs.clear');
+                Route::get('pos-connection/logs/export', [\App\Http\Controllers\Admin\PosConnectionController::class, 'exportLogs'])->name('pos-connection.logs.export');
+                Route::post('pos-integration/save-and-test', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'saveAndTestConnection'])->name('pos-integration.save-and-test');
+                Route::post('pos-integration/test', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'testConnection'])->name('pos-integration.test');
+            });
+
+            // High-Risk Security, Backups, AI Keys & Audit Trail (STRICTLY Super Administrator Only)
             Route::middleware('super_admin')->group(function () {
-                // Store & Payment Settings
-                Route::get('settings', [SettingsController::class , 'index'])->name('settings.index');
-                Route::put('settings', [SettingsController::class , 'update'])->name('settings.update');
-
                 // Database Backups Management
                 Route::get('backups', [\App\Http\Controllers\Admin\BackupController::class, 'index'])->name('backups.index');
                 Route::post('backups', [\App\Http\Controllers\Admin\BackupController::class, 'store'])->name('backups.store');
@@ -346,36 +469,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
                     ->where('filename', '.*')
                     ->name('backups.destroy');
 
-                // AI Assistant Settings (Sub-menu under Settings)
+                // AI Assistant Settings (API Keys)
                 Route::get('ai-settings', [\App\Http\Controllers\Admin\AiSettingsController::class, 'index'])->name('ai-settings.index');
                 Route::put('ai-settings', [\App\Http\Controllers\Admin\AiSettingsController::class, 'update'])->name('ai-settings.update');
-
-                // Shipping Zones Management
-                Route::patch('shipping-zones/{shipping_zone}/set-default', [\App\Http\Controllers\Admin\ShippingZoneController::class, 'setDefault'])->name('shipping-zones.set-default');
-                Route::patch('shipping-zones/{shipping_zone}/toggle-status', [\App\Http\Controllers\Admin\ShippingZoneController::class, 'toggleStatus'])->name('shipping-zones.toggle-status');
-                Route::resource('shipping-zones', \App\Http\Controllers\Admin\ShippingZoneController::class)->except(['create', 'edit', 'show']);
-
-                // Promo Flyers & Timed Popup Modal
-                Route::get('promo-flyers', [\App\Http\Controllers\Admin\PromoFlyerController::class, 'index'])->name('promo-flyers.index');
-                Route::post('promo-flyers', [\App\Http\Controllers\Admin\PromoFlyerController::class, 'update'])->name('promo-flyers.update');
-
-                // Theme & Dual-Color Palette Settings
-                Route::get('theme-settings', [\App\Http\Controllers\Admin\ThemeController::class, 'index'])->name('themes.index');
-                Route::put('theme-settings', [\App\Http\Controllers\Admin\ThemeController::class, 'update'])->name('themes.update');
-
-                // POS Integration & Connection Settings
-                Route::get('pos-connection', [\App\Http\Controllers\Admin\PosConnectionController::class, 'index'])->name('pos-connection.index');
-                Route::get('pos-integration', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'index'])->name('pos-integration.index');
-                Route::post('pos-integration/save-and-test', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'saveAndTestConnection'])->name('pos-integration.save-and-test');
-                Route::post('pos-integration/test', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'testConnection'])->name('pos-integration.test');
-                Route::post('pos-integration/sync-catalog', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'syncCatalog'])->name('pos-integration.sync-catalog');
-                Route::post('pos-integration/sync-availability', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'syncAvailability'])->name('pos-integration.sync-availability');
-                Route::post('pos-integration/reconcile-mappings', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'reconcileMappings'])->name('pos-integration.reconcile-mappings');
-                Route::post('pos-integration/import-simple', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'importSimple'])->name('pos-integration.import-simple');
-                Route::post('pos-integration/bulk-import', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'bulkImport'])->name('pos-integration.bulk-import');
-                Route::post('pos-integration/import-all', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'importAllEligible'])->name('pos-integration.import-all');
-                Route::post('pos-integration/prune-stale', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'pruneStaleItems'])->name('pos-integration.prune-stale');
-                Route::delete('pos-integration/items/{syncedItem}', [\App\Http\Controllers\Admin\PosIntegrationController::class, 'destroySyncedItem'])->name('pos-integration.items.destroy');
 
                 // Roles & Permissions Management (STRICTLY Super Administrator)
                 Route::get('roles', [\App\Http\Controllers\Admin\RoleController::class, 'index'])->name('roles.index');

@@ -16,11 +16,11 @@
             $themeDarkModeText = \App\Models\StoreSetting::get('theme_dark_mode_text_color', '#FFFFFF');
         @endphp
 
-        <title inertia>{{ $companyName }}</title>
+        <title inertia>{{ $meta['title'] ?? $companyName }}</title>
 
         <meta name="description" content="{{ $meta['description'] ?? $metaDescription }}">
         <meta name="keywords" content="{{ $meta['keywords'] ?? $metaKeywords }}">
-        <link rel="canonical" href="{{ url()->current() }}">
+        <link rel="canonical" href="{{ $meta['url'] ?? url()->current() }}">
         @if (config('app.debug', false))
             <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
         @else
@@ -28,27 +28,41 @@
         @endif
 
         @isset($meta)
+            <meta property="og:site_name" content="{{ $companyName }}">
             <meta property="og:title" content="{{ $meta['title'] }}">
             <meta property="og:description" content="{{ $meta['description'] ?? $metaDescription }}">
             <meta property="og:image" content="{{ $meta['image'] ?? $logoUrl }}">
+            <meta property="og:image:secure_url" content="{{ $meta['image'] ?? $logoUrl }}">
+            <meta property="og:image:alt" content="{{ $meta['title'] }}">
+            @if (!empty($meta['image_type']))
+                <meta property="og:image:type" content="{{ $meta['image_type'] }}">
+            @endif
+            @if (!empty($meta['image_width']))
+                <meta property="og:image:width" content="{{ $meta['image_width'] }}">
+            @endif
+            @if (!empty($meta['image_height']))
+                <meta property="og:image:height" content="{{ $meta['image_height'] }}">
+            @endif
             <meta property="og:type" content="{{ $meta['type'] ?? 'website' }}">
-            <meta property="og:url" content="{{ url()->current() }}">
+            <meta property="og:url" content="{{ $meta['url'] ?? url()->full() }}">
             <meta property="fb:app_id" content="1440937930739472">
-            <meta property="og:image:width" content="1200">
-            <meta property="og:image:height" content="630">
+            @if (!empty($meta['price']))
+                <meta property="product:price:amount" content="{{ $meta['price'] }}">
+                <meta property="product:price:currency" content="{{ $meta['currency'] ?? 'NGN' }}">
+            @endif
 
             <meta name="twitter:card" content="summary_large_image">
             <meta name="twitter:title" content="{{ $meta['title'] }}">
             <meta name="twitter:description" content="{{ $meta['description'] ?? $metaDescription }}">
             <meta name="twitter:image" content="{{ $meta['image'] ?? $logoUrl }}">
         @else
+            <meta property="og:site_name" content="{{ $companyName }}">
             <meta property="og:title" content="{{ $companyName }}">
             <meta property="og:description" content="{{ $metaDescription }}">
             <meta property="og:type" content="website">
             <meta property="fb:app_id" content="1440937930739472">
             <meta property="og:image" content="{{ $logoUrl }}">
-            <meta property="og:image:width" content="1200">
-            <meta property="og:image:height" content="630">
+            <meta property="og:image:secure_url" content="{{ $logoUrl }}">
             <meta property="og:url" content="{{ url()->current() }}">
 
             <meta name="twitter:card" content="summary_large_image">

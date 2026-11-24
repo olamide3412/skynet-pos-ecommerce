@@ -34,14 +34,16 @@ const applyFilters = () => {
 
 watch(search, () => {
     clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(applyFilters, 350);
+    searchTimeout = setTimeout(applyFilters, 600);
 });
 
 watch([provider, sort], () => {
+    clearTimeout(searchTimeout);
     applyFilters();
 });
 
 const clearFilters = () => {
+    clearTimeout(searchTimeout);
     search.value = '';
     provider.value = 'all';
     sort.value = 'latest';

@@ -1,7 +1,8 @@
 <script setup>
 import { Head, router } from '@inertiajs/vue3';
 import AdminLayout from '@/Layouts/AdminLayout.vue';
-import { ref, watch, computed } from 'vue';
+import Pagination from '@/Components/Pagination.vue';
+import { ref, computed } from 'vue';
 
 const props = defineProps({
     metrics: Object,
@@ -13,12 +14,12 @@ const props = defineProps({
         }),
     },
     chart_data: {
-        type: Array,
-        default: () => [],
+        type: [Array, Object],
+        default: () => ({ data: [] }),
     },
     product_profits: {
-        type: Array,
-        default: () => [],
+        type: [Array, Object],
+        default: () => ({ data: [] }),
     },
     method_stats: {
         type: Array,
@@ -48,24 +49,15 @@ const selectSourceFilter = (source) => {
     applyFilters();
 };
 
-// Pagination Logic for Daily Breakdown
-const currentPage = ref(1);
-const itemsPerPage = 30;
-
-watch([startDate, endDate, inventorySource], () => {
-    currentPage.value = 1;
+const dailyRows = computed(() => {
+    if (Array.isArray(props.chart_data)) return props.chart_data;
+    return props.chart_data?.data || [];
 });
 
-const totalPages = computed(() => Math.ceil((props.chart_data || []).length / itemsPerPage));
-
-const paginatedChartData = computed(() => {
-    const start = (currentPage.value - 1) * itemsPerPage;
-    const end = start + itemsPerPage;
-    return (props.chart_data || []).slice(start, end);
+const productProfitRows = computed(() => {
+    if (Array.isArray(props.product_profits)) return props.product_profits;
+    return props.product_profits?.data || [];
 });
-
-const prevPage = () => { if (currentPage.value > 1) currentPage.value--; };
-const nextPage = () => { if (currentPage.value < totalPages.value) currentPage.value++; };
 
 // Format currency
 const formatCurrency = (amount) => {
@@ -256,99 +248,136 @@ const formatCurrency = (amount) => {
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <!-- Daily Revenue & Profit List -->
-                <div class="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl shadow-xs border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex items-center justify-between">
-                        <h2 class="font-bold text-lg">Daily Revenue & Profit Breakdown</h2>
-                        <span v-if="inventorySource" class="text-xs font-bold px-2.5 py-1 rounded-full theme-primary-badge uppercase">
-                            Filtered: {{ inventorySource === 'pos' ? 'POS Items Only' : 'Ecommerce Items Only' }}
-                        </span>
+            <!-- ── Payment Methods Breakdown (Full Width Horizontal Grid) ─── -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xs border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div class="px-5 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex items-center justify-between">
+                    <h2 class="font-bold text-base sm:text-lg">Payment Methods</h2>
+                    <span v-if="method_stats.length" class="text-xs text-gray-500 dark:text-gray-400">
+                        {{ method_stats.length }} {{ method_stats.length === 1 ? 'channel' : 'channels' }}
+                    </span>
+                </div>
+                <div class="p-4 sm:p-5">
+                    <div v-if="!method_stats.length" class="text-center text-gray-400 py-4 text-sm">
+                        No payment data available.
                     </div>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left font-medium">
-                            <thead class="bg-gray-50 dark:bg-gray-800 text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
-                                <tr>
-                                    <th class="px-5 py-3">Date</th>
-                                    <th class="px-4 py-3 text-center">Orders</th>
-                                    <th class="px-5 py-3 text-right">Revenue</th>
-                                    <th class="px-5 py-3 text-right">Buying Cost</th>
-                                    <th class="px-5 py-3 text-right">POS Profit</th>
-                                    <th class="px-5 py-3 text-right">Ecom Profit</th>
-                                    <th class="px-5 py-3 text-right">Net Profit</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-100 dark:divide-gray-700 text-sm">
-                                <tr v-for="day in paginatedChartData" :key="day.date" class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
-                                    <td class="px-5 py-3.5 whitespace-nowrap text-gray-700 dark:text-gray-300">
-                                        {{ new Date(day.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) }}
-                                    </td>
-                                    <td class="px-4 py-3.5 whitespace-nowrap text-center">
-                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full theme-primary-badge text-xs">{{ day.orders }}</span>
-                                    </td>
-                                    <td class="px-5 py-3.5 whitespace-nowrap text-right font-bold text-gray-900 dark:text-white">{{ formatCurrency(day.revenue) }}</td>
-                                    <td class="px-5 py-3.5 whitespace-nowrap text-right text-amber-600 dark:text-amber-400">{{ formatCurrency(day.cost || 0) }}</td>
-                                    <td class="px-5 py-3.5 whitespace-nowrap text-right text-primary font-semibold">{{ formatCurrency(day.pos_profit || 0) }}</td>
-                                    <td class="px-5 py-3.5 whitespace-nowrap text-right text-secondary font-semibold">{{ formatCurrency(day.ecommerce_profit || 0) }}</td>
-                                    <td class="px-5 py-3.5 whitespace-nowrap text-right font-extrabold text-emerald-600 dark:text-emerald-400">{{ formatCurrency(day.profit ?? day.revenue) }}</td>
-                                </tr>
-                                <tr v-if="!chart_data.length">
-                                    <td colspan="7" class="px-6 py-10 text-center text-gray-400">No sales data for this period.</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <!-- Pagination Controls -->
-                    <div v-if="totalPages > 1" class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex flex-col sm:flex-row items-center justify-between gap-4">
-                        <span class="text-sm text-gray-500 dark:text-gray-400">
-                            Showing <span class="font-medium text-gray-900 dark:text-white">{{ (currentPage - 1) * itemsPerPage + 1 }}</span> to <span class="font-medium text-gray-900 dark:text-white">{{ Math.min(currentPage * itemsPerPage, chart_data.length) }}</span> of <span class="font-medium text-gray-900 dark:text-white">{{ chart_data.length }}</span> days
-                        </span>
-                        <div class="flex items-center gap-2">
-                            <button @click="prevPage" :disabled="currentPage === 1"
-                                class="px-3 py-1.5 text-sm font-medium bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition">
-                                Previous
-                            </button>
-                            <span class="text-sm px-2 text-gray-600 dark:text-gray-300 font-medium">Page {{ currentPage }} of {{ totalPages }}</span>
-                            <button @click="nextPage" :disabled="currentPage === totalPages"
-                                class="px-3 py-1.5 text-sm font-medium bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition">
-                                Next
-                            </button>
+                    <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                        <div
+                            v-for="method in method_stats"
+                            :key="method.payment_method"
+                            class="flex items-center justify-between gap-3 p-3.5 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-700"
+                        >
+                            <div class="flex items-center gap-3 min-w-0">
+                                <div class="w-10 h-10 rounded-full flex items-center justify-center bg-white dark:bg-gray-800 shadow-xs border dark:border-gray-600 shrink-0">
+                                    <span v-if="String(method.payment_method).toLowerCase().includes('paystack')" class="font-bold text-blue-600 dark:text-blue-400 text-[11px] tracking-tighter">PAY</span>
+                                    <span v-else-if="String(method.payment_method).toLowerCase().includes('flutterwave')" class="font-bold text-amber-500 text-[11px] tracking-tighter">FLW</span>
+                                    <span v-else-if="['cod', 'pod'].includes(String(method.payment_method).toLowerCase()) || String(method.payment_method).toLowerCase().includes('delivery')" class="font-bold text-emerald-600 dark:text-emerald-400 text-[11px] tracking-tighter">POD</span>
+                                    <span v-else-if="String(method.payment_method).toLowerCase().includes('bank')" class="font-bold text-indigo-600 dark:text-indigo-400 text-[10px] tracking-tighter">BANK</span>
+                                    <span v-else class="font-bold text-gray-500 text-[10px] uppercase tracking-tighter">{{ String(method.payment_method).slice(0, 4) }}</span>
+                                </div>
+                                <div class="min-w-0">
+                                    <p class="font-bold text-sm text-gray-900 dark:text-white truncate">
+                                        {{ ['cod', 'pod'].includes(String(method.payment_method).toLowerCase()) ? 'Payment on Delivery (POD)' : (method.payment_method === 'bank_transfer' ? 'Direct Bank Transfer' : method.payment_method) }}
+                                    </p>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">{{ method.orders }} {{ method.orders === 1 ? 'order' : 'orders' }}</p>
+                                </div>
+                            </div>
+                            <div class="text-right font-extrabold text-sm text-gray-900 dark:text-white whitespace-nowrap tabular-nums">
+                                {{ formatCurrency(method.revenue) }}
+                            </div>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <!-- Payment Method Stats -->
-                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xs border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
-                        <h2 class="font-bold text-lg">Payment Methods</h2>
-                    </div>
-                    <div class="p-6 space-y-4">
-                        <div v-if="!method_stats.length" class="text-center text-gray-400 py-4">
-                            No payment data available.
+            <!-- ── Daily Revenue & Profit Breakdown (Full Width) ───────────── -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xs border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div class="px-5 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex flex-wrap items-center justify-between gap-2">
+                    <h2 class="font-bold text-base sm:text-lg">Daily Revenue & Profit Breakdown</h2>
+                    <span v-if="inventorySource" class="text-xs font-bold px-2.5 py-1 rounded-full theme-primary-badge uppercase">
+                        Filtered: {{ inventorySource === 'pos' ? 'POS Items Only' : 'Ecommerce Items Only' }}
+                    </span>
+                </div>
+
+                <!-- Mobile Card View (< md) -->
+                <div class="md:hidden divide-y divide-gray-100 dark:divide-gray-700">
+                    <div v-for="day in dailyRows" :key="'m-' + day.date" class="p-4 space-y-2.5">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="font-bold text-sm text-gray-900 dark:text-white">
+                                {{ new Date(day.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) }}
+                            </span>
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full theme-primary-badge text-xs font-bold">
+                                {{ day.orders }} {{ day.orders === 1 ? 'order' : 'orders' }}
+                            </span>
                         </div>
-                        <template v-else>
-                            <div v-for="method in method_stats" :key="method.payment_method" class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-100 dark:border-gray-700">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-10 h-10 rounded-full flex items-center justify-center bg-white dark:bg-gray-800 shadow-xs border dark:border-gray-600">
-                                        <span v-if="method.payment_method === 'paystack'" class="font-bold text-blue-600 text-xs tracking-tighter">PAY</span>
-                                        <span v-else-if="method.payment_method === 'flutterwave'" class="font-bold text-yellow-500 text-xs tracking-tighter">FLW</span>
-                                        <span v-else-if="['cod', 'pod', 'Payment on Delivery (POD)'].includes(method.payment_method)" class="font-bold text-green-600 text-xs tracking-tighter">POD</span>
-                                        <span v-else class="font-bold text-gray-500 text-xs tracking-tighter">{{ method.payment_method }}</span>
-                                    </div>
-                                    <div>
-                                        <p class="font-bold capitalize text-gray-900 dark:text-white">
-                                            {{ ['cod', 'pod'].includes(method.payment_method) ? 'Payment on Delivery (POD)' : (method.payment_method === 'bank_transfer' ? 'Direct Bank Transfer' : method.payment_method) }}
-                                        </p>
-                                        <p class="text-xs text-gray-500">{{ method.orders }} orders</p>
-                                    </div>
-                                </div>
-                                <div class="text-right font-extrabold text-gray-900 dark:text-white">
-                                    {{ formatCurrency(method.revenue) }}
-                                </div>
+                        <div class="grid grid-cols-2 gap-2 text-xs bg-gray-50 dark:bg-gray-900/40 p-2.5 rounded-lg">
+                            <div>
+                                <span class="text-gray-400 block">Revenue</span>
+                                <span class="font-bold text-gray-900 dark:text-white">{{ formatCurrency(day.revenue) }}</span>
                             </div>
-                        </template>
+                            <div>
+                                <span class="text-gray-400 block">Buying Cost</span>
+                                <span class="font-semibold text-amber-600 dark:text-amber-400">{{ formatCurrency(day.cost || 0) }}</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-400 block">POS Profit</span>
+                                <span class="font-semibold text-primary">{{ formatCurrency(day.pos_profit || 0) }}</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-400 block">Ecom Profit</span>
+                                <span class="font-semibold text-secondary">{{ formatCurrency(day.ecommerce_profit || 0) }}</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between text-sm pt-0.5">
+                            <span class="text-xs font-semibold text-gray-500 uppercase">Net Profit</span>
+                            <span class="font-extrabold text-emerald-600 dark:text-emerald-400">{{ formatCurrency(day.profit ?? day.revenue) }}</span>
+                        </div>
                     </div>
+                    <div v-if="!dailyRows.length" class="px-6 py-10 text-center text-sm text-gray-400">
+                        No sales data for this period.
+                    </div>
+                </div>
+
+                <!-- Desktop & Laptop Table (>= md, full width — no cramped scrollbar) -->
+                <div class="hidden md:block overflow-x-auto">
+                    <table class="w-full text-left font-medium">
+                        <thead class="bg-gray-50 dark:bg-gray-800 text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
+                            <tr>
+                                <th class="px-4 py-3">Date</th>
+                                <th class="px-3 py-3 text-center">Orders</th>
+                                <th class="px-4 py-3 text-right">Revenue</th>
+                                <th class="px-4 py-3 text-right">Buying Cost</th>
+                                <th class="px-4 py-3 text-right">POS Profit</th>
+                                <th class="px-4 py-3 text-right">Ecom Profit</th>
+                                <th class="px-4 py-3 text-right">Net Profit</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100 dark:divide-gray-700 text-sm tabular-nums">
+                            <tr v-for="day in dailyRows" :key="day.date" class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
+                                <td class="px-4 py-3.5 whitespace-nowrap text-gray-700 dark:text-gray-300">
+                                    {{ new Date(day.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) }}
+                                </td>
+                                <td class="px-3 py-3.5 whitespace-nowrap text-center">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full theme-primary-badge text-xs">{{ day.orders }}</span>
+                                </td>
+                                <td class="px-4 py-3.5 whitespace-nowrap text-right font-bold text-gray-900 dark:text-white">{{ formatCurrency(day.revenue) }}</td>
+                                <td class="px-4 py-3.5 whitespace-nowrap text-right text-amber-600 dark:text-amber-400">{{ formatCurrency(day.cost || 0) }}</td>
+                                <td class="px-4 py-3.5 whitespace-nowrap text-right text-primary font-semibold">{{ formatCurrency(day.pos_profit || 0) }}</td>
+                                <td class="px-4 py-3.5 whitespace-nowrap text-right text-secondary font-semibold">{{ formatCurrency(day.ecommerce_profit || 0) }}</td>
+                                <td class="px-4 py-3.5 whitespace-nowrap text-right font-extrabold text-emerald-600 dark:text-emerald-400">{{ formatCurrency(day.profit ?? day.revenue) }}</td>
+                            </tr>
+                            <tr v-if="!dailyRows.length">
+                                <td colspan="7" class="px-6 py-10 text-center text-gray-400">No sales data for this period.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Daily Breakdown Pagination -->
+                <div v-if="chart_data?.links && chart_data.links.length > 3" class="px-5 sm:px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <span class="text-xs text-gray-500 dark:text-gray-400">
+                        Showing <span class="font-semibold text-gray-900 dark:text-white">{{ chart_data.from || 0 }}</span> to <span class="font-semibold text-gray-900 dark:text-white">{{ chart_data.to || 0 }}</span> of <span class="font-semibold text-gray-900 dark:text-white">{{ chart_data.total || 0 }}</span> days
+                    </span>
+                    <Pagination :paginator="chart_data" :preserve-scroll="true" />
                 </div>
             </div>
 
@@ -375,7 +404,7 @@ const formatCurrency = (amount) => {
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-                            <tr v-for="(item, idx) in product_profits" :key="idx" class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
+                            <tr v-for="(item, idx) in productProfitRows" :key="item.product_id + '-' + item.inventory_source + '-' + idx" class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
                                 <td class="px-6 py-3.5 font-semibold text-gray-900 dark:text-white">
                                     {{ item.product_name }}
                                 </td>
@@ -406,13 +435,21 @@ const formatCurrency = (amount) => {
                                     {{ formatCurrency(item.profit) }}
                                 </td>
                             </tr>
-                            <tr v-if="!product_profits?.length">
+                            <tr v-if="!productProfitRows.length">
                                 <td colspan="6" class="px-6 py-10 text-center text-gray-400">
                                     No product sales recorded in this date range.
                                 </td>
                             </tr>
                         </tbody>
                     </table>
+                </div>
+
+                <!-- Product Profit Breakdown Pagination -->
+                <div v-if="product_profits?.links && product_profits.links.length > 3" class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <span class="text-xs text-gray-500 dark:text-gray-400">
+                        Showing <span class="font-semibold text-gray-900 dark:text-white">{{ product_profits.from || 0 }}</span> to <span class="font-semibold text-gray-900 dark:text-white">{{ product_profits.to || 0 }}</span> of <span class="font-semibold text-gray-900 dark:text-white">{{ product_profits.total || 0 }}</span> products
+                    </span>
+                    <Pagination :paginator="product_profits" :preserve-scroll="true" />
                 </div>
             </div>
         </div>

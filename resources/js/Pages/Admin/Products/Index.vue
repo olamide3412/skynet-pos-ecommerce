@@ -44,7 +44,7 @@ const filterExpiryStatus = ref(props.filters?.expiry_status || '');
 const filterSort = ref(props.filters?.sort || 'latest');
 const perPage = ref(props.filters?.per_page || '25');
 
-const applyFilters = debounce(() => {
+const runFilterQuery = () => {
     router.get(route('admin.products.index'), {
         search: search.value || undefined,
         category_id: filterCategory.value || undefined,
@@ -55,9 +55,16 @@ const applyFilters = debounce(() => {
         sort: filterSort.value !== 'latest' ? filterSort.value : undefined,
         per_page: perPage.value !== '25' ? perPage.value : undefined,
     }, { preserveState: true, replace: true });
+};
+
+const applySearchFilter = debounce(runFilterQuery, 600);
+const applyFilters = debounce(() => {
+    applySearchFilter.cancel();
+    runFilterQuery();
 }, 300);
 
-watch([search, filterCategory, filterBrand, filterStatus, filterInventorySource, filterExpiryStatus, filterSort, perPage], applyFilters);
+watch(search, applySearchFilter);
+watch([filterCategory, filterBrand, filterStatus, filterInventorySource, filterExpiryStatus, filterSort, perPage], applyFilters);
 
 const clearFilters = () => {
     search.value = '';
@@ -1237,20 +1244,20 @@ const submitBulkMoveToEcommerce = () => {
 <template>
     <Head title="Manage Products" />
     <AdminLayout>
-        <div class="container mx-auto px-4 py-8 text-black dark:text-white max-w-7xl">
+        <div class="container mx-auto px-3 sm:px-4 py-4 sm:py-8 text-black dark:text-white max-w-7xl">
 
             <!-- ── Header ─────────────────────────────────── -->
-            <div class="flex items-center justify-between mb-8" :class="isFormVisible ? 'pb-4 border-b dark:border-gray-700' : ''">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 mb-5 sm:mb-8" :class="isFormVisible ? 'pb-4 border-b dark:border-gray-700' : ''">
                 <div>
-                    <h1 class="text-2xl font-bold">{{ isFormVisible ? (isEditing ? 'Edit Product' : 'Create New Product') : 'Catalog Management' }}</h1>
+                    <h1 class="text-xl sm:text-2xl font-bold">{{ isFormVisible ? (isEditing ? 'Edit Product' : 'Create New Product') : 'Catalog Management' }}</h1>
                     <button v-if="isFormVisible" @click="closeForm" class="text-sm text-primary hover:opacity-80 font-medium mt-1 flex items-center gap-1">
                         ← Back to Catalog
                     </button>
                 </div>
-                <div class="flex gap-3">
+                <div class="flex flex-wrap items-center gap-2 sm:gap-3">
                     <template v-if="isFormVisible">
-                        <button @click="closeForm" class="border dark:border-gray-600 font-semibold py-2 px-5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition text-sm">Cancel</button>
-                        <button @click="save" :disabled="form.processing" class="bg-primary hover:bg-primary-dark text-white font-bold py-2 px-7 rounded-lg shadow transition disabled:opacity-50 flex items-center gap-2 text-sm">
+                        <button @click="closeForm" class="flex-1 sm:flex-none border dark:border-gray-600 font-semibold py-2 px-4 sm:px-5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition text-xs sm:text-sm">Cancel</button>
+                        <button @click="save" :disabled="form.processing" class="flex-1 sm:flex-none bg-primary hover:bg-primary-dark text-white font-bold py-2 px-5 sm:px-7 rounded-lg shadow transition disabled:opacity-50 flex items-center justify-center gap-2 text-xs sm:text-sm">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                             Save Product
                         </button>
@@ -1261,7 +1268,7 @@ const submitBulkMoveToEcommerce = () => {
                             <button
                                 @click="showExportMenu = !showExportMenu"
                                 type="button"
-                                class="border border-gray-300 dark:border-gray-600 font-semibold py-2 px-4 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition text-sm flex items-center gap-2 text-gray-700 dark:text-gray-200 shadow-xs cursor-pointer"
+                                class="border border-gray-300 dark:border-gray-600 font-semibold py-2 px-3 sm:px-4 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 text-gray-700 dark:text-gray-200 shadow-xs cursor-pointer"
                                 title="Export products to CSV"
                             >
                                 <svg class="w-4 h-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1284,7 +1291,7 @@ const submitBulkMoveToEcommerce = () => {
                             >
                                 <div
                                     v-if="showExportMenu"
-                                    class="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 py-1.5 z-50 text-left"
+                                    class="absolute left-0 sm:left-auto sm:right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 py-1.5 z-50 text-left"
                                 >
                                     <div class="px-3.5 py-2 text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
                                         <span>Export Options</span>
@@ -1336,7 +1343,7 @@ const submitBulkMoveToEcommerce = () => {
                         <button
                             @click="showImportModal = true"
                             type="button"
-                            class="border border-gray-300 dark:border-gray-600 font-semibold py-2 px-4 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition text-sm flex items-center gap-2 text-gray-700 dark:text-gray-200 shadow-xs cursor-pointer"
+                            class="border border-gray-300 dark:border-gray-600 font-semibold py-2 px-3 sm:px-4 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 text-gray-700 dark:text-gray-200 shadow-xs cursor-pointer"
                             title="Import products from CSV"
                         >
                             <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1345,7 +1352,7 @@ const submitBulkMoveToEcommerce = () => {
                             <span>Import</span>
                         </button>
 
-                        <button @click="openCreateForm" class="bg-primary hover:bg-primary-dark text-white font-bold py-2 px-5 rounded-lg shadow flex items-center gap-2 text-sm cursor-pointer">
+                        <button @click="openCreateForm" class="bg-primary hover:bg-primary-dark text-white font-bold py-2 px-3.5 sm:px-5 rounded-lg shadow flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm cursor-pointer">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                             Add Product
                         </button>
@@ -1354,17 +1361,17 @@ const submitBulkMoveToEcommerce = () => {
             </div>
 
             <!-- ── Filters ────────────────────────────────── -->
-            <div v-if="!isFormVisible" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700 p-4 mb-6 flex flex-wrap gap-4 items-end">
-                <div class="flex-1 min-w-[200px]">
+            <div v-if="!isFormVisible" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700 p-3.5 sm:p-4 mb-5 sm:mb-6 grid grid-cols-2 sm:flex sm:flex-wrap gap-3 sm:gap-4 items-end">
+                <div class="col-span-2 sm:flex-1 sm:min-w-[200px]">
                     <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Search Products</label>
                     <input v-model="search" type="text" placeholder="Name, SKU, URL Key..." 
                         class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary focus:border-primary" />
                 </div>
                 
-                <div class="w-full sm:w-auto min-w-[150px]">
+                <div class="w-full sm:w-auto sm:min-w-[150px]">
                     <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Category</label>
                     <select v-model="filterCategory" 
-                        class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary focus:border-primary">
+                        class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-2.5 sm:px-3 py-2 text-sm focus:ring-primary focus:border-primary">
                         <option value="">All Categories</option>
                         <template v-for="parent in categories" :key="parent.id">
                             <optgroup v-if="parent.children?.length" :label="parent.name">
@@ -1376,40 +1383,40 @@ const submitBulkMoveToEcommerce = () => {
                     </select>
                 </div>
 
-                <div class="w-full sm:w-auto min-w-[150px]">
+                <div class="w-full sm:w-auto sm:min-w-[150px]">
                     <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Brand</label>
                     <select v-model="filterBrand" 
-                        class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary focus:border-primary">
+                        class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-2.5 sm:px-3 py-2 text-sm focus:ring-primary focus:border-primary">
                         <option value="">All Brands</option>
                         <option value="none">— No Brand —</option>
                         <option v-for="b in localBrands" :key="b.id" :value="b.id">{{ b.name }}</option>
                     </select>
                 </div>
 
-                <div class="w-full sm:w-auto min-w-[150px]">
+                <div class="w-full sm:w-auto sm:min-w-[150px]">
                     <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Status</label>
                     <select v-model="filterStatus" 
-                        class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary focus:border-primary">
+                        class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-2.5 sm:px-3 py-2 text-sm focus:ring-primary focus:border-primary">
                         <option value="">All Statuses</option>
                         <option value="active">Active</option>
                         <option value="inactive">Inactive</option>
                     </select>
                 </div>
 
-                <div class="w-full sm:w-auto min-w-[160px]">
+                <div class="w-full sm:w-auto sm:min-w-[160px]">
                     <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Source</label>
                     <select v-model="filterInventorySource" 
-                        class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary focus:border-primary">
+                        class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-2.5 sm:px-3 py-2 text-sm focus:ring-primary focus:border-primary">
                         <option value="">All Sources (Both)</option>
                         <option value="ecommerce">Ecommerce Only</option>
                         <option value="pos">POS Branch Items</option>
                     </select>
                 </div>
 
-                <div v-if="$page.props.store_settings?.enable_product_expiry_tracking === '1'" class="w-full sm:w-auto min-w-[160px]">
+                <div v-if="$page.props.store_settings?.enable_product_expiry_tracking === '1'" class="w-full sm:w-auto sm:min-w-[160px]">
                     <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">⏳ Expiry Status</label>
                     <select v-model="filterExpiryStatus" 
-                        class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary focus:border-primary">
+                        class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-2.5 sm:px-3 py-2 text-sm focus:ring-primary focus:border-primary">
                         <option value="">All Expiry</option>
                         <option value="expired">🔴 Expired Only</option>
                         <option value="expiring_soon">🟡 Expiring Soon</option>
@@ -1419,10 +1426,10 @@ const submitBulkMoveToEcommerce = () => {
                     </select>
                 </div>
 
-                <div class="w-full sm:w-auto min-w-[170px]">
+                <div class="w-full sm:w-auto sm:min-w-[170px]">
                     <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Sort By</label>
                     <select v-model="filterSort" 
-                        class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary focus:border-primary">
+                        class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-2.5 sm:px-3 py-2 text-sm focus:ring-primary focus:border-primary">
                         <option value="latest">Newest First</option>
                         <option value="oldest">Oldest First</option>
                         <option value="name_asc">Name: A to Z</option>
@@ -1438,10 +1445,10 @@ const submitBulkMoveToEcommerce = () => {
                     </select>
                 </div>
 
-                <div class="w-full sm:w-auto min-w-[130px]">
+                <div class="w-full sm:w-auto sm:min-w-[130px]">
                     <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Per Page</label>
                     <select v-model="perPage" 
-                        class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary focus:border-primary">
+                        class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-2.5 sm:px-3 py-2 text-sm focus:ring-primary focus:border-primary">
                         <option value="25">25</option>
                         <option value="50">50</option>
                         <option value="100">100</option>
@@ -1449,9 +1456,9 @@ const submitBulkMoveToEcommerce = () => {
                     </select>
                 </div>
 
-                <div v-if="search || filterCategory || filterBrand || filterStatus || filterInventorySource || filterExpiryStatus || filterSort !== 'latest' || perPage !== '25'">
-                    <button @click="clearFilters" class="px-4 py-2 text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition h-[38px]">
-                        Clear
+                <div v-if="search || filterCategory || filterBrand || filterStatus || filterInventorySource || filterExpiryStatus || filterSort !== 'latest' || perPage !== '25'" class="col-span-2 sm:col-span-1 sm:w-auto">
+                    <button @click="clearFilters" class="w-full sm:w-auto px-4 py-2 text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition h-[38px]">
+                        Clear Filters
                     </button>
                 </div>
             </div>
@@ -1592,7 +1599,155 @@ const submitBulkMoveToEcommerce = () => {
 
             <!-- ── Product List ───────────────────────────── -->
             <div v-if="!isFormVisible" class="bg-white dark:bg-gray-800 rounded-xl shadow border dark:border-gray-700 overflow-hidden">
-                <div class="overflow-x-auto">
+
+                <!-- Mobile Card View (< lg) -->
+                <div class="lg:hidden">
+                    <!-- Mobile Select-All Bar -->
+                    <div v-if="products.data?.length" class="px-4 py-2.5 bg-gray-50 dark:bg-gray-900/50 border-b dark:border-gray-700 flex items-center justify-between gap-3">
+                        <label class="inline-flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-gray-600 dark:text-gray-300">
+                            <input
+                                type="checkbox"
+                                :checked="isAllSelected"
+                                :indeterminate.prop="isIndeterminate"
+                                @change="toggleSelectAll"
+                                class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary bg-white dark:bg-gray-800 cursor-pointer"
+                            />
+                            <span>Select all on page</span>
+                        </label>
+                        <span class="text-[11px] font-medium text-gray-500 dark:text-gray-400">
+                            {{ products.total || 0 }} total
+                        </span>
+                    </div>
+
+                    <!-- Product Cards -->
+                    <div v-if="products.data?.length" class="divide-y divide-gray-100 dark:divide-gray-700">
+                        <div
+                            v-for="p in products.data"
+                            :key="'mobile-' + p.id"
+                            class="p-3.5 sm:p-4 space-y-3 transition"
+                            :class="selectedIds.includes(p.id) ? 'bg-primary-soft' : ''"
+                        >
+                            <!-- Top Row: Checkbox, Thumbnail, Title & Status -->
+                            <div class="flex items-start gap-3">
+                                <input
+                                    type="checkbox"
+                                    :checked="selectedIds.includes(p.id)"
+                                    @change="toggleSelect(p.id)"
+                                    class="mt-1 w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary bg-white dark:bg-gray-800 cursor-pointer shrink-0"
+                                />
+                                <img
+                                    :src="p.image ? '/storage/' + p.image : 'https://placehold.co/60x60'"
+                                    class="w-14 h-14 rounded-lg object-cover border dark:border-gray-600 shrink-0"
+                                />
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <h3 class="font-bold text-sm text-gray-900 dark:text-white leading-snug line-clamp-2">
+                                            {{ p.name }}
+                                        </h3>
+                                        <span
+                                            class="text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0"
+                                            :class="p.status ? 'theme-primary-badge' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'"
+                                        >
+                                            {{ p.status ? 'Active' : 'Inactive' }}
+                                        </span>
+                                    </div>
+                                    <div class="text-[11px] text-gray-400 font-mono truncate mt-0.5">
+                                        {{ p.url_key || p.sku || '—' }}
+                                    </div>
+                                    <!-- Badges Row -->
+                                    <div class="flex flex-wrap items-center gap-1.5 mt-1.5">
+                                        <span v-if="p.inventory_source === 'pos'" class="text-[10px] font-bold px-1.5 py-0.5 rounded theme-primary-badge">
+                                            POS #{{ p.pos_item_id }}
+                                        </span>
+                                        <span v-if="p.pos_sync_status === 'missing_pos_item'" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700">
+                                            Missing in POS
+                                        </span>
+                                        <span v-if="p.category?.name" class="text-[10px] bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 px-2 py-0.5 rounded-full font-medium">
+                                            {{ p.category.name }}
+                                        </span>
+                                        <span v-if="p.brand?.name" class="inline-flex items-center gap-1 text-[10px] bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 px-2 py-0.5 rounded-full font-medium">
+                                            <img v-if="p.brand.logo_url" :src="p.brand.logo_url" class="w-3 h-3 rounded-full object-contain" />
+                                            {{ p.brand.name }}
+                                        </span>
+                                        <span v-if="p.is_new" class="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-bold">NEW</span>
+                                        <span v-if="p.is_featured" class="text-[10px] bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded font-bold">★ FEAT</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Middle Row: Pricing & Stock Grid -->
+                            <div class="grid grid-cols-2 gap-2.5 bg-gray-50 dark:bg-gray-900/40 rounded-lg p-2.5 border border-gray-100 dark:border-gray-700/60">
+                                <div>
+                                    <div class="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Pricing</div>
+                                    <div class="font-bold text-sm text-gray-900 dark:text-white mt-0.5">₦{{ parseFloat(p.price).toLocaleString() }}</div>
+                                    <div class="text-[11px] text-gray-500 dark:text-gray-400">
+                                        Cost: <span class="font-semibold text-gray-700 dark:text-gray-300">₦{{ getEffectiveCostPrice(p).toLocaleString() }}</span>
+                                    </div>
+                                    <div v-if="p.discount_price" class="text-[11px] text-red-400 line-through">₦{{ parseFloat(p.discount_price).toLocaleString() }}</div>
+                                    <div v-if="p.special_price" class="text-[11px] text-secondary font-semibold">Special: ₦{{ parseFloat(p.special_price).toLocaleString() }}</div>
+                                </div>
+                                <div>
+                                    <div class="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Stock</div>
+                                    <div
+                                        class="text-xs font-bold flex items-center gap-1.5 mt-1"
+                                        :class="p.stock > 10 ? 'text-green-600' : (p.stock > 0 ? 'text-yellow-600' : 'text-red-600')"
+                                    >
+                                        <span
+                                            class="w-2 h-2 rounded-full inline-block shrink-0"
+                                            :class="p.stock > 10 ? 'bg-green-500' : (p.stock > 0 ? 'bg-yellow-500' : 'bg-red-500')"
+                                        ></span>
+                                        <span>{{ p.stock > 0 ? `${p.stock} in stock` : 'Out of stock' }}</span>
+                                    </div>
+                                    <div v-if="$page.props.store_settings?.enable_product_expiry_tracking === '1' && p.expiry_date" class="mt-1">
+                                        <span v-if="p.expiry_status === 'expired'" class="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
+                                            🔴 Expired: {{ p.expiry_date.substring(0, 10) }}
+                                        </span>
+                                        <span v-else-if="p.expiry_status === 'expiring_soon'" class="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+                                            🟡 Exp: {{ p.days_until_expiry }}d left
+                                        </span>
+                                        <span v-else class="text-[10px] text-gray-400 dark:text-gray-500 block">
+                                            Exp: {{ p.expiry_date.substring(0, 10) }}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Bottom Row: Touch-friendly Actions -->
+                            <div class="flex items-center gap-2 pt-0.5">
+                                <button
+                                    v-if="p.inventory_source === 'ecommerce'"
+                                    type="button"
+                                    @click="openStockAdjustModal(p)"
+                                    class="flex-1 py-2 px-2.5 rounded-lg text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 transition text-center cursor-pointer"
+                                >
+                                    Adjust Stock
+                                </button>
+                                <button
+                                    type="button"
+                                    @click="openEditForm(p)"
+                                    class="flex-1 py-2 px-2.5 rounded-lg text-xs font-semibold text-primary bg-primary-soft border border-primary/20 hover:opacity-90 transition text-center cursor-pointer"
+                                >
+                                    Edit
+                                </button>
+                                <button
+                                    type="button"
+                                    @click="deleteProduct(p.id)"
+                                    class="py-2 px-3 rounded-lg text-xs font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 hover:bg-red-100 transition text-center cursor-pointer"
+                                >
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Mobile Empty State -->
+                    <div v-else class="px-6 py-12 text-center text-sm text-gray-400">
+                        No products yet. Click "Add Product" to get started.
+                    </div>
+                </div>
+
+                <!-- Desktop Table View (>= lg) -->
+                <div class="hidden lg:block overflow-x-auto">
                     <table class="w-full text-left min-w-[800px]">
                         <thead class="bg-gray-50 dark:bg-gray-900/50 border-b dark:border-gray-700 text-xs text-gray-500 uppercase">
                             <tr>

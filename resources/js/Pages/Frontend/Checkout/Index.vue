@@ -153,7 +153,10 @@ const removeCoupon = () => {
 
 const submit = () => {
     form._rendered_at = renderedAt.value;
-    form.post(route('checkout.process'));
+    form.transform((data) => ({
+        ...data,
+        address: data.delivery_method === 'pickup' ? null : data.address,
+    })).post(route('checkout.process'));
 };
 </script>
 
@@ -181,65 +184,7 @@ const submit = () => {
                             />
                         </div>
 
-                        <!-- Saved Addresses Picker (if available) -->
-                        <div v-if="addresses && addresses.length > 0" class="bg-white dark:bg-gray-800 shadow-sm rounded-xl p-6 border dark:border-gray-700">
-                            <h2 class="text-lg font-semibold mb-3 flex items-center justify-between">
-                                <span>Saved Delivery Addresses</span>
-                                <span class="text-xs font-normal text-gray-500">Click to auto-fill</span>
-                            </h2>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <button
-                                    v-for="addr in addresses"
-                                    :key="addr.id"
-                                    type="button"
-                                    @click="selectSavedAddress(addr)"
-                                    class="p-3.5 text-left rounded-lg border dark:border-gray-700 hover:border-primary transition bg-gray-50 dark:bg-gray-900/50 flex flex-col justify-between"
-                                >
-                                    <div>
-                                        <div class="flex items-center gap-2 mb-1">
-                                            <span class="font-bold text-sm">{{ addr.name }}</span>
-                                            <span v-if="addr.is_default" class="text-[10px] bg-primary/10 text-primary font-bold px-1.5 py-0.5 rounded">Default</span>
-                                        </div>
-                                        <p class="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">{{ addr.address_line_1 }}, {{ addr.city }}, {{ addr.state }}</p>
-                                    </div>
-                                    <p class="text-xs font-semibold text-primary mt-2">Use this address →</p>
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Billing Info -->
-                        <div class="bg-white dark:bg-gray-800 shadow-sm rounded-xl p-6 border dark:border-gray-700">
-                            <div class="flex items-center justify-between mb-4">
-                                <h2 class="text-xl font-semibold">Billing & Delivery Info</h2>
-                                <!-- Auto-fill checkbox for authenticated customers -->
-                                <label v-if="customer" class="flex items-center gap-2 cursor-pointer bg-primary/10 border border-primary/20 rounded-lg px-3 py-2">
-                                    <input type="checkbox" @change="(e) => fillFromAccount(e.target.checked)" class="w-4 h-4 text-primary rounded" />
-                                    <span class="text-sm font-medium text-primary">Use my account info</span>
-                                </label>
-                            </div>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Full Name *</label>
-                                    <input type="text" v-model="form.name" required class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2.5 focus:ring-primary focus:border-primary" />
-                                    <p v-if="form.errors.name" class="text-red-500 text-xs mt-1">{{ form.errors.name }}</p>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email Address *</label>
-                                    <input type="email" v-model="form.email" required class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2.5 focus:ring-primary focus:border-primary" />
-                                    <p v-if="form.errors.email" class="text-red-500 text-xs mt-1">{{ form.errors.email }}</p>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Phone Number</label>
-                                    <input type="tel" v-model="form.phone" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2.5" placeholder="+234..." />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Delivery Address *</label>
-                                    <input type="text" v-model="form.address" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2.5" :placeholder="s.default_delivery_address_hint || 'Street name, City, State'" />
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Delivery Method & Dynamic Zones -->
+                        <!-- Delivery Method & Dynamic Zones (First so Pickup hides Delivery Address immediately) -->
                         <div v-if="shippingEnabled || pickupEnabled" class="bg-white dark:bg-gray-800 shadow-sm rounded-xl p-6 border dark:border-gray-700">
                             <h2 class="text-xl font-semibold mb-4">Delivery Method</h2>
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
@@ -277,6 +222,67 @@ const submit = () => {
                                         {{ zone.state }}{{ zone.city ? ' — ' + zone.city : '' }} • {{ parseFloat(zone.rate) === 0 ? 'FREE Delivery' : '₦' + parseFloat(zone.rate).toLocaleString() }} ({{ zone.delivery_estimate_days || 'Standard delivery' }})
                                     </option>
                                 </select>
+                            </div>
+                        </div>
+
+                        <!-- Saved Addresses Picker (only for Home Delivery) -->
+                        <div v-if="form.delivery_method !== 'pickup' && addresses && addresses.length > 0" class="bg-white dark:bg-gray-800 shadow-sm rounded-xl p-6 border dark:border-gray-700">
+                            <h2 class="text-lg font-semibold mb-3 flex items-center justify-between">
+                                <span>Saved Delivery Addresses</span>
+                                <span class="text-xs font-normal text-gray-500">Click to auto-fill</span>
+                            </h2>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <button
+                                    v-for="addr in addresses"
+                                    :key="addr.id"
+                                    type="button"
+                                    @click="selectSavedAddress(addr)"
+                                    class="p-3.5 text-left rounded-lg border dark:border-gray-700 hover:border-primary transition bg-gray-50 dark:bg-gray-900/50 flex flex-col justify-between"
+                                >
+                                    <div>
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <span class="font-bold text-sm">{{ addr.name }}</span>
+                                            <span v-if="addr.is_default" class="text-[10px] bg-primary/10 text-primary font-bold px-1.5 py-0.5 rounded">Default</span>
+                                        </div>
+                                        <p class="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">{{ addr.address_line_1 }}, {{ addr.city }}, {{ addr.state }}</p>
+                                    </div>
+                                    <p class="text-xs font-semibold text-primary mt-2">Use this address →</p>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Billing / Contact Info -->
+                        <div class="bg-white dark:bg-gray-800 shadow-sm rounded-xl p-6 border dark:border-gray-700">
+                            <div class="flex items-center justify-between mb-4">
+                                <h2 class="text-xl font-semibold">
+                                    {{ form.delivery_method === 'pickup' ? 'Contact & Pickup Info' : 'Billing & Delivery Info' }}
+                                </h2>
+                                <!-- Auto-fill checkbox for authenticated customers -->
+                                <label v-if="customer" class="flex items-center gap-2 cursor-pointer bg-primary/10 border border-primary/20 rounded-lg px-3 py-2">
+                                    <input type="checkbox" @change="(e) => fillFromAccount(e.target.checked)" class="w-4 h-4 text-primary rounded" />
+                                    <span class="text-sm font-medium text-primary">Use my account info</span>
+                                </label>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Full Name *</label>
+                                    <input type="text" v-model="form.name" required class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2.5 focus:ring-primary focus:border-primary" />
+                                    <p v-if="form.errors.name" class="text-red-500 text-xs mt-1">{{ form.errors.name }}</p>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email Address *</label>
+                                    <input type="email" v-model="form.email" required class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2.5 focus:ring-primary focus:border-primary" />
+                                    <p v-if="form.errors.email" class="text-red-500 text-xs mt-1">{{ form.errors.email }}</p>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Phone Number</label>
+                                    <input type="tel" v-model="form.phone" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2.5" placeholder="+234..." />
+                                </div>
+                                <div v-if="form.delivery_method !== 'pickup'">
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Delivery Address *</label>
+                                    <input type="text" v-model="form.address" required class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2.5 focus:ring-primary focus:border-primary" :placeholder="s.default_delivery_address_hint || 'Street name, City, State'" />
+                                    <p v-if="form.errors.address" class="text-red-500 text-xs mt-1">{{ form.errors.address }}</p>
+                                </div>
                             </div>
                         </div>
 

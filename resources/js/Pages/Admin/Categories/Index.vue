@@ -29,10 +29,11 @@ const applySearch = () => {
 watch(search, (newVal, oldVal) => {
     if (newVal === oldVal) return;
     clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(applySearch, 350);
+    searchTimeout = setTimeout(applySearch, 600);
 });
 
 const clearSearch = () => {
+    clearTimeout(searchTimeout);
     search.value = '';
     applySearch();
 };

@@ -11,17 +11,17 @@ use Inertia\Inertia;
 
 class SettingsController extends Controller
 {
-    protected function authorizeSuperAdmin(): void
+    protected function authorizeStoreSettings(): void
     {
         $user = auth('web')->user();
-        if (!$user || !$user->isSuperAdmin()) {
-            abort(403, 'Unauthorized. Only the Super Administrator can access or modify system settings.');
+        if (!$user || (!$user->isSuperAdmin() && !$user->can('settings.store'))) {
+            abort(403, 'Unauthorized. You do not have permission to access or modify store settings.');
         }
     }
 
     public function index(PosConnectionService $connectionService)
     {
-        $this->authorizeSuperAdmin();
+        $this->authorizeStoreSettings();
 
         return Inertia::render('Admin/Settings/Index', [
             'settings'       => StoreSetting::allAsArray(),
@@ -31,7 +31,7 @@ class SettingsController extends Controller
 
     public function update(Request $request)
     {
-        $this->authorizeSuperAdmin();
+        $this->authorizeStoreSettings();
 
         $data = $request->validate([
             // Company Branding & SEO
